@@ -121,7 +121,7 @@ func (s *Scanner) Run() (*model.Summary, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if path != s.cfg.Root && (strings.HasPrefix(d.Name(), ".") || strings.EqualFold(d.Name(), "$RECYCLE.BIN") || strings.EqualFold(d.Name(), "System Volume Information")) {
+			if path != s.cfg.Root && (strings.HasPrefix(d.Name(), ".") || strings.EqualFold(d.Name(), "$RECYCLE.BIN") || strings.EqualFold(d.Name(), "System Volume Information") || strings.EqualFold(d.Name(), quarantineDirName)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -146,18 +146,68 @@ func (s *Scanner) Run() (*model.Summary, error) {
 	wg.Wait()
 	close(results)
 	<-done
+	sum, _ := s.summarize(all, scanned, walked)
+	sum.DurationMs = time.Since(start).Milliseconds()
+	return sum, nil
+}
 
+const quarantineDirName = ".quarantine"
+
+func (s *Scanner) ScanFiles(paths []string) (*model.Summary, error) {
+	start := time.Now()
+	jobs := make(chan string, len(paths)+1)
+	results := make(chan model.FileResult, len(paths)+1)
+	var wg sync.WaitGroup
+	for i := 0; i < s.cfg.Workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range jobs {
+				results <- s.scanFile(p, 0)
+			}
+		}()
+	}
+	var scanned int64
+	done := make(chan struct{})
+	var all []model.FileResult
+	go func() {
+		defer close(done)
+		for r := range results {
+			all = append(all, r)
+			if !r.Skipped {
+				atomic.AddInt64(&scanned, 1)
+				if !s.cfg.Quiet && r.Verdict != model.VerdictClean {
+					fmt.Printf("[%s] %d  %s  %s\n", r.Verdict, r.Score, truncPath(r.Path, 90), topFinding(r))
+				}
+			}
+		}
+	}()
+	for _, p := range paths {
+		if s.skipFile(p) {
+			continue
+		}
+		jobs <- p
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+	<-done
+	sum, _ := s.summarize(all, scanned, int64(len(paths)))
+	sum.DurationMs = time.Since(start).Milliseconds()
+	return sum, nil
+}
+
+func (s *Scanner) summarize(all []model.FileResult, scanned, walked int64) (*model.Summary, error) {
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].Score != all[j].Score {
 			return all[i].Score > all[j].Score
 		}
 		return all[i].Path < all[j].Path
 	})
-
 	sum := &model.Summary{
 		FilesScanned: int(scanned),
 		FilesSkipped: int(walked) - int(scanned),
-		DurationMs:   time.Since(start).Milliseconds(),
+		DurationMs:   0,
 		Results:      all,
 	}
 	for _, r := range all {

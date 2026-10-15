@@ -14,6 +14,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/watch"
 	"gamecrack-scanner/internal/yara"
 )
 
@@ -68,7 +69,123 @@ func main() {
 		runDeep(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "watch" {
+		runWatch(os.Args[2:])
+		return
+	}
 	runScan(os.Args[1:])
+}
+
+func runWatch(args []string) {
+	args = reorderArgs(args)
+	fs := flag.NewFlagSet("watch", flag.ExitOnError)
+	var (
+		interval    int
+		once        bool
+		quarantine  bool
+		notifyURL   string
+		threat      int
+		notifyAt    int
+		workers     int
+		maxSizeMB   int64
+		skipAssets  bool
+		excludes    string
+		noCache     bool
+		cachePath   string
+		onlineFlag  bool
+		vtKey       string
+		mbKey       string
+		vtIntervalS int
+		noYara      bool
+		yaraRules   string
+		extractDep  int
+		extractMB   int64
+		quiet       bool
+	)
+	fs.IntVar(&interval, "interval", 60, "seconds between watch passes")
+	fs.BoolVar(&once, "once", false, "single pass then exit")
+	fs.BoolVar(&quarantine, "quarantine", false, "move files scoring >= threat into <root>/.quarantine")
+	fs.StringVar(&notifyURL, "notify-url", "", "webhook URL (any JSON endpoint: Discord/CF worker/custom) for alerts")
+	fs.IntVar(&threat, "threat", 70, "score that triggers quarantine")
+	fs.IntVar(&notifyAt, "notify-at", 30, "score that triggers a notification")
+	fs.IntVar(&workers, "workers", 3, "parallel workers")
+	fs.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
+	fs.BoolVar(&skipAssets, "skip-assets", true, "skip game asset extensions")
+	fs.StringVar(&excludes, "exclude", "", "comma-separated extra extensions to skip")
+	fs.BoolVar(&noCache, "no-cache", false, "disable hash cache")
+	fs.StringVar(&cachePath, "cache", ".gamecrack-cache.jsonl", "hash cache file path")
+	fs.BoolVar(&onlineFlag, "online", false, "enable online hash reputation")
+	fs.StringVar(&vtKey, "vt-key", "", "VirusTotal API key (default from VT_API_KEY env)")
+	fs.StringVar(&mbKey, "mb-key", "", "MalwareBazaar Auth-Key (default from MB_API_KEY env)")
+	fs.IntVar(&vtIntervalS, "vt-interval", 16, "min seconds between online lookups")
+	fs.BoolVar(&noYara, "no-yara", false, "disable YARA scanning")
+	fs.StringVar(&yaraRules, "yara-rules", "", "directory of external .yar rules")
+	fs.IntVar(&extractDep, "extract-depth", 2, "scan inside containers N levels deep")
+	fs.Int64Var(&extractMB, "extract-mb", 500, "max MB of inner files per container")
+	fs.BoolVar(&quiet, "quiet", false, "minimal output")
+	fs.Parse(args)
+
+	root := fs.Arg(0)
+	if root == "" {
+		root = "."
+	}
+	if vtKey == "" {
+		vtKey = os.Getenv("VT_API_KEY")
+	}
+	if mbKey == "" {
+		mbKey = os.Getenv("MB_API_KEY")
+	}
+	var ex []string
+	for _, e := range strings.Split(excludes, ",") {
+		e = strings.TrimSpace(e)
+		if e != "" {
+			ex = append(ex, e)
+		}
+	}
+	var oc *online.Client
+	if onlineFlag {
+		oc = online.New(vtKey, mbKey, secondsToDuration(vtIntervalS))
+		if !oc.Enabled() {
+			fmt.Fprintln(os.Stderr, "warning: -online requested but no API key configured")
+		}
+	}
+	var yr *yara.Runner
+	if !noYara {
+		if r, err := yara.New(yaraRules, true); err == nil {
+			yr = r
+		} else if err != yara.ErrYaraMissing && !quiet {
+			fmt.Fprintln(os.Stderr, "warning: yara:", err)
+		}
+	}
+	cfg := watch.Config{
+		Root:        root,
+		IntervalSec: interval,
+		Once:        once,
+		Quarantine:  quarantine,
+		NotifyURL:   notifyURL,
+		ThreatScore: threat,
+		NotifyScore: notifyAt,
+		Quiet:       quiet,
+		Scan: scan.Config{
+			Root:         root,
+			Workers:      workers,
+			MaxSizeMB:    maxSizeMB,
+			SkipAssets:   skipAssets,
+			Excludes:     ex,
+			UseCache:     !noCache,
+			CachePath:    cachePath,
+			Quiet:        quiet,
+			FullReadMB:   32,
+			Online:       oc,
+			Yara:         yr,
+			ExtractDepth: extractDep,
+			ExtractMaxMB: extractMB,
+		},
+	}
+	if err := watch.Run(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "watch error:", err)
+		os.Exit(1)
+	}
 }
 
 func runScan(args []string) {

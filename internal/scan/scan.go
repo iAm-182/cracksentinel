@@ -23,6 +23,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/pe"
 	"gamecrack-scanner/internal/rules"
+	"gamecrack-scanner/internal/sandbox"
 	"gamecrack-scanner/internal/text"
 	"gamecrack-scanner/internal/yara"
 )
@@ -42,12 +43,75 @@ type Config struct {
 	Yara         *yara.Runner
 	ExtractDepth int
 	ExtractMaxMB int64
+	Detonate     bool
+	DetonateMin  int
+	DetonatorDir string
 }
 
 type Scanner struct {
-	cfg   Config
-	cache *cache.Cache
-	tmp   string
+	cfg     Config
+	cache   *cache.Cache
+	tmp     string
+	detMu   sync.Mutex
+	detOk   bool
+	detFail bool
+}
+
+func (s *Scanner) detonate(path string) *sandbox.Report {
+	s.detMu.Lock()
+	defer s.detMu.Unlock()
+	if s.detFail {
+		return nil
+	}
+	image := "cracksentinel-detonator"
+	if !sandbox.ImageExists(image) {
+		dir := s.cfg.DetonatorDir
+		if dir == "" {
+			dir = "detonator"
+		}
+		if err := sandbox.BuildImage(image, dir); err != nil {
+			s.detFail = true
+			fmt.Fprintf(os.Stderr, "warning: detonator image build failed: %v\n", err)
+			return nil
+		}
+	}
+	rep, err := sandbox.Detonate(path, image, 150)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: detonation %s: %v\n", path, err)
+		return nil
+	}
+	return rep
+}
+
+func behavioralFindings(r *sandbox.Report) []model.Finding {
+	var out []model.Finding
+	for i, c := range r.Connects {
+		if i >= 3 {
+			break
+		}
+		out = append(out, model.Finding{Rule: "behav_network_connect", Category: "behavioral", Severity: 12, Detail: "outbound connect attempt to " + c + " (no external network in sandbox = C2 attempt)"})
+	}
+	for i, f := range r.FilesDropped {
+		if i >= 3 {
+			break
+		}
+		out = append(out, model.Finding{Rule: "behav_file_drop", Category: "behavioral", Severity: 15, Detail: "wrote file: " + f})
+	}
+	for i, p := range r.ChildProcs {
+		if i >= 3 {
+			break
+		}
+		sev := 15
+		low := strings.ToLower(p)
+		if strings.Contains(low, "powershell") || strings.Contains(low, "cmd") || strings.Contains(low, "wscript") || strings.Contains(low, "cscript") {
+			sev = 25
+		}
+		out = append(out, model.Finding{Rule: "behav_child_process", Category: "behavioral", Severity: sev, Detail: "spawned: " + p})
+	}
+	if r.StdoutNote != "" {
+		out = append(out, model.Finding{Rule: "behav_output", Category: "behavioral", Severity: 0, Detail: r.StdoutNote})
+	}
+	return out
 }
 
 func New(cfg Config) (*Scanner, error) {
@@ -374,6 +438,19 @@ func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 				})
 			}
 			res.Findings = findings
+		}
+	}
+
+	if s.cfg.Detonate && kind == filetype.KindPE && s.cfg.DetonateMin > 0 {
+		base := 0
+		for _, f := range findings {
+			base += f.Severity
+		}
+		if base >= s.cfg.DetonateMin && base < 70 {
+			if rep := s.detonate(path); rep != nil && rep.Error == "" {
+				findings = append(findings, behavioralFindings(rep)...)
+				res.Findings = findings
+			}
 		}
 	}
 

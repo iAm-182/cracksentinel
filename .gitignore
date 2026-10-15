@@ -10,3 +10,9 @@ deep-test.json
 nextstepnya.md
 test_data/
 .opencode/
+
+plan.md
+containers-scan.json
+deep-escalation-test.json
+liar-scan.json
+liar-scan-online.json

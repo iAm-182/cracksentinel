@@ -212,6 +212,9 @@ func runScan(args []string) {
 		deepThreshold int
 		deepMax       int
 		deepBudget    int
+		detonateFlag  bool
+		detonateMin   int
+		detonatorDir  string
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -234,6 +237,9 @@ func runScan(args []string) {
 	flag.IntVar(&deepThreshold, "deep-threshold", 40, "auto-run REA static analysis on PE files scoring >= N (0 = off)")
 	flag.IntVar(&deepMax, "deep-max", 3, "max files to auto-escalate per scan")
 	flag.IntVar(&deepBudget, "deep-budget", 240, "total seconds budget for auto-escalation")
+	flag.BoolVar(&detonateFlag, "detonate", false, "behavioral detonation of suspicious PEs in an isolated Docker+wine sandbox")
+	flag.IntVar(&detonateMin, "detonate-min", 30, "static score that triggers detonation")
+	flag.StringVar(&detonatorDir, "detonator-dir", "detonator", "path to detonator Dockerfile context (for image build)")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -312,6 +318,9 @@ func runScan(args []string) {
 		Yara:         yr,
 		ExtractDepth: extractDep,
 		ExtractMaxMB: extractMB,
+		Detonate:     detonateFlag,
+		DetonateMin:  detonateMin,
+		DetonatorDir: detonatorDir,
 	}
 
 	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d\n",

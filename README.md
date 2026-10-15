@@ -49,8 +49,29 @@ Flags: `-workers`, `-max-size` (MB), `-skip-assets=false`, `-exclude .bin,.dat`,
 `-online`, `-vt-key` / `VT_API_KEY`, `-mb-key` / `MB_API_KEY`, `-vt-interval`,
 `-yara-rules <dir>`, `-no-yara`, `-no-cache`, `-cache <path>`, `-quiet`, `-top N`
 
-YARA support runs through the system `yara` binary if present (built-in rules are
-embedded either way); install YARA 4.x on PATH to enable that layer.
+## No-install design
+
+Scanning never runs, mounts, or installs anything. It reads bytes, PE headers,
+sections, import tables, and strings. The `deep` subcommand adds Ghidra static
+disassembly — still execution-free.
+
+All game types are handled by folder scan, and container formats are expanded
+headlessly so the *inner* files get the same treatment without extracting by hand:
+
+| Container | Handling |
+|---|---|
+| `.zip` | stdlib `archive/zip` (always available) |
+| `.7z` `.rar` `.iso` `.cab` `.tar` | system `7z` binary (auto-detected, `7z x` with executable-include filters) |
+| FreeArc (`fg-*.bin` from FitGirl/DODI repacks) | flagged as `container_freearc` — FreeArc needs its own extractor; the repack's `setup.exe -extract` (manual/elevated) or the FreeArc CLI is required |
+
+Depth is bounded (`-extract-depth`, default 2 levels) with an inner-file budget
+(`-extract-mb`, default 500 MB per container), so a 60 GB game does not become a
+60 GB temp extraction.
+
+Game-type coverage (AAA ElAmigos/DODI/TENOKE, indies, GOG installers, scene
+releases, FitGirl/DODI/DODI-style repacks, emulator cracks):
+no per-type special-casing needed — anything that lands as files or as
+zip/7z/rar/iso containers is walked and scored.
 
 ## Layout
 

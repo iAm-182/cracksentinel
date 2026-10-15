@@ -1,11 +1,14 @@
 package scan
 
 import (
+	"archive/zip"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -25,27 +28,37 @@ import (
 )
 
 type Config struct {
-	Root        string
-	Workers     int
-	MaxSizeMB   int64
-	SkipAssets  bool
-	Excludes    []string
-	UseCache    bool
-	CachePath   string
-	Quiet       bool
-	FullReadMB  int64
-	VerboseHits bool
-	Online      *online.Client
-	Yara        *yara.Runner
+	Root         string
+	Workers      int
+	MaxSizeMB    int64
+	SkipAssets   bool
+	Excludes     []string
+	UseCache     bool
+	CachePath    string
+	Quiet        bool
+	FullReadMB   int64
+	VerboseHits  bool
+	Online       *online.Client
+	Yara         *yara.Runner
+	ExtractDepth int
+	ExtractMaxMB int64
 }
 
 type Scanner struct {
 	cfg   Config
 	cache *cache.Cache
+	tmp   string
 }
 
 func New(cfg Config) (*Scanner, error) {
 	s := &Scanner{cfg: cfg}
+	if cfg.ExtractDepth > 0 {
+		tmp, err := os.MkdirTemp("", "gc-extract-")
+		if err != nil {
+			return nil, err
+		}
+		s.tmp = tmp
+	}
 	if cfg.UseCache {
 		c, err := cache.Open(cfg.CachePath)
 		if err != nil {
@@ -63,6 +76,9 @@ func (s *Scanner) Close() {
 	if s.cfg.Yara != nil {
 		s.cfg.Yara.Close()
 	}
+	if s.tmp != "" {
+		os.RemoveAll(s.tmp)
+	}
 }
 
 func (s *Scanner) Run() (*model.Summary, error) {
@@ -76,7 +92,7 @@ func (s *Scanner) Run() (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				results <- s.scanFile(p)
+				results <- s.scanFile(p, 0)
 			}
 		}()
 	}
@@ -167,7 +183,10 @@ func (s *Scanner) skipFile(path string) bool {
 		return true
 	}
 	if info.Size() > s.cfg.MaxSizeMB*1024*1024 {
-		return true
+		isContainer := s.cfg.ExtractDepth > 0 && (filetype.IsContainerExt(path) || filetype.IsFreeArc(path))
+		if !isContainer || info.Size() > 8*1024*1024*1024 {
+			return true
+		}
 	}
 	ext := strings.ToLower(filepath.Ext(path))
 	for _, ex := range s.cfg.Excludes {
@@ -181,7 +200,7 @@ func (s *Scanner) skipFile(path string) bool {
 	return false
 }
 
-func (s *Scanner) scanFile(path string) model.FileResult {
+func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 	t0 := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
@@ -331,11 +350,189 @@ func (s *Scanner) scanFile(path string) model.FileResult {
 	if onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40 {
 		res.Verdict = model.VerdictMalicious
 	}
+	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsContainerExt(path)) {
+		s.expandContainer(path, depth, &res)
+	}
 	if s.cache != nil && sha != "" && (score > 0 || onlineJSON != "") {
 		s.cache.PutOnline(sha, score, res.Verdict.String(), onlineJSON)
 	}
 	res.ScanMs = time.Since(t0).Milliseconds()
 	return res
+}
+
+var containerSeq int64
+
+var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com"}
+
+func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult) {
+	if s.tmp == "" {
+		return
+	}
+	if filetype.IsFreeArc(path) {
+		res.Findings = append(res.Findings, model.Finding{
+			Rule: "container_freearc", Category: "container", Severity: 2,
+			Detail: "FreeArc container (repack installer data) - extract manually before scanning: run its setup.exe -extract or install FreeArc",
+		})
+		return
+	}
+	dest := filepath.Join(s.tmp, fmt.Sprintf("c%d_%d", depth, atomic.AddInt64(&containerSeq, 1)))
+	os.MkdirAll(dest, 0o755)
+	n, total, method, err := s.extract(path, dest)
+	if err != nil {
+		res.Findings = append(res.Findings, model.Finding{
+			Rule: "container_unextracted", Category: "container", Severity: 1,
+			Detail: fmt.Sprintf("container %s: %v", method, err),
+		})
+		return
+	}
+	if n == 0 {
+		return
+	}
+	res.Findings = append(res.Findings, model.Finding{
+		Rule: "container_expanded", Category: "container", Severity: 0,
+		Detail: fmt.Sprintf("%s container: scanned %d inner files (%s)", method, n, humanMB(total)),
+	})
+	limit := s.cfg.ExtractMaxMB * 1024 * 1024
+	budget := total
+	entries, _ := os.ReadDir(dest)
+	count := 0
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		subPath := filepath.Join(dest, e.Name())
+		info, err := os.Stat(subPath)
+		if err != nil || info.Size() > s.cfg.MaxSizeMB*1024*1024 {
+			continue
+		}
+		budget += info.Size()
+		count++
+		if budget > limit || count > 3000 {
+			res.Findings = append(res.Findings, model.Finding{
+				Rule: "container_truncated", Category: "container", Severity: 0,
+				Detail: "inner file scan budget reached",
+			})
+			break
+		}
+		sub := s.scanFile(subPath, depth+1)
+		rel := e.Name()
+		if sub.Score > 0 {
+			res.Findings = append(res.Findings, model.Finding{
+				Rule: "nested_result", Category: "container", Severity: sub.Score,
+				Detail: rel + " -> " + sub.Verdict.String() + " (" + strconv.Itoa(sub.Score) + ")",
+			})
+		}
+		if sub.Verdict > res.Verdict || (sub.Score > res.Score && sub.Verdict == res.Verdict) {
+			res.Score = sub.Score
+			res.Verdict = sub.Verdict
+		}
+	}
+}
+
+func (s *Scanner) extract(path, dest string) (int, int64, string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".zip" {
+		n, total, err := extractZip(path, dest)
+		return n, total, "zip", err
+	}
+	sevenz := find7z()
+	if sevenz == "" {
+		return 0, 0, "7z", fmt.Errorf("7-Zip binary not found (needed for %s containers)", ext)
+	}
+	args := []string{"x", "-y", "-o" + dest}
+	for _, e := range extractableExts {
+		args = append(args, "-i!*."+e)
+	}
+	args = append(args, path)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, sevenz, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return 0, 0, "7z", err
+	}
+	entries, _ := os.ReadDir(dest)
+	n := 0
+	var total int64
+	for _, e := range entries {
+		if e.Type().IsRegular() {
+			if info, err := e.Info(); err == nil {
+				n++
+				total += info.Size()
+			}
+		}
+	}
+	return n, total, "7z", nil
+}
+
+func extractZip(path, dest string) (int, int64, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer zr.Close()
+	n := 0
+	var total int64
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() || f.FileInfo().Size() > 64*1024*1024 {
+			continue
+		}
+		if !wantExt(f.Name) {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		name := filepath.Base(f.Name)
+		if name == "." || name == string(os.PathSeparator) {
+			rc.Close()
+			continue
+		}
+		out := filepath.Join(dest, name)
+		w, err := os.Create(out)
+		if err != nil {
+			rc.Close()
+			continue
+		}
+		io.Copy(w, io.LimitReader(rc, 64<<20))
+		w.Close()
+		rc.Close()
+		n++
+		total += f.FileInfo().Size()
+	}
+	return n, total, nil
+}
+
+func wantExt(name string) bool {
+	e := strings.ToLower(filepath.Ext(name))
+	for _, x := range extractableExts {
+		if e == "."+x {
+			return true
+		}
+	}
+	return false
+}
+
+func find7z() string {
+	if p, err := exec.LookPath("7z"); err == nil {
+		return p
+	}
+	for _, p := range []string{
+		`C:\Program Files\7-Zip\7z.exe`,
+		`C:\Program Files (x86)\7-Zip\7z.exe`,
+		`/usr/bin/7z`, `/usr/bin/7za`, `/usr/local/bin/7z`,
+	} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func humanMB(b int64) string {
+	return strconv.FormatFloat(float64(b)/1024/1024, 'f', 1, 64) + " MB"
 }
 
 func hashAndHead(path string, fullReadMB int64) (string, []byte, []byte) {

@@ -40,8 +40,10 @@ func runScan(args []string) {
 		vtKey       string
 		mbKey       string
 		vtIntervalS int
-		noYara      bool
-		yaraRules   string
+		noYara     bool
+		yaraRules  string
+		extractDep int
+		extractMB  int64
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -59,6 +61,8 @@ func runScan(args []string) {
 	flag.IntVar(&vtIntervalS, "vt-interval", 16, "min seconds between online lookups (VT free tier = 4/min)")
 	flag.BoolVar(&noYara, "no-yara", false, "disable YARA scanning (also off automatically when yara binary is missing)")
 	flag.StringVar(&yaraRules, "yara-rules", "", "directory of external .yar rules (builtin rules always run too)")
+	flag.IntVar(&extractDep, "extract-depth", 2, "scan inside archive/ISO containers N levels deep (0 = scan container file only)")
+	flag.Int64Var(&extractMB, "extract-mb", 500, "max MB of inner files to extract+scan per container")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -124,21 +128,23 @@ func runScan(args []string) {
 	}
 
 	cfg := scan.Config{
-		Root:       root,
-		Workers:    workers,
-		MaxSizeMB:  maxSizeMB,
-		SkipAssets: skipAssets,
-		Excludes:   ex,
-		UseCache:   !noCache,
-		CachePath:  cachePath,
-		Quiet:      quiet,
-		FullReadMB: 32,
-		Online:     oc,
-		Yara:       yr,
+		Root:         root,
+		Workers:      workers,
+		MaxSizeMB:    maxSizeMB,
+		SkipAssets:   skipAssets,
+		Excludes:     ex,
+		UseCache:     !noCache,
+		CachePath:    cachePath,
+		Quiet:        quiet,
+		FullReadMB:   32,
+		Online:       oc,
+		Yara:         yr,
+		ExtractDepth: extractDep,
+		ExtractMaxMB: extractMB,
 	}
 
-	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v\n",
-		root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled())
+	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d\n",
+		root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled(), cfg.ExtractDepth)
 	s, err := scan.New(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "scanner init error:", err)

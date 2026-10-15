@@ -36,6 +36,26 @@ var docExt = map[string]bool{
 	".rtf": true, ".chm": true,
 }
 
+var containerExt = map[string]bool{
+	".zip": true, ".7z": true, ".rar": true, ".iso": true, ".cab": true,
+	".arj": true, ".tgz": true, ".tar": true,
+}
+
+func IsContainerExt(path string) bool {
+	return containerExt[strings.ToLower(filepath.Ext(path))]
+}
+
+func IsFreeArc(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	b := make([]byte, 4)
+	n, _ := f.Read(b)
+	return n == 4 && b[0] == 'A' && b[1] == 'r' && b[2] == 'C' && b[3] == 0x01
+}
+
 func Classify(path string) Kind {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch {

@@ -238,6 +238,11 @@ func ScoreDelta(r Result) int {
 	if n == 0 && (r.Harmless > 0 || r.Undetected > 0) {
 		n = -5
 	}
+	if strings.HasPrefix(strings.ToLower(r.Label), "pua") {
+		if n > 0 {
+			n = 10
+		}
+	}
 	return n
 }
 

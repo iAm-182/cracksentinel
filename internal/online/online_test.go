@@ -24,6 +24,14 @@ func TestParseVTSmallDetection(t *testing.T) {
 	}
 }
 
+func TestPUACapped(t *testing.T) {
+	body := []byte(`{"data":{"attributes":{"last_analysis_stats":{"malicious":8,"suspicious":0,"undetected":20,"harmless":30},"popular_threat_classification":{"suggested_threat_label":"pua.crack/pseb"}}}}`)
+	r, _ := parseVT(body)
+	if d := ScoreDelta(r); d != 10 {
+		t.Fatalf("pua label should cap delta at 10, got %d", d)
+	}
+}
+
 func TestParseVTClean(t *testing.T) {
 	body := []byte(`{"data":{"attributes":{"last_analysis_stats":{"malicious":0,"suspicious":0,"undetected":5,"harmless":60},"popular_threat_classification":{}}}}`)
 	r, _ := parseVT(body)

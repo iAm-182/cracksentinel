@@ -5,15 +5,63 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
 	"gamecrack-scanner/internal/deep"
+	"gamecrack-scanner/internal/model"
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
 	"gamecrack-scanner/internal/yara"
 )
+
+func escalate(sum *model.Summary, threshold, maxN, budgetSec int) {
+	var flagged []int
+	for i, r := range sum.Results {
+		if r.Skipped || r.Deep != nil || r.Score < threshold || r.Type != "pe" {
+			continue
+		}
+		flagged = append(flagged, i)
+	}
+	sort.Slice(flagged, func(a, b int) bool {
+		return sum.Results[flagged[a]].Score > sum.Results[flagged[b]].Score
+	})
+	if len(flagged) == 0 {
+		return
+	}
+	fmt.Printf("\nDEEP ESCALATION: %d candidate PE file(s) (threshold=%d max=%d budget=%ds)\n", len(flagged), threshold, maxN, budgetSec)
+	start := time.Now()
+	done := 0
+	for _, idx := range flagged {
+		if done >= maxN {
+			fmt.Printf("  ... %d more skipped (deep-max reached)\n", len(flagged)-done)
+			break
+		}
+		if time.Since(start).Seconds() > float64(budgetSec) {
+			fmt.Printf("  budget exhausted, %d skipped\n", len(flagged)-done)
+			break
+		}
+		r := &sum.Results[idx]
+		fmt.Printf("  [%d/%d] %s (score %d)\n", done+1, maxN, r.Path, r.Score)
+		rep, err := deep.RunReport(r.Path, 300*time.Second)
+		if err != nil {
+			r.Deep = &model.DeepReport{Available: false, Errors: []string{err.Error()}}
+			fmt.Printf("    FAILED: %v\n", err)
+			continue
+		}
+		r.Deep = rep
+		r.Findings = append(r.Findings, model.Finding{
+			Rule: "deep_escalated", Category: "analysis", Severity: 0,
+			Detail: fmt.Sprintf("REA static: %d procedures, %d IOC string hits, %d suspicious funcs", rep.Procedures, len(rep.StringHits), len(rep.FuncHits)),
+		})
+		fmt.Printf("    REA: %d tools, %d procedures, %d string hits, %d func hits, %dms\n",
+			rep.ServerTools, rep.Procedures, len(rep.StringHits), len(rep.FuncHits), rep.ElapsedMs)
+		done++
+	}
+	fmt.Printf("DEEP ESCALATION done: %d analyzed\n\n", done)
+}
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "deep" {
@@ -26,24 +74,27 @@ func main() {
 func runScan(args []string) {
 	os.Args = append(os.Args[:1], reorderArgs(args)...)
 	var (
-		workers     int
-		maxSizeMB   int64
-		skipAssets  bool
-		excludes    string
-		noCache     bool
-		cachePath   string
-		quiet       bool
-		jsonOut     string
-		mdOut       string
-		top         int
-		onlineFlag  bool
-		vtKey       string
-		mbKey       string
-		vtIntervalS int
-		noYara     bool
-		yaraRules  string
-		extractDep int
-		extractMB  int64
+		workers       int
+		maxSizeMB     int64
+		skipAssets    bool
+		excludes      string
+		noCache       bool
+		cachePath     string
+		quiet         bool
+		jsonOut       string
+		mdOut         string
+		top           int
+		onlineFlag    bool
+		vtKey         string
+		mbKey         string
+		vtIntervalS   int
+		noYara        bool
+		yaraRules     string
+		extractDep    int
+		extractMB     int64
+		deepThreshold int
+		deepMax       int
+		deepBudget    int
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -63,6 +114,9 @@ func runScan(args []string) {
 	flag.StringVar(&yaraRules, "yara-rules", "", "directory of external .yar rules (builtin rules always run too)")
 	flag.IntVar(&extractDep, "extract-depth", 2, "scan inside archive/ISO containers N levels deep (0 = scan container file only)")
 	flag.Int64Var(&extractMB, "extract-mb", 500, "max MB of inner files to extract+scan per container")
+	flag.IntVar(&deepThreshold, "deep-threshold", 40, "auto-run REA static analysis on PE files scoring >= N (0 = off)")
+	flag.IntVar(&deepMax, "deep-max", 3, "max files to auto-escalate per scan")
+	flag.IntVar(&deepBudget, "deep-budget", 240, "total seconds budget for auto-escalation")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -156,6 +210,10 @@ func runScan(args []string) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "scan error:", err)
 		os.Exit(1)
+	}
+
+	if deepThreshold > 0 {
+		escalate(sum, deepThreshold, deepMax, deepBudget)
 	}
 
 	report.PrintSummary(sum, top)

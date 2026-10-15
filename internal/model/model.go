@@ -30,21 +30,43 @@ type Finding struct {
 	Detail   string `json:"detail"`
 }
 
+type DeepStringHit struct {
+	Pattern string `json:"pattern"`
+	Output  string `json:"output"`
+}
+
+type DeepFuncHit struct {
+	Name      string `json:"name"`
+	Pseudcode string `json:"pseudocode,omitempty"`
+}
+
+type DeepReport struct {
+	ServerTools int             `json:"server_tools"`
+	Procedures  int             `json:"procedures"`
+	StringHits  []DeepStringHit `json:"string_hits,omitempty"`
+	FuncHits    []DeepFuncHit   `json:"func_hits,omitempty"`
+	OpenOut     string          `json:"open_output,omitempty"`
+	Errors      []string        `json:"errors,omitempty"`
+	ElapsedMs   int64           `json:"elapsed_ms"`
+	Available   bool            `json:"rea_available"`
+}
+
 type FileResult struct {
-	Path      string    `json:"path"`
-	Size      int64     `json:"size"`
-	SHA256    string    `json:"sha256,omitempty"`
-	Type      string    `json:"type"`
-	Score     int       `json:"score"`
-	Verdict   Verdict   `json:"verdict"`
-	Cached    bool      `json:"cached"`
-	Skipped   bool      `json:"skipped,omitempty"`
-	Findings  []Finding `json:"findings,omitempty"`
-	Imphash   string    `json:"imphash,omitempty"`
-	Sections  []string  `json:"sections,omitempty"`
-	Signed    bool      `json:"signed,omitempty"`
-	Packer    string    `json:"packer,omitempty"`
-	ScanMs    int64     `json:"scan_ms"`
+	Path     string       `json:"path"`
+	Size     int64        `json:"size"`
+	SHA256   string       `json:"sha256,omitempty"`
+	Type     string       `json:"type"`
+	Score    int          `json:"score"`
+	Verdict  Verdict      `json:"verdict"`
+	Cached   bool         `json:"cached"`
+	Skipped  bool         `json:"skipped,omitempty"`
+	Findings []Finding    `json:"findings,omitempty"`
+	Deep     *DeepReport  `json:"deep,omitempty"`
+	Imphash  string       `json:"imphash,omitempty"`
+	Sections []string     `json:"sections,omitempty"`
+	Signed   bool         `json:"signed,omitempty"`
+	Packer   string       `json:"packer,omitempty"`
+	ScanMs   int64        `json:"scan_ms"`
 }
 
 type Summary struct {

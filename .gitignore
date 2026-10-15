@@ -1,0 +1,12 @@
+scanner.exe
+*.exe
+*.dll
+.gamecrack-cache.jsonl
+deep-report.json
+schema-depth-report.json
+report.json
+report.md
+deep-test.json
+nextstepnya.md
+test_data/
+.opencode/

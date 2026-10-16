@@ -389,6 +389,9 @@ func reorderArgs(args []string) []string {
 		"-skip-assets": true, "--skip-assets": true,
 		"-online": true, "--online": true,
 		"-no-yara": true, "--no-yara": true,
+		"-detonate": true, "--detonate": true,
+		"-once": true, "--once": true,
+		"-quarantine": true, "--quarantine": true,
 	}
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {

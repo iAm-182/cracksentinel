@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,17 @@ func ImageExists(image string) bool {
 
 func BuildImage(tag, contextDir string) error {
 	if _, err := os.Stat(filepath.Join(contextDir, "Dockerfile")); err != nil {
-		return fmt.Errorf("detonator dir missing Dockerfile: %s", contextDir)
+		// Fall back to the detonator dir shipped next to the scanner binary,
+		// so `-detonate` works regardless of the caller's working directory.
+		if exe, e := os.Executable(); e == nil {
+			alt := filepath.Join(filepath.Dir(exe), filepath.Base(contextDir))
+			if _, e2 := os.Stat(filepath.Join(alt, "Dockerfile")); e2 == nil {
+				contextDir = alt
+			}
+		}
+		if _, err := os.Stat(filepath.Join(contextDir, "Dockerfile")); err != nil {
+			return fmt.Errorf("detonator dir missing Dockerfile: %s", contextDir)
+		}
 	}
 	cmd := exec.Command("docker", "build", "-t", tag, contextDir)
 	cmd.Stdout = os.Stdout
@@ -49,7 +60,16 @@ func Detonate(targetPath, image string, timeoutSec int) (*Report, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(outDir)
-	detDir := filepath.Dir(abs)
+	// Stage the target as /det/target.exe: run.sh expects exactly that path,
+	// and mounting the parent dir does not guarantee the file name matches.
+	stageDir, err := os.MkdirTemp("", "gc-detonate-in-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(stageDir)
+	if err := copyFile(abs, filepath.Join(stageDir, "target.exe")); err != nil {
+		return nil, fmt.Errorf("stage target: %w", err)
+	}
 
 	if timeoutSec <= 0 || timeoutSec > 300 {
 		timeoutSec = 150
@@ -62,7 +82,7 @@ func Detonate(targetPath, image string, timeoutSec int) (*Report, error) {
 		"--memory", "1g",
 		"--pids-limit", "512",
 		"-v", filepath.ToSlash(outDir) + ":/out",
-		"-v", filepath.ToSlash(detDir) + ":/det:ro",
+		"-v", filepath.ToSlash(stageDir) + ":/det:ro",
 		image,
 	}
 	cmd := exec.Command("docker", args...)
@@ -170,6 +190,21 @@ func truncateStr(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 var _ = strconv.Itoa

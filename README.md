@@ -47,7 +47,16 @@ scanner.exe deep <file.exe> [-out deep.json]
 
 Flags: `-workers`, `-max-size` (MB), `-skip-assets=false`, `-exclude .bin,.dat`,
 `-online`, `-vt-key` / `VT_API_KEY`, `-mb-key` / `MB_API_KEY`, `-vt-interval`,
-`-yara-rules <dir>`, `-no-yara`, `-no-cache`, `-cache <path>`, `-quiet`, `-top N`
+`-yara-rules <dir>`, `-no-yara`, `-no-cache`, `-cache <path>`, `-quiet`, `-top N`,
+`-json`, `-md`, `-extract-depth`, `-extract-mb`,
+`-deep-threshold` / `-deep-max` / `-deep-budget` (REA auto-escalation, 0 = off),
+`-detonate` / `-detonate-min` / `-detonator-dir` (Docker+wine behavioral sandbox),
+`-no-unpack` (disable UPX auto-unpack).
+
+Optional external tools (auto-detected, everything works without them):
+`yara`/`yara64` in PATH enables the real YARA layer (builtin rules always
+embedded), `upx` in PATH enables UPX auto-unpack-and-rescan, `docker` +
+`detonator/` image enables behavioral detonation of mid-score PEs.
 
 ## No-install design
 

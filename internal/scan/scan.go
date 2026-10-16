@@ -46,15 +46,73 @@ type Config struct {
 	Detonate     bool
 	DetonateMin  int
 	DetonatorDir string
+	NoUnpack     bool
 }
 
 type Scanner struct {
-	cfg     Config
-	cache   *cache.Cache
-	tmp     string
-	detMu   sync.Mutex
-	detOk   bool
-	detFail bool
+	cfg      Config
+	cache    *cache.Cache
+	tmp      string
+	detMu    sync.Mutex
+	detOk    bool
+	detFail  bool
+	upxMu     sync.Mutex
+	upxPath   string
+	upxProbed bool
+	tmpMu     sync.Mutex
+}
+
+var unpackSeq int64
+
+// upxBin resolves the UPX binary once (E:\tools\upx or anywhere in PATH).
+func (s *Scanner) upxBin() string {
+	s.upxMu.Lock()
+	defer s.upxMu.Unlock()
+	if !s.upxProbed {
+		s.upxProbed = true
+		if p, err := exec.LookPath("upx"); err == nil {
+			s.upxPath = p
+		}
+	}
+	return s.upxPath
+}
+
+func isUPX(packer string) bool {
+	return packer == "UPX!" || packer == "UPX0" || packer == "UPX1" ||
+		strings.HasPrefix(packer, "UPX")
+}
+
+// tryUnpackUPX decompresses a UPX-packed PE to the scanner temp dir.
+// Returns "" when upx is missing or decompression fails.
+func (s *Scanner) tryUnpackUPX(path string) string {
+	bin := s.upxBin()
+	if bin == "" {
+		return ""
+	}
+	if s.tmp == "" {
+		s.tmpMu.Lock()
+		if s.tmp == "" {
+			if tmp, err := os.MkdirTemp("", "gc-extract-"); err == nil {
+				s.tmp = tmp
+			}
+		}
+		s.tmpMu.Unlock()
+		if s.tmp == "" {
+			return ""
+		}
+	}
+	out := filepath.Join(s.tmp, fmt.Sprintf("upx%d_%s", atomic.AddInt64(&unpackSeq, 1), filepath.Base(path)))
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "-d", "-q", "-o", out, path)
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	if st, err := os.Stat(out); err != nil || st.Size() == 0 {
+		os.Remove(out)
+		return ""
+	}
+	return out
 }
 
 func (s *Scanner) detonate(path string) *sandbox.Report {
@@ -156,7 +214,7 @@ func (s *Scanner) Run() (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				results <- s.scanFile(p, 0)
+				results <- s.scanFile(p, 0, false)
 			}
 		}()
 	}
@@ -227,7 +285,7 @@ func (s *Scanner) ScanFiles(paths []string) (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				results <- s.scanFile(p, 0)
+				results <- s.scanFile(p, 0, false)
 			}
 		}()
 	}
@@ -314,7 +372,7 @@ func (s *Scanner) skipFile(path string) bool {
 	return false
 }
 
-func (s *Scanner) scanFile(path string, depth int) model.FileResult {
+func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 	t0 := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
@@ -339,6 +397,7 @@ func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 	}
 
 	var peInfo *pe.Info
+	var peErr string
 	if kind == filetype.KindPE {
 		if pi, err := pe.Analyze(path); err == nil {
 			peInfo = pi
@@ -349,7 +408,7 @@ func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 				res.Sections = append(res.Sections, sec.Name+":"+strconv.FormatFloat(sec.Entropy, 'f', 2, 64))
 			}
 		} else {
-			res.Findings = append(res.Findings, model.Finding{Rule: "pe_parse", Category: "info", Severity: 1, Detail: "PE parse failed: " + err.Error()})
+			peErr = err.Error()
 		}
 	}
 
@@ -372,7 +431,55 @@ func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head})
 		findings = append(findings, f2...)
 	}
+	if peErr != "" {
+		findings = append(findings, model.Finding{Rule: "pe_parse", Category: "info", Severity: 1, Detail: "PE parse failed: " + peErr})
+	}
 	res.Findings = findings
+
+	// Packer signal when debug/pe itself choked (UPX mangles the symbol
+	// table): fall back to raw section-name reading so packed files are
+	// still flagged AND still enter the auto-unpack path below.
+	packer := ""
+	if peInfo != nil {
+		packer = peInfo.Packer
+		res.Packer = packer
+	}
+	if packer == "" && kind == filetype.KindPE {
+		if p := pe.DetectPackerSections(path); p != "" {
+			packer = p
+			res.Packer = p
+			findings = append(findings, model.Finding{
+				Rule: "packer", Category: "packing", Severity: 15,
+				Detail: "packer/obfuscation: " + p + " (section names; full PE parse failed)",
+			})
+			res.Findings = findings
+		}
+	}
+
+	// Auto-unpack: a UPX-packed PE hides its strings/imports. Decompress to
+	// temp and rescan the unpacked image (sub=true: no nested unpack, no
+	// online lookups on derived bytes). Unpacked findings merge into the
+	// outer result so the final score reflects the real payload.
+	if !sub && !s.cfg.NoUnpack && kind == filetype.KindPE && isUPX(packer) {
+		if up := s.tryUnpackUPX(path); up != "" {
+			inner := s.scanFile(up, depth+1, true)
+			findings = append(findings, model.Finding{
+				Rule: "auto_unpacked", Category: "packing", Severity: 0,
+				Detail: fmt.Sprintf("UPX-packed, unpacked image rescanned (score %d)", inner.Score),
+			})
+			for _, f := range inner.Findings {
+				f.Detail = "[unpacked] " + f.Detail
+				findings = append(findings, f)
+			}
+			res.Findings = findings
+		} else if s.upxBin() != "" {
+			findings = append(findings, model.Finding{
+				Rule: "unpack_failed", Category: "packing", Severity: 2,
+				Detail: "UPX section present but upx -d failed (tampered packer?)",
+			})
+			res.Findings = findings
+		}
+	}
 
 	if s.cfg.Yara != nil && info.Size() < 200*1024*1024 {
 		switch kind {
@@ -402,7 +509,7 @@ func (s *Scanner) scanFile(path string, depth int) model.FileResult {
 
 	var onlineRes *online.Result
 	onlineJSON := ""
-	if onlineOn && sha != "" {
+	if onlineOn && !sub && sha != "" {
 		haveCache := false
 		if s.cache != nil {
 			if e, ok := s.cache.Get(sha); ok && e.Online != "" {
@@ -541,7 +648,7 @@ func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult)
 			})
 			break
 		}
-		sub := s.scanFile(subPath, depth+1)
+		sub := s.scanFile(subPath, depth+1, false)
 		rel := e.Name()
 		if sub.Score > 0 {
 			res.Findings = append(res.Findings, model.Finding{

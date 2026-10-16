@@ -276,3 +276,46 @@ func entropy(b []byte) float64 {
 func round2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
+
+// DetectPackerSections reads COFF section names with a minimal header parser
+// that survives binaries debug/pe rejects (notably UPX-packed files, whose
+// symbol table UPX mangles). Returns the packer name or "".
+func DetectPackerSections(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	hdr := make([]byte, 8192)
+	n, _ := f.Read(hdr)
+	hdr = hdr[:n]
+	if len(hdr) < 0x40 || hdr[0] != 'M' || hdr[1] != 'Z' {
+		return ""
+	}
+	lfanew := int(binary.LittleEndian.Uint32(hdr[0x3C:]))
+	if lfanew < 0 || lfanew+6 > len(hdr) {
+		return ""
+	}
+	if hdr[lfanew] != 'P' || hdr[lfanew+1] != 'E' {
+		return ""
+	}
+	coff := lfanew + 4
+	numSec := int(binary.LittleEndian.Uint16(hdr[coff+2:]))
+	optSize := int(binary.LittleEndian.Uint16(hdr[coff+16:]))
+	tab := coff + 20 + optSize
+	for i := 0; i < numSec; i++ {
+		off := tab + i*40
+		if off+8 > len(hdr) {
+			// Section table runs past the 8KB window; give up rather than
+			// issue more reads for what is only a packer hint.
+			return ""
+		}
+		name := strings.TrimRight(string(hdr[off:off+8]), "\x00")
+		for _, p := range packerNames {
+			if strings.Contains(name, p) {
+				return p
+			}
+		}
+	}
+	return ""
+}

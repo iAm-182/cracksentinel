@@ -215,6 +215,7 @@ func runScan(args []string) {
 		detonateFlag  bool
 		detonateMin   int
 		detonatorDir  string
+		noUnpack      bool
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -240,6 +241,7 @@ func runScan(args []string) {
 	flag.BoolVar(&detonateFlag, "detonate", false, "behavioral detonation of suspicious PEs in an isolated Docker+wine sandbox")
 	flag.IntVar(&detonateMin, "detonate-min", 30, "static score that triggers detonation")
 	flag.StringVar(&detonatorDir, "detonator-dir", "detonator", "path to detonator Dockerfile context (for image build)")
+	flag.BoolVar(&noUnpack, "no-unpack", false, "disable UPX auto-unpack (requires upx binary in PATH)")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -321,6 +323,7 @@ func runScan(args []string) {
 		Detonate:     detonateFlag,
 		DetonateMin:  detonateMin,
 		DetonatorDir: detonatorDir,
+		NoUnpack:     noUnpack,
 	}
 
 	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d\n",
@@ -390,6 +393,7 @@ func reorderArgs(args []string) []string {
 		"-online": true, "--online": true,
 		"-no-yara": true, "--no-yara": true,
 		"-detonate": true, "--detonate": true,
+		"-no-unpack": true, "--no-unpack": true,
 		"-once": true, "--once": true,
 		"-quarantine": true, "--quarantine": true,
 	}

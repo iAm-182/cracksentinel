@@ -46,9 +46,38 @@ type DeepReport struct {
 	StringHits  []DeepStringHit `json:"string_hits,omitempty"`
 	FuncHits    []DeepFuncHit   `json:"func_hits,omitempty"`
 	OpenOut     string          `json:"open_output,omitempty"`
+	Go          *GoInfo        `json:"go,omitempty"`
+	Dotnet      *DotnetInfo    `json:"dotnet,omitempty"`
 	Errors      []string        `json:"errors,omitempty"`
 	ElapsedMs   int64           `json:"elapsed_ms"`
 	Available   bool            `json:"rea_available"`
+}
+
+// GoInfo is the parsed form of REA inspect_go_binary output.
+type GoInfo struct {
+	GoVersion  string            `json:"go_version,omitempty"`
+	ModulePath string            `json:"module_path,omitempty"`
+	MainPath   string            `json:"main_path,omitempty"`
+	MainVer    string            `json:"main_version,omitempty"`
+	Deps       []GoDep           `json:"dependencies,omitempty"`
+	Settings   map[string]string `json:"settings,omitempty"`
+}
+
+type GoDep struct {
+	Path string `json:"path"`
+	Ver  string `json:"version,omitempty"`
+}
+
+// DotnetInfo is the parsed form of REA inspect_managed_artifact output.
+// Shapes vary by detail level, so only widely-present fields are extracted
+// and the rest stays in Summary for display.
+type DotnetInfo struct {
+	Assembly string `json:"assembly,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Target   string `json:"target_framework,omitempty"`
+	Module   string `json:"module,omitempty"`
+	MVID     string `json:"mvid,omitempty"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 type FileResult struct {

@@ -12,6 +12,7 @@ import (
 
 	"gamecrack-scanner/internal/mcpclient"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/pe"
 )
 
 var iocPatterns = []string{
@@ -127,16 +128,28 @@ func RunReport(path string, timeout time.Duration) (*model.DeepReport, error) {
 		rep.Errors = append(rep.Errors, "procedure search/pseudocode tools not found")
 	}
 
-	if gob := find("go_binary"); gob != "" {
-		txt, _ := c.CallToolText(gob, map[string]any{"path": path})
-		if strings.Contains(txt, "Go build ID") || strings.Contains(txt, "module") {
-			rep.Errors = append(rep.Errors, "GOBIN_INFO: "+truncate(firstLine(txt, 400), 400))
+	if gob := find("go_binary"); gob != "" && looksLikeGo(path) {
+		txt, err := c.CallToolText(gob, map[string]any{"path": path})
+		if err != nil {
+			rep.Errors = append(rep.Errors, "inspect_go_binary: "+truncate(txt, 200))
+		} else if gi := parseGoInfo(txt); gi != nil {
+			rep.Go = gi
+		} else {
+			rep.Errors = append(rep.Errors, "inspect_go_binary: unrecognized output")
 		}
 	}
-	if mfa := find("managed_artifact"); mfa != "" {
-		txt, _ := c.CallToolText(mfa, map[string]any{"path": path})
-		if strings.Contains(txt, ".NET") || strings.Contains(txt, "assembly") || strings.Contains(txt, "CLR") {
-			rep.Errors = append(rep.Errors, "MANAGED_INFO: "+truncate(firstLine(txt, 400), 400))
+	if mfa := find("managed_artifact"); mfa != "" && looksLikeDotnet(path) {
+		txt, err := c.CallToolText(mfa, map[string]any{"path": path, "detail": "summary"})
+		if err != nil {
+			// Fall back to the default (complete) detail level.
+			txt, err = c.CallToolText(mfa, map[string]any{"path": path})
+		}
+		if err != nil {
+			rep.Errors = append(rep.Errors, "inspect_managed_artifact: "+truncate(txt, 200))
+		} else if di := parseDotnetInfo(txt); di != nil {
+			rep.Dotnet = di
+		} else {
+			rep.Errors = append(rep.Errors, "inspect_managed_artifact: unrecognized output")
 		}
 	}
 
@@ -167,6 +180,12 @@ func Run(path string, timeout time.Duration, outPath string) error {
 	fmt.Printf("  suspicious funcs: %d\n", len(rep.FuncHits))
 	for _, f := range rep.FuncHits {
 		fmt.Printf("    - %s (%d chars pseudocode)\n", f.Name, len(f.Pseudcode))
+	}
+	if rep.Go != nil {
+		fmt.Printf("  go: %s module=%s deps=%d\n", rep.Go.GoVersion, rep.Go.ModulePath, len(rep.Go.Deps))
+	}
+	if rep.Dotnet != nil {
+		fmt.Printf("  dotnet: assembly=%s version=%s target=%s\n", rep.Dotnet.Assembly, rep.Dotnet.Version, rep.Dotnet.Target)
 	}
 	if len(rep.Errors) > 0 {
 		fmt.Printf("  warnings: %s\n", strings.Join(rep.Errors, "; "))
@@ -237,4 +256,163 @@ func countLines(s string) int {
 		}
 	}
 	return n
+}
+
+// looksLikeGo reports whether the file carries a Go build-info stamp, so the
+// (slow) inspect_go_binary call is only made when it can succeed. The stamp
+// can sit anywhere in the file, so stream the whole thing for the needle.
+func looksLikeGo(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	needle := []byte("Go buildinf:")
+	// 12-byte needle: keep a 15-byte overlap between 1MB windows.
+	const win = 1 << 20
+	buf := make([]byte, win+15)
+	var carry int
+	for {
+		n, err := f.Read(buf[carry:])
+		total := carry + n
+		if total >= len(needle) {
+			for i := 0; i+len(needle) <= total; i++ {
+				match := true
+				for j := range needle {
+					if buf[i+j] != needle[j] {
+						match = false
+						break
+					}
+				}
+				if match {
+					return true
+				}
+			}
+		}
+		if err != nil {
+			return false
+		}
+		copy(buf, buf[total-15:total])
+		carry = 15
+	}
+}
+
+// looksLikeDotnet reports whether the PE has a CLR header (dd[14]).
+func looksLikeDotnet(path string) bool {
+	info, err := pe.Analyze(path)
+	if err != nil {
+		return false
+	}
+	return info.Dotnet
+}
+
+type goEvidence struct {
+	NormalizedResult struct {
+		BuildInfo struct {
+			GoVersion string `json:"go_version"`
+			Module    struct {
+				Path         string `json:"path"`
+				Main         struct {
+					Path    string `json:"path"`
+					Version string `json:"version"`
+				} `json:"main"`
+				Dependencies []struct {
+					Path    string `json:"path"`
+					Version string `json:"version"`
+				} `json:"dependencies"`
+				Settings []struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+				} `json:"settings"`
+			} `json:"module"`
+		} `json:"build_info"`
+	} `json:"normalized_result"`
+}
+
+func parseGoInfo(txt string) *model.GoInfo {
+	var ev goEvidence
+	if err := json.Unmarshal([]byte(txt), &ev); err != nil {
+		return nil
+	}
+	bi := ev.NormalizedResult.BuildInfo
+	if bi.GoVersion == "" && bi.Module.Path == "" {
+		return nil
+	}
+	gi := &model.GoInfo{
+		GoVersion:  bi.GoVersion,
+		ModulePath: bi.Module.Path,
+		MainPath:   bi.Module.Main.Path,
+		MainVer:    bi.Module.Main.Version,
+		Settings:   map[string]string{},
+	}
+	for _, d := range bi.Module.Dependencies {
+		gi.Deps = append(gi.Deps, model.GoDep{Path: d.Path, Ver: d.Version})
+	}
+	for _, s := range bi.Module.Settings {
+		gi.Settings[s.Key] = s.Value
+	}
+	return gi
+}
+
+// parseDotnetInfo extracts the widely-present managed fields without assuming
+// an exact schema (shapes vary by detail level). Anything unrecognized stays
+// in Summary so no evidence is lost.
+func parseDotnetInfo(txt string) *model.DotnetInfo {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(txt), &raw); err != nil {
+		return nil
+	}
+	nr, _ := raw["normalized_result"].(map[string]any)
+	if nr == nil {
+		nr = raw
+	}
+	di := &model.DotnetInfo{
+		Assembly: findKey(nr, "assembly_name", "assembly", "name"),
+		Version:  findKey(nr, "assembly_version", "version", "assemblyversion"),
+		Target:   findKey(nr, "target_framework", "framework", "targetframework"),
+		Module:   findKey(nr, "module", "module_name", "modulename"),
+		MVID:     findKey(nr, "mvid", "module_version_id"),
+	}
+	if s := findKey(nr, "summary", "description"); s != "" {
+		di.Summary = truncate(s, 400)
+	} else {
+		di.Summary = truncate(firstLine(txt, 400), 400)
+	}
+	if di.Assembly == "" && di.Version == "" && di.Target == "" && di.Module == "" && di.MVID == "" {
+		return nil
+	}
+	return di
+}
+
+// findKey does a case-insensitive, recursive search for the first matching key
+// with a scalar string value.
+func findKey(m map[string]any, names ...string) string {
+	want := map[string]bool{}
+	for _, n := range names {
+		want[strings.ToLower(n)] = true
+	}
+	var walk func(v any, depth int) string
+	walk = func(v any, depth int) string {
+		if depth > 6 {
+			return ""
+		}
+		obj, ok := v.(map[string]any)
+		if !ok {
+			return ""
+		}
+		for k, val := range obj {
+			if want[strings.ToLower(k)] {
+				if s, ok := val.(string); ok && s != "" {
+					return s
+				}
+			}
+		}
+		for _, val := range obj {
+			if s := walk(val, depth+1); s != "" {
+				return s
+			}
+		}
+		return ""
+	}
+	return walk(m, 0)
 }

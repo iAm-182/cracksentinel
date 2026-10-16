@@ -20,29 +20,43 @@ type Match struct {
 }
 
 type Runner struct {
-	rulesDir string
+	bin      string
+	rules    string // single combined .yar file passed to the CLI
 	tmp      string
 	timeout  time.Duration
 }
 
 var ErrYaraMissing = fmt.Errorf("yara binary not found in PATH")
 
+// BinaryAvailable reports whether a YARA CLI is reachable. On Windows the
+// official prebuilt is named yara64.exe (or yara32.exe), so those are accepted
+// too — see plan P1.1.
 func BinaryAvailable() bool {
-	_, err := exec.LookPath("yara")
-	return err == nil
+	return resolveBinary() != ""
+}
+
+func resolveBinary() string {
+	for _, name := range []string{"yara", "yara64", "yara32"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 func New(rulesDir string, useBuiltin bool) (*Runner, error) {
-	if !BinaryAvailable() {
+	bin := resolveBinary()
+	if bin == "" {
 		return nil, ErrYaraMissing
 	}
-	r := &Runner{timeout: 60 * time.Second}
+	r := &Runner{bin: bin, timeout: 60 * time.Second}
+	var dirs []string
 	if rulesDir != "" {
 		info, err := os.Stat(rulesDir)
 		if err != nil || !info.IsDir() {
 			return nil, fmt.Errorf("yara rules dir invalid: %s", rulesDir)
 		}
-		r.rulesDir = rulesDir
+		dirs = append(dirs, rulesDir)
 	}
 	if useBuiltin || rulesDir == "" {
 		tmp, err := os.MkdirTemp("", "gc-yara-")
@@ -62,17 +76,72 @@ func New(rulesDir string, useBuiltin bool) (*Runner, error) {
 			}
 			os.WriteFile(filepath.Join(tmp, e.Name()), b, 0o644)
 		}
-		if r.rulesDir == "" {
-			r.rulesDir = tmp
+		dirs = append(dirs, tmp)
+	}
+	// The YARA CLI takes a single RULES_FILE, not a directory (and has no -C
+	// flag), so concatenate every .yar in scope into one combined file.
+	// NOTE: files must not declare the same rule name twice.
+	combined := filepath.Join(r.tmpOr(os.TempDir()), "combined.yar")
+	var sb strings.Builder
+	files := 0
+	for _, d := range dirs {
+		ents, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range ents {
+			if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".yar") {
+				continue
+			}
+			b, err := os.ReadFile(filepath.Join(d, e.Name()))
+			if err != nil {
+				continue
+			}
+			sb.WriteString("\n// ---- " + e.Name() + " ----\n")
+			sb.Write(b)
+			sb.WriteByte('\n')
+			files++
 		}
 	}
+	if files == 0 {
+		r.Close()
+		return nil, fmt.Errorf("no .yar rules found")
+	}
+	if r.tmp == "" {
+		tmp, err := os.MkdirTemp("", "gc-yara-")
+		if err != nil {
+			return nil, err
+		}
+		r.tmp = tmp
+		combined = filepath.Join(tmp, "combined.yar")
+	}
+	if err := os.WriteFile(combined, []byte(sb.String()), 0o644); err != nil {
+		r.Close()
+		return nil, err
+	}
+	r.rules = combined
+	// Compile-check now so a broken rule surfaces as a loud init warning
+	// instead of silently disabling the whole YARA layer on every file.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, bin, "-w", combined, "NUL").CombinedOutput(); err != nil {
+		r.Close()
+		return nil, fmt.Errorf("yara rules failed to compile: %s: %s", err, strings.TrimSpace(string(out)))
+	}
 	return r, nil
+}
+
+func (r *Runner) tmpOr(fallback string) string {
+	if r.tmp != "" {
+		return r.tmp
+	}
+	return fallback
 }
 
 func (r *Runner) Scan(target string) ([]Match, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "yara", "-r", "-w", "-C", r.rulesDir, target)
+	cmd := exec.CommandContext(ctx, r.bin, "-w", r.rules, target)
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -86,11 +155,12 @@ func (r *Runner) Scan(target string) ([]Match, error) {
 		if line == "" {
 			continue
 		}
-		fields := strings.SplitN(line, "\t", 2)
-		if len(fields) >= 2 {
-			matches = append(matches, Match{Rule: strings.TrimSpace(fields[0]), Path: strings.TrimSpace(fields[1])})
-		} else if len(fields) == 1 && fields[0] != "" {
-			matches = append(matches, Match{Rule: fields[0], Path: target})
+		// Default YARA output is "<rule> <path>" separated by spaces
+		// (rule names never contain spaces).
+		if i := strings.IndexByte(line, ' '); i > 0 {
+			matches = append(matches, Match{Rule: line[:i], Path: strings.TrimSpace(line[i+1:])})
+		} else {
+			matches = append(matches, Match{Rule: line, Path: target})
 		}
 	}
 	return matches, nil

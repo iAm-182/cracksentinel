@@ -49,7 +49,7 @@ rule gc_keylogger_strings
         $b = "SetWindowsHookEx" ascii wide
         $c = "GetKeyState" ascii wide
     condition:
-        ($a and $b) or $a or $b
+        $a or $b or $c
 }
 
 rule gc_stealer_strings

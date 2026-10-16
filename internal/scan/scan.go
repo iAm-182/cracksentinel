@@ -24,6 +24,7 @@ import (
 	"gamecrack-scanner/internal/pe"
 	"gamecrack-scanner/internal/rules"
 	"gamecrack-scanner/internal/sandbox"
+	"gamecrack-scanner/internal/telemetry"
 	"gamecrack-scanner/internal/text"
 	"gamecrack-scanner/internal/yara"
 )
@@ -47,6 +48,7 @@ type Config struct {
 	DetonateMin  int
 	DetonatorDir string
 	NoUnpack     bool
+	Telemetry    *telemetry.Client
 }
 
 type Scanner struct {
@@ -60,6 +62,57 @@ type Scanner struct {
 	upxPath   string
 	upxProbed bool
 	tmpMu     sync.Mutex
+	warnMu    sync.Mutex
+	warned    map[string]bool
+}
+
+// warnOnce prints a warning at most once per key (concurrency-safe).
+func (s *Scanner) warnOnce(msg string) {
+	s.warnMu.Lock()
+	defer s.warnMu.Unlock()
+	if s.warned == nil {
+		s.warned = map[string]bool{}
+	}
+	if s.warned[msg] {
+		return
+	}
+	s.warned[msg] = true
+	fmt.Fprintln(os.Stderr, msg)
+}
+
+// flushTelemetry contributes this scan's verdicts to the shared-reputation
+// worker. Best-effort: failures warn once and never fail the scan.
+func (s *Scanner) flushTelemetry(sum *model.Summary) {
+	tc := s.cfg.Telemetry
+	if tc == nil || !tc.Enabled() || sum == nil {
+		return
+	}
+	var entries []telemetry.ReportEntry
+	for _, r := range sum.Results {
+		if r.Skipped || r.SHA256 == "" {
+			continue
+		}
+		var rules []string
+		for i, f := range r.Findings {
+			if i >= 6 {
+				break
+			}
+			rules = append(rules, f.Rule)
+		}
+		entries = append(entries, telemetry.ReportEntry{
+			SHA:     r.SHA256,
+			Verdict: r.Verdict.String(),
+			Score:   r.Score,
+			Rules:   rules,
+		})
+	}
+	if err := tc.ReportBatch(entries); err != nil {
+		s.warnOnce(fmt.Sprintf("warning: telemetry report failed: %v", err))
+		return
+	}
+	if !s.cfg.Quiet {
+		fmt.Printf("telemetry: contributed %d verdict(s) to shared reputation\n", len(entries))
+	}
 }
 
 var unpackSeq int64
@@ -270,6 +323,7 @@ func (s *Scanner) Run() (*model.Summary, error) {
 	<-done
 	sum, _ := s.summarize(all, scanned, walked)
 	sum.DurationMs = time.Since(start).Milliseconds()
+	s.flushTelemetry(sum)
 	return sum, nil
 }
 
@@ -316,6 +370,7 @@ func (s *Scanner) ScanFiles(paths []string) (*model.Summary, error) {
 	<-done
 	sum, _ := s.summarize(all, scanned, int64(len(paths)))
 	sum.DurationMs = time.Since(start).Milliseconds()
+	s.flushTelemetry(sum)
 	return sum, nil
 }
 
@@ -544,6 +599,20 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 					Detail:   online.Describe(*onlineRes),
 				})
 			}
+			res.Findings = findings
+		}
+	}
+
+	if s.cfg.Telemetry != nil && s.cfg.Telemetry.Enabled() && sha != "" {
+		if rep, err := s.cfg.Telemetry.Lookup(sha); err != nil {
+			s.warnOnce(fmt.Sprintf("warning: telemetry lookup failed: %v", err))
+		} else if delta := telemetry.ScoreDelta(rep); delta != 0 {
+			findings = append(findings, model.Finding{
+				Rule:     "shared_rep",
+				Category: "reputation",
+				Severity: delta,
+				Detail:   telemetry.Describe(rep),
+			})
 			res.Findings = findings
 		}
 	}

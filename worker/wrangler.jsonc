@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/configuration/",
+  "name": "cracksentinel-rep",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cracksentinel-rep",
+      "database_id": "5d7c9275-141b-4822-ad64-727e2e6c5a60"
+    }
+  ],
+
+  // Custom domain. Zone jackishere.my.id lives in the ezpz account.
+  // Cloudflare creates the DNS record automatically on deploy.
+  "routes": [
+    {
+      "pattern": "sentinel.jackishere.my.id",
+      "custom_domain": true
+    }
+  ]
+}

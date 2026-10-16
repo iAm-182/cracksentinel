@@ -35,6 +35,17 @@ throttling, auto-backoff on 429, and negative-result caching (second scan = 0 AP
 **Deep-dive** (per-file, manual): spawns [REA](https://github.com/morluto/rea) +
 Ghidra headless to decompile IOC-referencing functions and produce pseudocode evidence.
 
+**Shared reputation** (optional, opt-in): community telemetry via a Cloudflare
+Worker + D1 (`worker/`, live at `https://sentinel.jackishere.my.id`). The scanner
+looks up each file hash (`shared_rep` finding when 2+ reporters agree) and
+contributes its own verdicts afterwards. Only hashes + verdicts + scores leave
+the machine — no filenames, no paths. Enable with:
+
+```
+scanner.exe <folder> -telemetry-url https://sentinel.jackishere.my.id -telemetry-key <key>
+# or via env: TELEMETRY_URL / TELEMETRY_KEY
+```
+
 ## Usage
 
 ```
@@ -90,10 +101,12 @@ internal/scan/     walker, worker pool, scoring pipeline
 internal/pe/       PE parsing: sections/entropy, imports, imphash, packer, signature
 internal/rules/    detection engine: import IOC table, script IOCs, crack whitelist
 internal/online/   VirusTotal / MalwareBazaar client + scoring
+internal/telemetry/ shared-reputation client (lookup + batch report)
 internal/yara/     yara CLI runner + embedded builtin rules
 internal/deep/     REA MCP deep-dive driver
 internal/cache/    JSONL hash cache
 internal/report/   console / JSON / Markdown output
+worker/            Cloudflare Worker + D1 shared-reputation backend
 ```
 
 ## Defensive tool

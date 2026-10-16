@@ -16,3 +16,11 @@ containers-scan.json
 deep-escalation-test.json
 liar-scan.json
 liar-scan-online.json
+telem*.json
+det-test.json
+detwin.json
+yara-check.json
+upx-check.json
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars

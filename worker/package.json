@@ -1,0 +1,15 @@
+{
+  "name": "cracksentinel-rep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CrackSentinel shared-reputation telemetry (Cloudflare Worker + D1)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "db:init": "wrangler d1 execute cracksentinel-rep --remote --yes --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.0"
+  }
+}

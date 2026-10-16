@@ -14,6 +14,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/telemetry"
 	"gamecrack-scanner/internal/watch"
 	"gamecrack-scanner/internal/yara"
 )
@@ -101,6 +102,8 @@ func runWatch(args []string) {
 		extractDep  int
 		extractMB   int64
 		quiet       bool
+		telemetryURL string
+		telemetryKey string
 	)
 	fs.IntVar(&interval, "interval", 60, "seconds between watch passes")
 	fs.BoolVar(&once, "once", false, "single pass then exit")
@@ -123,6 +126,8 @@ func runWatch(args []string) {
 	fs.IntVar(&extractDep, "extract-depth", 2, "scan inside containers N levels deep")
 	fs.Int64Var(&extractMB, "extract-mb", 500, "max MB of inner files per container")
 	fs.BoolVar(&quiet, "quiet", false, "minimal output")
+	fs.StringVar(&telemetryURL, "telemetry-url", "", "shared-reputation worker base URL (opt-in)")
+	fs.StringVar(&telemetryKey, "telemetry-key", "", "shared-reputation ingest key")
 	fs.Parse(args)
 
 	root := fs.Arg(0)
@@ -134,6 +139,12 @@ func runWatch(args []string) {
 	}
 	if mbKey == "" {
 		mbKey = os.Getenv("MB_API_KEY")
+	}
+	if telemetryURL == "" {
+		telemetryURL = os.Getenv("TELEMETRY_URL")
+	}
+	if telemetryKey == "" {
+		telemetryKey = os.Getenv("TELEMETRY_KEY")
 	}
 	var ex []string
 	for _, e := range strings.Split(excludes, ",") {
@@ -180,6 +191,7 @@ func runWatch(args []string) {
 			Yara:         yr,
 			ExtractDepth: extractDep,
 			ExtractMaxMB: extractMB,
+			Telemetry:    telemetry.New(telemetryURL, telemetryKey),
 		},
 	}
 	if err := watch.Run(cfg); err != nil {
@@ -216,6 +228,8 @@ func runScan(args []string) {
 		detonateMin   int
 		detonatorDir  string
 		noUnpack      bool
+		telemetryURL  string
+		telemetryKey  string
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -242,6 +256,8 @@ func runScan(args []string) {
 	flag.IntVar(&detonateMin, "detonate-min", 30, "static score that triggers detonation")
 	flag.StringVar(&detonatorDir, "detonator-dir", "detonator", "path to detonator Dockerfile context (for image build)")
 	flag.BoolVar(&noUnpack, "no-unpack", false, "disable UPX auto-unpack (requires upx binary in PATH)")
+	flag.StringVar(&telemetryURL, "telemetry-url", "", "shared-reputation worker base URL (default from TELEMETRY_URL env; opt-in)")
+	flag.StringVar(&telemetryKey, "telemetry-key", "", "shared-reputation ingest key (default from TELEMETRY_KEY env)")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -249,6 +265,12 @@ func runScan(args []string) {
 	}
 	if mbKey == "" {
 		mbKey = os.Getenv("MB_API_KEY")
+	}
+	if telemetryURL == "" {
+		telemetryURL = os.Getenv("TELEMETRY_URL")
+	}
+	if telemetryKey == "" {
+		telemetryKey = os.Getenv("TELEMETRY_KEY")
 	}
 
 	root := flag.Arg(0)
@@ -306,6 +328,14 @@ func runScan(args []string) {
 		}
 	}
 
+	var tel *telemetry.Client
+	if telemetryURL != "" {
+		tel = telemetry.New(telemetryURL, telemetryKey)
+		if !tel.Enabled() {
+			fmt.Fprintln(os.Stderr, "warning: -telemetry-url given but no key (use -telemetry-key or TELEMETRY_KEY env); telemetry disabled")
+		}
+	}
+
 	cfg := scan.Config{
 		Root:         root,
 		Workers:      workers,
@@ -324,10 +354,15 @@ func runScan(args []string) {
 		DetonateMin:  detonateMin,
 		DetonatorDir: detonatorDir,
 		NoUnpack:     noUnpack,
+		Telemetry:    tel,
 	}
 
-	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d\n",
+	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",
 		root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled(), cfg.ExtractDepth)
+	if tel.Enabled() {
+		fmt.Printf("  telemetry=on")
+	}
+	fmt.Println()
 	s, err := scan.New(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "scanner init error:", err)

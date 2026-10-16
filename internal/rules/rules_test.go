@@ -84,3 +84,55 @@ func TestFullPipelineVerdict(t *testing.T) {
 	}
 	var _ = model.VerdictMalicious
 }
+
+func emuStrs(n int) []string {
+	strs := make([]string, 0, n+1)
+	for i := 0; i < n; i++ {
+		strs = append(strs, "SteamAPI_Foo"+string(rune('A'+i%26)))
+	}
+	return strs
+}
+
+func TestIsEmuLikeClean(t *testing.T) {
+	findings, wl := Match(MatchInput{Kind: filetype.KindPE, Strs: emuStrs(60)})
+	found := false
+	for _, w := range wl {
+		if w == "EMU_STEAMAPI" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("emu-like DLL not flagged: wl=%+v findings=%+v", wl, findings)
+	}
+}
+
+func TestIsEmuLikeVetoed(t *testing.T) {
+	strs := append(emuStrs(60),
+		`https://discord.com/api/webhooks/1234567890123456789/aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789AbCdEfGhIjKlMnOpQrStUvWxYz01`)
+	findings, wl := Match(MatchInput{Kind: filetype.KindPE, Strs: strs})
+	for _, w := range wl {
+		if w == "EMU_STEAMAPI" {
+			t.Fatalf("trojanized emu must NOT get EMU_STEAMAPI: %+v", findings)
+		}
+	}
+}
+
+func TestVMRegexNoWinerrorFP(t *testing.T) {
+	fs := matchStrings([]string{"?_Winerror_map@std@@YAHH@Z"})
+	for _, f := range fs {
+		if f.Rule == "sandbox_check" {
+			t.Fatalf("Winerror must not match sandbox_check: %+v", fs)
+		}
+	}
+	// Real wine marker still fires.
+	fs = matchStrings([]string{"wine_get_version"})
+	found := false
+	for _, f := range fs {
+		if f.Rule == "sandbox_check" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("wine_get_version should match sandbox_check: %+v", fs)
+	}
+}

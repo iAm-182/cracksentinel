@@ -77,7 +77,7 @@ var reBase64Blob = regexp.MustCompile(`[A-Za-z0-9+/]{200,}={0,2}`)
 var reWallet = regexp.MustCompile(`(?i)(wallet\.dat|metamask|exodus|electrum|seed phrase|mnemonic|Login Data|cookies\.sqlite|passwords\.txt|autofill)`)
 var reKeylogWord = regexp.MustCompile(`(?i)(keylog|keystroke|clipboard ?grab|grabber|stealer|exfiltrat)`)
 var reRunKey = regexp.MustCompile(`(?i)(CurrentVersion\\\\Run|schtasks\s+/create|New-Service|reg\s+add\s+HKLM)`)
-var reVM = regexp.MustCompile(`(?i)(vmware|virtualbox|vbox|sandboxie|wine)`)
+var reVM = regexp.MustCompile(`(?i)(vmware|virtualbox|vbox|sandboxie|wine[^a-z])`)
 
 var scriptKeywords = []string{
 	"getasynckeystate", "setwindowshookex", "cryptunprotectdata",
@@ -90,6 +90,16 @@ var crackWhitelist = []string{
 	"RUNE", "Goldberg", "SmartSteamEmu", "SmartSteam", "FLT", "ALI213",
 	"HOODLUM", "CODEX", "CPY", "SKIDROW", "RELOADED", "PLAZA", "TENOKE",
 	"steam_emu", "ColdClientLoader", "creamlab",
+}
+
+// strongStringIOCs are string-level findings that veto the emulator-cap below:
+// a trojanized emu almost always adds one of these (C2 URL, encoded command,
+// credential targets). Import-only findings don't veto — hooking imports are
+// core emulator behavior.
+var strongStringIOCs = map[string]bool{
+	"discord_webhook": true, "telegram_token": true, "ps_encoded": true,
+	"download_cradle": true, "ip_port": true, "wallet_browser_target": true,
+	"keylog_word": true, "keylog_word2": true, "persistence_string": true,
 }
 
 type MatchInput struct {
@@ -106,6 +116,9 @@ func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 	findings = append(findings, matchStrings(in.Strs)...)
 	findings = append(findings, matchBytes(in.Bytes)...)
 	whitelistHits = matchWhitelist(in.Strs)
+	if isEmuLike(in.Strs, findings) {
+		whitelistHits = append(whitelistHits, "EMU_STEAMAPI")
+	}
 	if len(findings) == 0 && len(whitelistHits) > 0 {
 		findings = append(findings, model.Finding{
 			Rule:     "crack_whitelist",
@@ -248,6 +261,32 @@ func bytesContains(haystack, needle []byte) bool {
 		}
 	}
 	return false
+}
+
+// isEmuLike reports whether the file looks like a Steam emulator DLL (TENOKE /
+// Goldberg style): dominated by SteamAPI exports with no exfil/payload string
+// IOCs. Hooking imports (WriteProcessMemory, SetWindowsHookEx) are normal emu
+// behavior, so they don't veto — but any strong string IOC does, because a
+// trojanized twin needs payload strings (C2 URLs, encoded commands, paths).
+func isEmuLike(strs []string, findings []model.Finding) bool {
+	emu := 0
+	for _, s := range strs {
+		if strings.Contains(s, "SteamAPI_") {
+			emu++
+			if emu >= 50 {
+				break
+			}
+		}
+	}
+	if emu < 50 {
+		return false
+	}
+	for _, f := range findings {
+		if strongStringIOCs[f.Rule] {
+			return false
+		}
+	}
+	return true
 }
 
 func matchWhitelist(strs []string) []string {

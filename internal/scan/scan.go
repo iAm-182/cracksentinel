@@ -643,6 +643,24 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 			score = 0
 		}
 	}
+	// Emulator cap: a Steam-emu-like DLL (SteamAPI exports, zero payload
+	// strings) is suspicious by construction — hooking imports are its job —
+	// so it stays reviewable but never auto-MALICIOUS. A trojanized twin
+	// carries payload strings, which veto the cap inside isEmuLike.
+	for _, w := range whitelist {
+		if w != "EMU_STEAMAPI" {
+			continue
+		}
+		findings = append(findings, model.Finding{
+			Rule: "emu_steamapi", Category: "info", Severity: 0,
+			Detail: "Steam-emulator-like DLL: hooking imports are normal here; capped at SUSPICIOUS, review imports manually",
+		})
+		res.Findings = findings
+		if score > 59 {
+			score = 59
+		}
+		break
+	}
 	res.Score = score
 	res.Verdict = model.VerdictClean
 	if score >= 70 {

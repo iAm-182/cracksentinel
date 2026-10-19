@@ -25,7 +25,11 @@ CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
 
 echo "==> staging payload"
 cp README.md "${OUT}/"
-[ -d detonator ] && cp -r detonator "${OUT}/"
+# NOTE: "[ -d x ] && cmd" under `set -e` exits the whole script when the test
+# is false, so every conditional here uses a proper if block.
+if [ -d detonator ]; then
+  cp -r detonator "${OUT}/"
+fi
 mkdir -p "${OUT}/yara-rules"
 cp internal/yara/rules/builtin.yar "${OUT}/yara-rules/"
 
@@ -41,8 +45,25 @@ if command -v sha256sum >/dev/null 2>&1; then
 fi
 
 echo "==> zipping"
-cd dist && zip -qr "$(basename "${OUT}").zip" "$(basename "${OUT}")"
-cd ..
+# The zip tool differs across environments (CI has zip, git-bash on Windows
+# does not), so fall back through the available options.
+if command -v zip >/dev/null 2>&1; then
+  (cd dist && zip -qr "$(basename "${OUT}").zip" "$(basename "${OUT}")")
+elif command -v 7z >/dev/null 2>&1; then
+  (cd dist && 7z a -tzip -mx=5 "$(basename "${OUT}").zip" "$(basename "${OUT}")" >/dev/null)
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+  (cd dist && python3 -m zipfile -c "$(basename "${OUT}").zip" "$(basename "${OUT}")")
+elif command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
+  (cd dist && python -m zipfile -c "$(basename "${OUT}").zip" "$(basename "${OUT}")")
+elif command -v tar >/dev/null 2>&1; then
+  # bsdtar picks the format from the extension with -a.
+  (cd dist && tar -a -cf "$(basename "${OUT}").zip" "$(basename "${OUT}")")
+else
+  echo "no zip tool found (need zip, 7z, python or tar)" >&2
+  exit 1
+fi
+# No `cd` here: every branch above runs in a subshell, so the working
+# directory never changed and a stray `cd ..` would break the paths below.
 
 echo "==> done: dist/$(basename "${OUT}").zip"
 ls -la "dist/$(basename "${OUT}").zip"

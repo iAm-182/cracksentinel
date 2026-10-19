@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -384,35 +385,55 @@ func parseDotnetInfo(txt string) *model.DotnetInfo {
 	return di
 }
 
-// findKey does a case-insensitive, recursive search for the first matching key
-// with a scalar string value.
+// findKey searches a nested structure for a key with a scalar string value.
+//
+// The names are a PRIORITY LIST: "assembly_name" is preferred over
+// "assembly", which is preferred over "name". The previous implementation
+// treated the list as a set and walked the tree in Go's randomized map
+// iteration order, so a structure holding both identity.assembly and
+// module.name returned one or the other at random — the same binary could
+// report a different assembly name on every run, and the result differed
+// between Windows and Linux.
+//
+// The search is breadth-first (a shallower match wins) and the keys within
+// a level are visited in sorted order, so the result is deterministic.
 func findKey(m map[string]any, names ...string) string {
-	want := map[string]bool{}
-	for _, n := range names {
-		want[strings.ToLower(n)] = true
+	for _, name := range names {
+		if s := findKeyOne(m, strings.ToLower(name), 0); s != "" {
+			return s
+		}
 	}
-	var walk func(v any, depth int) string
-	walk = func(v any, depth int) string {
-		if depth > 6 {
-			return ""
-		}
-		obj, ok := v.(map[string]any)
-		if !ok {
-			return ""
-		}
-		for k, val := range obj {
-			if want[strings.ToLower(k)] {
-				if s, ok := val.(string); ok && s != "" {
-					return s
+	return ""
+}
+
+// findKeyOne finds a single key name anywhere in the tree.
+func findKeyOne(m map[string]any, name string, depth int) string {
+	if depth > 6 {
+		return ""
+	}
+	level := []map[string]any{m}
+	for d := 0; d <= 6 && len(level) > 0; d++ {
+		var next []map[string]any
+		for _, obj := range level {
+			keys := make([]string, 0, len(obj))
+			for k := range obj {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				if strings.ToLower(k) == name {
+					if s, ok := obj[k].(string); ok && s != "" {
+						return s
+					}
+				}
+			}
+			for _, k := range keys {
+				if sub, ok := obj[k].(map[string]any); ok {
+					next = append(next, sub)
 				}
 			}
 		}
-		for _, val := range obj {
-			if s := walk(val, depth+1); s != "" {
-				return s
-			}
-		}
-		return ""
+		level = next
 	}
-	return walk(m, 0)
+	return ""
 }

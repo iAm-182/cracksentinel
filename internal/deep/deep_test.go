@@ -79,3 +79,41 @@ func TestParseDotnetInfo(t *testing.T) {
 		t.Errorf("garbage input must return nil")
 	}
 }
+
+// TestParseDotnetInfoIsDeterministic is a regression test for a real defect:
+// findKey used Go's randomized map iteration order, so a structure holding
+// both identity.assembly ("EvilRat") and module.name ("EvilRat.exe") returned
+// one or the other at random. The same binary could report a different
+// assembly name on every run, and the result differed between Windows and
+// Linux — the Windows build passed the single-assertion test above by luck.
+func TestParseDotnetInfoIsDeterministic(t *testing.T) {
+	const fixture = `{"evidence_id":"ev_1","operation":"inspect_managed_artifact",` +
+		`"normalized_result":{"identity":{"assembly":"EvilRat","version":"1.2.3.0"},` +
+		`"module":{"name":"EvilRat.exe","mvid":"12345678-1234-1234-1234-1234567890ab"},` +
+		`"frameworks":[".NET Framework 4.8"],"summary":"managed PE/CLI"}}`
+
+	first := parseDotnetInfo(fixture)
+	if first == nil {
+		t.Fatal("parseDotnetInfo returned nil")
+	}
+	for i := 0; i < 200; i++ {
+		got := parseDotnetInfo(fixture)
+		if got == nil {
+			t.Fatal("parseDotnetInfo returned nil on iteration", i)
+		}
+		if got.Assembly != first.Assembly {
+			t.Fatalf("iteration %d: Assembly = %q, want %q (map iteration order leaked)",
+				i, got.Assembly, first.Assembly)
+		}
+		if got.Version != first.Version {
+			t.Fatalf("iteration %d: Version = %q, want %q", i, got.Version, first.Version)
+		}
+		if got.MVID != first.MVID {
+			t.Fatalf("iteration %d: MVID = %q, want %q", i, got.MVID, first.MVID)
+		}
+	}
+	// The priority list must win over a later, less specific name.
+	if first.Assembly != "EvilRat" {
+		t.Errorf("Assembly = %q, want %q (identity.assembly must beat module.name)", first.Assembly, "EvilRat")
+	}
+}

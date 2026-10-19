@@ -57,11 +57,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-      - name: package bundle
-        run: bash scripts/package.sh "${GITHUB_REF_NAME#v}"
+      - name: package bundles (win/linux/mac)
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          for target in "windows amd64" "linux amd64" "darwin arm64"; do
+            set -- $target
+            echo "==> packaging $1/$2"
+            GOOS="$1" GOARCH="$2" bash scripts/package.sh "$VERSION"
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: release-bundle
+          name: release-bundles
           path: dist/*.zip
       - name: publish release
         uses: softprops/action-gh-release@v2
@@ -77,12 +84,13 @@ jobs:
             scanner.exe <folder> -html report.html
             ```
 
-            | Platform | File |
+            | Platform | Bundle |
             |---|---|
-            | Windows | `scacksentinel-*-windows-amd64.zip` |
+            | Windows | `cracksentinel-*-windows-amd64.zip` |
             | Linux | `cracksentinel-*-linux-amd64.zip` |
             | macOS | `cracksentinel-*-darwin-arm64.zip` |
 
             Optional extras (auto-detected, everything works without them):
             `yara`/`yara64` (YARA layer), `upx` (packed-PE auto-unpack),
             `7z` (7z/rar/iso container expansion), `docker` (behavioural detonation).
+

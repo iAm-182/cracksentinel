@@ -15,6 +15,7 @@ import (
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
 	"gamecrack-scanner/internal/telemetry"
+	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
 	"gamecrack-scanner/internal/yara"
 )
@@ -66,6 +67,16 @@ func escalate(sum *model.Summary, threshold, maxN, budgetSec int) {
 }
 
 func main() {
+	for _, a := range os.Args[1:] {
+		switch a {
+		case "-version", "--version", "-v":
+			fmt.Println(version.String())
+			return
+		case "-help", "--help", "-h":
+			usage()
+			return
+		}
+	}
 	if len(os.Args) > 1 && os.Args[1] == "deep" {
 		runDeep(os.Args[2:])
 		return
@@ -75,6 +86,48 @@ func main() {
 		return
 	}
 	runScan(os.Args[1:])
+}
+
+func usage() {
+	fmt.Printf(`CrackSentinel — defensive malware scanner for cracked-game folders
+
+usage:
+  scanner.exe <folder|file> [flags]      scan a folder (or a single file)
+  scanner.exe deep <file> [flags]        REA/Ghidra static deep-dive
+  scanner.exe watch <folder> [flags]      continuous scan + quarantine
+  scanner.exe -version                   print build identity
+
+scan flags:
+  -workers N        parallel workers (default 3)
+  -max-size MB      skip files larger than N MB (default 512)
+  -skip-assets      skip game asset extensions (default true)
+  -exclude LIST     comma-separated extra extensions to skip
+  -online           VirusTotal / MalwareBazaar hash reputation
+  -vt-key K         VirusTotal API key (or VT_API_KEY env)
+  -mb-key K         MalwareBazaar key (or MB_API_KEY env)
+  -vt-interval S    min seconds between online lookups (default 16)
+  -no-cache         disable the SHA-256 cache
+  -cache PATH       cache file path
+  -yara-rules DIR   directory of external .yar rules
+  -no-yara          disable the YARA layer
+  -extract-depth N  scan inside containers N levels deep (default 2, 0 = off)
+  -extract-mb MB    max MB of inner files per container (default 500)
+  -tmp-dir DIR      where container extraction happens (default: system temp)
+  -deep-threshold N auto-run REA static analysis on PEs scoring >= N (default 40, 0 = off)
+  -deep-max N       max files to auto-escalate per scan (default 3)
+  -deep-budget S    total seconds budget for auto-escalation (default 240)
+  -detonate         behavioral detonation of suspicious PEs (docker + wine)
+  -detonate-min N   static score that triggers detonation (default 30)
+  -detonator-dir D  detonator Dockerfile context (default "detonator")
+  -no-unpack        disable UPX auto-unpack
+  -telemetry-url U  shared-reputation worker base URL (opt-in)
+  -telemetry-key K  shared-reputation ingest key
+  -json PATH        write JSON report
+  -md PATH          write Markdown report
+  -html PATH        write standalone HTML report
+  -top N            max flagged files shown in the console summary (default 50)
+  -quiet            only print the summary
+`)
 }
 
 func runWatch(args []string) {
@@ -212,6 +265,7 @@ func runScan(args []string) {
 		quiet         bool
 		jsonOut       string
 		mdOut         string
+		htmlOut       string
 		top           int
 		onlineFlag    bool
 		vtKey         string
@@ -230,6 +284,7 @@ func runScan(args []string) {
 		noUnpack      bool
 		telemetryURL  string
 		telemetryKey  string
+		tmpDir        string
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -240,6 +295,7 @@ func runScan(args []string) {
 	flag.BoolVar(&quiet, "quiet", false, "only print summary")
 	flag.StringVar(&jsonOut, "json", "", "write JSON report to file")
 	flag.StringVar(&mdOut, "md", "", "write Markdown report to file")
+	flag.StringVar(&htmlOut, "html", "", "write standalone HTML report to file")
 	flag.IntVar(&top, "top", 50, "max flagged files shown in summary")
 	flag.BoolVar(&onlineFlag, "online", false, "enable online hash reputation (VirusTotal/MalwareBazaar); caches results in the hash cache")
 	flag.StringVar(&vtKey, "vt-key", "", "VirusTotal API key (default from VT_API_KEY env)")
@@ -249,6 +305,7 @@ func runScan(args []string) {
 	flag.StringVar(&yaraRules, "yara-rules", "", "directory of external .yar rules (builtin rules always run too)")
 	flag.IntVar(&extractDep, "extract-depth", 2, "scan inside archive/ISO containers N levels deep (0 = scan container file only)")
 	flag.Int64Var(&extractMB, "extract-mb", 500, "max MB of inner files to extract+scan per container")
+	flag.StringVar(&tmpDir, "tmp-dir", "", "base directory for container extraction (default: system temp)")
 	flag.IntVar(&deepThreshold, "deep-threshold", 40, "auto-run REA static analysis on PE files scoring >= N (0 = off)")
 	flag.IntVar(&deepMax, "deep-max", 3, "max files to auto-escalate per scan")
 	flag.IntVar(&deepBudget, "deep-budget", 240, "total seconds budget for auto-escalation")
@@ -282,11 +339,14 @@ func runScan(args []string) {
 		fmt.Fprintln(os.Stderr, "path error:", err)
 		os.Exit(1)
 	}
-	if !info.IsDir() {
-		if i := strings.LastIndexByte(root, os.PathSeparator); i > 0 {
-			root = root[:i]
-		} else {
-			root = "."
+	// Single-file mode: scanning one file scans THAT file, not its parent
+	// directory. The old behaviour silently widened the scope to the whole
+	// folder, which is both surprising and slow.
+	singleFile := !info.IsDir()
+	if singleFile {
+		if !info.Mode().IsRegular() {
+			fmt.Fprintln(os.Stderr, "path error: not a regular file:", root)
+			os.Exit(1)
 		}
 	}
 
@@ -355,10 +415,11 @@ func runScan(args []string) {
 		DetonatorDir: detonatorDir,
 		NoUnpack:     noUnpack,
 		Telemetry:    tel,
+		TempDir:      tmpDir,
 	}
 
-	fmt.Printf("GameCrack Scanner  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",
-		root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled(), cfg.ExtractDepth)
+	fmt.Printf("CrackSentinel %s  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",
+		version.Short(), root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled(), cfg.ExtractDepth)
 	if tel.Enabled() {
 		fmt.Printf("  telemetry=on")
 	}
@@ -369,8 +430,16 @@ func runScan(args []string) {
 		os.Exit(1)
 	}
 	defer s.Close()
+	if tp := s.TempPath(); tp != "" {
+		fmt.Println("extraction temp:", tp)
+	}
 
-	sum, err := s.Run()
+	var sum *model.Summary
+	if singleFile {
+		sum, err = s.ScanFiles([]string{root})
+	} else {
+		sum, err = s.Run()
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "scan error:", err)
 		os.Exit(1)
@@ -396,6 +465,13 @@ func runScan(args []string) {
 			fmt.Fprintln(os.Stderr, "md write error:", err)
 		} else {
 			fmt.Println("Markdown report:", mdOut)
+		}
+	}
+	if htmlOut != "" {
+		if err := report.WriteHTML(htmlOut, sum, root, version.String()); err != nil {
+			fmt.Fprintln(os.Stderr, "html write error:", err)
+		} else {
+			fmt.Println("HTML report:", htmlOut)
 		}
 	}
 }

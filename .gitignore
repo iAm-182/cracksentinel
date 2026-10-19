@@ -24,3 +24,9 @@ upx-check.json
 worker/node_modules/
 worker/.wrangler/
 worker/.dev.vars
+
+# dev scratch files (machine-local, not part of the project)
+schema-depth.js
+dist/
+*.zip
+coverage.out

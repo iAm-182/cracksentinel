@@ -21,7 +21,7 @@ const (
 
 var scriptExt = map[string]bool{
 	".bat": true, ".cmd": true, ".ps1": true, ".vbs": true, ".js": true,
-	".jse": true, ".wsf": true, ".hta": true, ".scr": false,
+	".jse": true, ".wsf": true, ".hta": true,
 }
 
 var assetExt = map[string]bool{
@@ -67,8 +67,13 @@ func Classify(path string) Kind {
 		return KindShortcut
 	case scriptExt[ext]:
 		return KindScript
+	case containerExt[ext]:
+		// .7z/.rar/.iso/.cab/.tar have no reliable magic byte, so the
+		// extension is the only signal. Without this they land in
+		// KindUnknown and the archive rule set never fires.
+		return KindArchive
 	}
-	head := make([]byte, 2)
+	head := make([]byte, 4)
 	f, err := os.Open(path)
 	if err != nil {
 		return KindUnknown
@@ -81,9 +86,6 @@ func Classify(path string) Kind {
 		}
 		if bytes.Equal(head[:2], []byte("PK")) {
 			return KindArchive
-		}
-		if bytes.Equal(head[:2], []byte("MZ")) {
-			return KindPE
 		}
 		if bytes.Equal(head[1:2], []byte{0x00}) && (head[0] == 0xD0 || head[0] == 0xCF) {
 			return KindDoc

@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +28,11 @@ func ImageExists(image string) bool {
 	return cmd.Run() == nil
 }
 
+// BuildImage builds the detonator image. The build output is captured and
+// only surfaced on failure: a 2.4 GB wine image build takes minutes and
+// dumping BuildKit logs into a scan report buries the actual findings.
+// The captured log is returned in the error so the user can still diagnose
+// a broken build.
 func BuildImage(tag, contextDir string) error {
 	if _, err := os.Stat(filepath.Join(contextDir, "Dockerfile")); err != nil {
 		// Fall back to the detonator dir shipped next to the scanner binary,
@@ -42,9 +48,17 @@ func BuildImage(tag, contextDir string) error {
 		}
 	}
 	cmd := exec.Command("docker", "build", "-t", tag, contextDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		log := out.String()
+		if len(log) > 4000 {
+			log = log[len(log)-4000:]
+		}
+		return fmt.Errorf("docker build %s: %w\n%s", tag, err, log)
+	}
+	return nil
 }
 
 func Detonate(targetPath, image string, timeoutSec int) (*Report, error) {

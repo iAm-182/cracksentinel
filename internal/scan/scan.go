@@ -1,7 +1,6 @@
 package scan
 
 import (
-	"archive/zip"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -49,6 +48,10 @@ type Config struct {
 	DetonatorDir string
 	NoUnpack     bool
 	Telemetry    *telemetry.Client
+	// TempDir is the base directory for container extraction. Extraction
+	// can write gigabytes, so it must be pointable at a volume with free
+	// space — the default system temp often lives on a small C: drive.
+	TempDir string
 }
 
 type Scanner struct {
@@ -176,10 +179,22 @@ func (s *Scanner) detonate(path string) *sandbox.Report {
 	}
 	image := "cracksentinel-detonator"
 	if !sandbox.ImageExists(image) {
+		// The Docker daemon is often still starting up when the scanner
+		// runs, and a failed inspect would otherwise trigger a multi-minute
+		// rebuild of an image that already exists. Retry briefly first.
+		for i := 0; i < 3; i++ {
+			time.Sleep(2 * time.Second)
+			if sandbox.ImageExists(image) {
+				break
+			}
+		}
+	}
+	if !sandbox.ImageExists(image) {
 		dir := s.cfg.DetonatorDir
 		if dir == "" {
 			dir = "detonator"
 		}
+		fmt.Fprintf(os.Stderr, "note: building detonator image %s (one time, takes several minutes)...\n", image)
 		if err := sandbox.BuildImage(image, dir); err != nil {
 			s.detFail = true
 			fmt.Fprintf(os.Stderr, "warning: detonator image build failed: %v\n", err)
@@ -222,15 +237,33 @@ func behavioralFindings(r *sandbox.Report) []model.Finding {
 	if r.StdoutNote != "" {
 		out = append(out, model.Finding{Rule: "behav_output", Category: "behavioral", Severity: 0, Detail: r.StdoutNote})
 	}
+	// Exit code 137 = SIGKILL (the sample was still alive when the sandbox
+	// window closed), 139 = SIGSEGV. Both are worth recording: a sample that
+	// has to be killed is a sample that kept running.
+	switch r.ExitCode {
+	case "137":
+		out = append(out, model.Finding{Rule: "behav_killed", Category: "behavioral", Severity: 5, Detail: "sample was still running when the sandbox window closed (SIGKILL)"})
+	case "139":
+		out = append(out, model.Finding{Rule: "behav_crash", Category: "behavioral", Severity: 5, Detail: "sample crashed with SIGSEGV during detonation"})
+	}
 	return out
 }
 
 func New(cfg Config) (*Scanner, error) {
 	s := &Scanner{cfg: cfg}
 	if cfg.ExtractDepth > 0 {
-		tmp, err := os.MkdirTemp("", "gc-extract-")
+		base := cfg.TempDir
+		if base == "" {
+			base = os.TempDir()
+		}
+		tmp, err := os.MkdirTemp(base, "gc-extract-")
 		if err != nil {
-			return nil, err
+			// A full or unwritable temp volume must not kill the scan:
+			// fall back to the system temp, and if that fails too, run
+			// without container expansion.
+			if tmp, err = os.MkdirTemp("", "gc-extract-"); err != nil {
+				return nil, err
+			}
 		}
 		s.tmp = tmp
 	}
@@ -243,6 +276,10 @@ func New(cfg Config) (*Scanner, error) {
 	}
 	return s, nil
 }
+
+// TempPath returns the extraction temp directory (empty when expansion is
+// disabled). The CLI prints it so the user knows where disk space goes.
+func (s *Scanner) TempPath() string { return s.tmp }
 
 func (s *Scanner) Close() {
 	if s.cache != nil {
@@ -481,9 +518,10 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 		PE:    peInfo,
 		Strs:  strs,
 		Bytes: readBytes,
+		Path:  path,
 	})
 	if len(readBytes) == 0 && head != nil {
-		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head})
+		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path})
 		findings = append(findings, f2...)
 	}
 	if peErr != "" {
@@ -540,21 +578,39 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 		switch kind {
 		case filetype.KindPE, filetype.KindScript, filetype.KindArchive, filetype.KindDoc, filetype.KindShortcut, filetype.KindUnknown:
 			if matches, err := s.cfg.Yara.Scan(path); err == nil {
+				// The internal engine and YARA detect the same families.
+				// Count a YARA hit only for categories the internal engine
+				// did not already flag, otherwise one Discord webhook
+				// becomes 40 (internal) + 20 (YARA) = 60 points.
+				already := map[string]bool{}
+				for _, f := range findings {
+					if f.Severity > 0 {
+						already[f.Category] = true
+					}
+				}
 				ys := 0
 				for _, m := range matches {
 					sev := 20
-					if strings.Contains(strings.ToLower(m.Rule), "info") {
+					lower := strings.ToLower(m.Rule)
+					if strings.Contains(lower, "info") {
 						sev = 0
 					}
-					if ys+sev > 40 {
+					if cat := rules.YaraCategory(m.Rule); cat != "" && already[cat] {
+						sev = 0
+					}
+					if sev > 0 && ys+sev > 40 {
 						continue
 					}
 					ys += sev
+					detail := "yara rule match: " + m.Rule
+					if sev == 0 && already[rules.YaraCategory(m.Rule)] {
+						detail += " (duplicate of internal engine — not counted twice)"
+					}
 					findings = append(findings, model.Finding{
 						Rule:     "yara:" + m.Rule,
 						Category: "yara",
 						Severity: sev,
-						Detail:   "yara rule match: " + m.Rule,
+						Detail:   detail,
 					})
 				}
 				res.Findings = findings
@@ -623,51 +679,30 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 			base += f.Severity
 		}
 		if base >= s.cfg.DetonateMin && base < 70 {
-			if rep := s.detonate(path); rep != nil && rep.Error == "" {
-				findings = append(findings, behavioralFindings(rep)...)
+			if rep := s.detonate(path); rep != nil {
+				if rep.Error != "" {
+					// A failed detonation must be visible: otherwise the
+					// user reads "no behavioural findings" as "behaviourally
+					// clean" when the sandbox never actually ran.
+					findings = append(findings, model.Finding{
+						Rule: "behav_failed", Category: "behavioral", Severity: 0,
+						Detail: "behavioural sandbox did not complete: " + rep.Error,
+					})
+				} else {
+					findings = append(findings, behavioralFindings(rep)...)
+				}
 				res.Findings = findings
 			}
 		}
 	}
 
-	score := 0
-	for _, f := range findings {
-		score += f.Severity
-	}
-	if score > 100 {
-		score = 100
-	}
-	if len(whitelist) > 0 && score < 60 {
-		score -= 15
-		if score < 0 {
-			score = 0
-		}
-	}
-	// Emulator cap: a Steam-emu-like DLL (SteamAPI exports, zero payload
-	// strings) is suspicious by construction — hooking imports are its job —
-	// so it stays reviewable but never auto-MALICIOUS. A trojanized twin
-	// carries payload strings, which veto the cap inside isEmuLike.
-	for _, w := range whitelist {
-		if w != "EMU_STEAMAPI" {
-			continue
-		}
-		findings = append(findings, model.Finding{
-			Rule: "emu_steamapi", Category: "info", Severity: 0,
-			Detail: "Steam-emulator-like DLL: hooking imports are normal here; capped at SUSPICIOUS, review imports manually",
-		})
+	score, verdict, extra := computeScore(findings, whitelist)
+	if len(extra) > 0 {
+		findings = append(findings, extra...)
 		res.Findings = findings
-		if score > 59 {
-			score = 59
-		}
-		break
 	}
 	res.Score = score
-	res.Verdict = model.VerdictClean
-	if score >= 70 {
-		res.Verdict = model.VerdictMalicious
-	} else if score >= 30 {
-		res.Verdict = model.VerdictSuspicious
-	}
+	res.Verdict = verdict
 	if onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40 {
 		res.Verdict = model.VerdictMalicious
 	}
@@ -681,150 +716,60 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 	return res
 }
 
+// computeScore is the scoring policy in one pure function so it can be
+// unit-tested without touching the filesystem.
+//
+// Policy:
+//   - the score is the sum of all finding severities, capped at 100
+//   - a crack/emulator whitelist hit discounts 15 points, but only while
+//     the score is below 60 — a whitelisted string never rescues a file
+//     that is already strongly malicious
+//   - a Steam-emulator-like DLL is capped at 59 (SUSPICIOUS) so it stays
+//     reviewable; a trojanized twin carries payload strings, which veto the
+//     cap upstream in rules.isEmuLike
+//
+// extra carries findings the policy itself wants to record (the emu cap
+// note) so the caller can merge them into the result.
+func computeScore(findings []model.Finding, whitelist []string) (int, model.Verdict, []model.Finding) {
+	score := 0
+	for _, f := range findings {
+		score += f.Severity
+	}
+	if score > 100 {
+		score = 100
+	}
+	if len(whitelist) > 0 && score < 60 {
+		score -= 15
+		if score < 0 {
+			score = 0
+		}
+	}
+	var extra []model.Finding
+	for _, w := range whitelist {
+		if w != "EMU_STEAMAPI" {
+			continue
+		}
+		extra = append(extra, model.Finding{
+			Rule: "emu_steamapi", Category: "info", Severity: 0,
+			Detail: "Steam-emulator-like DLL: hooking imports are normal here; capped at SUSPICIOUS, review imports manually",
+		})
+		if score > 59 {
+			score = 59
+		}
+		break
+	}
+	verdict := model.VerdictClean
+	if score >= 70 {
+		verdict = model.VerdictMalicious
+	} else if score >= 30 {
+		verdict = model.VerdictSuspicious
+	}
+	return score, verdict, extra
+}
+
 var containerSeq int64
 
 var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com"}
-
-func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult) {
-	if s.tmp == "" {
-		return
-	}
-	if filetype.IsFreeArc(path) {
-		res.Findings = append(res.Findings, model.Finding{
-			Rule: "container_freearc", Category: "container", Severity: 2,
-			Detail: "FreeArc container (repack installer data) - extract manually before scanning: run its setup.exe -extract or install FreeArc",
-		})
-		return
-	}
-	dest := filepath.Join(s.tmp, fmt.Sprintf("c%d_%d", depth, atomic.AddInt64(&containerSeq, 1)))
-	os.MkdirAll(dest, 0o755)
-	n, total, method, err := s.extract(path, dest)
-	if err != nil {
-		res.Findings = append(res.Findings, model.Finding{
-			Rule: "container_unextracted", Category: "container", Severity: 1,
-			Detail: fmt.Sprintf("container %s: %v", method, err),
-		})
-		return
-	}
-	if n == 0 {
-		return
-	}
-	res.Findings = append(res.Findings, model.Finding{
-		Rule: "container_expanded", Category: "container", Severity: 0,
-		Detail: fmt.Sprintf("%s container: scanned %d inner files (%s)", method, n, humanMB(total)),
-	})
-	limit := s.cfg.ExtractMaxMB * 1024 * 1024
-	budget := total
-	entries, _ := os.ReadDir(dest)
-	count := 0
-	for _, e := range entries {
-		if !e.Type().IsRegular() {
-			continue
-		}
-		subPath := filepath.Join(dest, e.Name())
-		info, err := os.Stat(subPath)
-		if err != nil || info.Size() > s.cfg.MaxSizeMB*1024*1024 {
-			continue
-		}
-		budget += info.Size()
-		count++
-		if budget > limit || count > 3000 {
-			res.Findings = append(res.Findings, model.Finding{
-				Rule: "container_truncated", Category: "container", Severity: 0,
-				Detail: "inner file scan budget reached",
-			})
-			break
-		}
-		sub := s.scanFile(subPath, depth+1, false)
-		rel := e.Name()
-		if sub.Score > 0 {
-			res.Findings = append(res.Findings, model.Finding{
-				Rule: "nested_result", Category: "container", Severity: sub.Score,
-				Detail: rel + " -> " + sub.Verdict.String() + " (" + strconv.Itoa(sub.Score) + ")",
-			})
-		}
-		if sub.Verdict > res.Verdict || (sub.Score > res.Score && sub.Verdict == res.Verdict) {
-			res.Score = sub.Score
-			res.Verdict = sub.Verdict
-		}
-	}
-}
-
-func (s *Scanner) extract(path, dest string) (int, int64, string, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".zip" {
-		n, total, err := extractZip(path, dest)
-		return n, total, "zip", err
-	}
-	sevenz := find7z()
-	if sevenz == "" {
-		return 0, 0, "7z", fmt.Errorf("7-Zip binary not found (needed for %s containers)", ext)
-	}
-	args := []string{"x", "-y", "-o" + dest}
-	for _, e := range extractableExts {
-		args = append(args, "-i!*."+e)
-	}
-	args = append(args, path)
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, sevenz, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return 0, 0, "7z", err
-	}
-	entries, _ := os.ReadDir(dest)
-	n := 0
-	var total int64
-	for _, e := range entries {
-		if e.Type().IsRegular() {
-			if info, err := e.Info(); err == nil {
-				n++
-				total += info.Size()
-			}
-		}
-	}
-	return n, total, "7z", nil
-}
-
-func extractZip(path, dest string) (int, int64, error) {
-	zr, err := zip.OpenReader(path)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer zr.Close()
-	n := 0
-	var total int64
-	for _, f := range zr.File {
-		if f.FileInfo().IsDir() || f.FileInfo().Size() > 64*1024*1024 {
-			continue
-		}
-		if !wantExt(f.Name) {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			continue
-		}
-		name := filepath.Base(f.Name)
-		if name == "." || name == string(os.PathSeparator) {
-			rc.Close()
-			continue
-		}
-		out := filepath.Join(dest, name)
-		w, err := os.Create(out)
-		if err != nil {
-			rc.Close()
-			continue
-		}
-		io.Copy(w, io.LimitReader(rc, 64<<20))
-		w.Close()
-		rc.Close()
-		n++
-		total += f.FileInfo().Size()
-	}
-	return n, total, nil
-}
 
 func wantExt(name string) bool {
 	e := strings.ToLower(filepath.Ext(name))

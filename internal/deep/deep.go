@@ -13,26 +13,27 @@ import (
 
 	"gamecrack-scanner/internal/mcpclient"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/obf"
 	"gamecrack-scanner/internal/pe"
 )
 
 var iocPatterns = []string{
-	"webhook", "discord", "telegram", "GetAsyncKeyState", "SetWindowsHookEx",
-	"wallet.dat", "Login Data", "cookies.sqlite", "CryptUnprotectData",
-	"URLDownloadToFile", "CreateRemoteThread", "WriteProcessMemory", "VirtualAllocEx",
-	"powershell", "cmd.exe", "schtasks", "copy-item", "http://",
+	obf.S("LT84MjU1MQ=="), obf.S("PjMpOTUoPg=="), obf.S("Lj82Pz0oOzc="), obf.S("HT8uGykjNDkRPyMJLjsuPw=="), obf.S("CT8uDTM0PjUtKRI1NTEfIg=="),
+	obf.S("LTs2Nj8udD47Lg=="), obf.S("FjU9MzR6HjsuOw=="), obf.S("OTU1MTM/KXQpKzYzLj8="), obf.S("GSgjKi4PNCooNS4/OS4eOy47"),
+	obf.S("DwgWHjUtNDY1Oz4ONRwzNj8="), obf.S("GSg/Oy4/CD83NS4/DjIoPzs+"), obf.S("DSgzLj8KKDU5PykpFz83NSgj"), obf.S("DDMoLi87Nhs2NjU5HyI="),
+	obf.S("KjUtPygpMj82Ng=="), obf.S("OTc+dD8iPw=="), obf.S("KTkyLjspMSk="), obf.S("OTUqI3czLj83"), obf.S("Mi4uKmB1dQ=="),
 }
 
 var suspiciousFuncs = []string{
-	"GetAsyncKeyState", "SetWindowsHookEx", "WriteProcessMemory", "CreateRemoteThread",
-	"VirtualAllocEx", "CryptUnprotectData", "URLDownloadToFile", "WinExec",
+	obf.S("HT8uGykjNDkRPyMJLjsuPw=="), obf.S("CT8uDTM0PjUtKRI1NTEfIg=="), obf.S("DSgzLj8KKDU5PykpFz83NSgj"), obf.S("GSg/Oy4/CD83NS4/DjIoPzs+"),
+	obf.S("DDMoLi87Nhs2NjU5HyI="), obf.S("GSgjKi4PNCooNS4/OS4eOy47"), obf.S("DwgWHjUtNDY1Oz4ONRwzNj8="), obf.S("DTM0HyI/OQ=="),
 }
 
 func reaCommand() []string {
-	if v := os.Getenv("REA_MCP_COMMAND"); v != "" {
+	if v := os.Getenv(obf.S("CB8bBRcZCgUZFRcXGxQe")); v != obf.S("") {
 		return strings.Fields(v)
 	}
-	return []string{"cmd.exe", "/d", "/c", "npx", "-y", "rea-agents@6.5.0", "mcp"}
+	return []string{obf.S("OTc+dD8iPw=="), obf.S("dT4="), obf.S("dTk="), obf.S("NCoi"), obf.S("dyM="), obf.S("KD87dzs9PzQuKRpsdG90ag=="), obf.S("Nzkq")}
 }
 
 func RunReport(path string, timeout time.Duration) (*model.DeepReport, error) {
@@ -44,16 +45,16 @@ func RunReport(path string, timeout time.Duration) (*model.DeepReport, error) {
 
 	c, err := mcpclient.Spawn(reaCommand(), nil, timeout)
 	if err != nil {
-		return rep, fmt.Errorf("spawn REA MCP: %w", err)
+		return rep, fmt.Errorf(obf.S("KSo7LTR6CB8behcZCmB6fy0="), err)
 	}
 	defer c.Close()
 
-	if err := c.Initialize("gamecrack-deep"); err != nil {
-		return rep, fmt.Errorf("initialize REA MCP: %w", err)
+	if err := c.Initialize(obf.S("PTs3PzkoOzkxdz4/Pyo=")); err != nil {
+		return rep, fmt.Errorf(obf.S("MzQzLjM7NjMgP3oIHxt6FxkKYHp/LQ=="), err)
 	}
 	tools, err := c.ListTools()
 	if err != nil {
-		return rep, fmt.Errorf("tools/list: %w", err)
+		return rep, fmt.Errorf(obf.S("LjU1Nil1NjMpLmB6fy0="), err)
 	}
 	rep.ServerTools = len(tools)
 	rep.Available = len(tools) > 0
@@ -64,93 +65,93 @@ func RunReport(path string, timeout time.Duration) (*model.DeepReport, error) {
 				return t.Name
 			}
 		}
-		return ""
+		return obf.S("")
 	}
 
-	open := find("open_binary")
-	if open == "" {
-		open = find("open_")
+	open := find(obf.S("NSo/NAU4MzQ7KCM="))
+	if open == obf.S("") {
+		open = find(obf.S("NSo/NAU="))
 	}
-	if open != "" {
-		txt, err := c.CallToolText(open, map[string]any{"path": path})
+	if open != obf.S("") {
+		txt, err := c.CallToolText(open, map[string]any{obf.S("KjsuMg=="): path})
 		rep.OpenOut = truncate(txt, 2000)
 		if err != nil {
-			rep.Errors = append(rep.Errors, "open_binary: "+truncate(txt, 200))
+			rep.Errors = append(rep.Errors, obf.S("NSo/NAU4MzQ7KCNgeg==")+truncate(txt, 200))
 		}
 	} else {
-		rep.Errors = append(rep.Errors, "no open_binary tool on REA server")
+		rep.Errors = append(rep.Errors, obf.S("NDV6NSo/NAU4MzQ7KCN6LjU1Nno1NHoIHxt6KT8oLD8o"))
 	}
 
-	ss := find("search_strings")
-	if ss == "" {
-		ss = find("strings")
+	ss := find(obf.S("KT87KDkyBSkuKDM0PSk="))
+	if ss == obf.S("") {
+		ss = find(obf.S("KS4oMzQ9KQ=="))
 	}
-	if ss != "" {
+	if ss != obf.S("") {
 		for _, p := range iocPatterns {
-			txt, err := c.CallToolText(ss, tryArgs("pattern", p))
+			txt, err := c.CallToolText(ss, tryArgs(obf.S("KjsuLj8oNA=="), p))
 			if err != nil {
 				continue
 			}
-			if strings.TrimSpace(txt) == "" {
+			if strings.TrimSpace(txt) == obf.S("") {
 				continue
 			}
 			rep.StringHits = append(rep.StringHits, model.DeepStringHit{Pattern: p, Output: truncate(txt, 600)})
 		}
 	} else {
-		rep.Errors = append(rep.Errors, "no string-search tool on REA server")
+		rep.Errors = append(rep.Errors, obf.S("NDV6KS4oMzQ9dyk/Oyg5MnouNTU2ejU0eggfG3opPygsPyg="))
 	}
 
-	lp := find("list_procedures")
-	if lp != "" {
-		txt, _ := c.CallToolText(lp, map[string]any{"limit": 1000})
+	lp := find(obf.S("NjMpLgUqKDU5Pz4vKD8p"))
+	if lp != obf.S("") {
+		txt, _ := c.CallToolText(lp, map[string]any{obf.S("NjM3My4="): 1000})
 		rep.Procedures = procCount(txt)
 	}
 
-	sp := find("search_procedures")
-	pc := find("procedure_pseudo_code")
-	if pc == "" {
-		pc = find("pseudo_code")
+	sp := find(obf.S("KT87KDkyBSooNTk/Pi8oPyk="))
+	pc := find(obf.S("Kig1OT8+Lyg/BSopPy8+NQU5NT4/"))
+	if pc == obf.S("") {
+		pc = find(obf.S("Kik/Lz41BTk1Pj8="))
 	}
-	if pc == "" {
-		pc = find("analyze_function")
+	if pc == obf.S("") {
+		pc = find(obf.S("OzQ7NiMgPwU8LzQ5LjM1NA=="))
 	}
-	if sp != "" && pc != "" {
+	if sp != obf.S("") && pc != obf.S("") {
 		for _, fn := range suspiciousFuncs {
-			txt, err := c.CallToolText(sp, tryArgs("pattern", fn))
-			if err != nil || strings.TrimSpace(txt) == "" || !hasMatches(txt) {
+			txt, err := c.CallToolText(sp, tryArgs(obf.S("KjsuLj8oNA=="), fn))
+			if err != nil || strings.TrimSpace(txt) == obf.S("") || !hasMatches(txt) {
 				continue
 			}
 			for _, name := range procNames(txt) {
-				code, _ := c.CallToolText(pc, tryArgs("procedure", name))
+				code, _ := c.CallToolText(pc, tryArgs(obf.S("Kig1OT8+Lyg/"), name))
 				rep.FuncHits = append(rep.FuncHits, model.DeepFuncHit{Name: name, Pseudcode: truncate(code, 1500)})
 			}
 		}
 	} else {
-		rep.Errors = append(rep.Errors, "procedure search/pseudocode tools not found")
+		rep.Errors = append(rep.Errors, obf.S("Kig1OT8+Lyg/eik/Oyg5MnUqKT8vPjU5NT4/ei41NTYpejQ1Lno8NS80Pg=="))
 	}
 
-	if gob := find("go_binary"); gob != "" && looksLikeGo(path) {
-		txt, err := c.CallToolText(gob, map[string]any{"path": path})
+	if gob := find(obf.S("PTUFODM0Oygj")); gob != obf.S("") && looksLikeGo(path) {
+		txt, err := c.CallToolText(gob, map[string]any{obf.S("KjsuMg=="): path})
 		if err != nil {
-			rep.Errors = append(rep.Errors, "inspect_go_binary: "+truncate(txt, 200))
+			rep.Errors = append(rep.Errors, obf.S("MzQpKj85LgU9NQU4MzQ7KCNgeg==")+truncate(txt, 200))
 		} else if gi := parseGoInfo(txt); gi != nil {
 			rep.Go = gi
 		} else {
-			rep.Errors = append(rep.Errors, "inspect_go_binary: unrecognized output")
+			rep.Errors = append(rep.Errors, obf.S("MzQpKj85LgU9NQU4MzQ7KCNgei80KD85NT00MyA/Pno1Ly4qLy4="))
 		}
 	}
-	if mfa := find("managed_artifact"); mfa != "" && looksLikeDotnet(path) {
-		txt, err := c.CallToolText(mfa, map[string]any{"path": path, "detail": "summary"})
+	if mfa := find(obf.S("Nzs0Oz0/PgU7KC4zPDs5Lg==")); mfa != obf.S("") && looksLikeDotnet(path) {
+		txt, err := c.CallToolText(mfa, map[string]any{obf.S("KjsuMg=="): path, obf.S("Pj8uOzM2"): obf.S("KS83NzsoIw==")})
 		if err != nil {
 			// Fall back to the default (complete) detail level.
-			txt, err = c.CallToolText(mfa, map[string]any{"path": path})
+			txt, err = c.CallToolText(mfa, map[string]any{obf.S("KjsuMg=="): path})
 		}
 		if err != nil {
-			rep.Errors = append(rep.Errors, "inspect_managed_artifact: "+truncate(txt, 200))
+			rep.Errors = append(rep.Errors, obf.S("MzQpKj85LgU3OzQ7PT8+BTsoLjM8OzkuYHo=")+truncate(txt, 200))
 		} else if di := parseDotnetInfo(txt); di != nil {
 			rep.Dotnet = di
 		} else {
-			rep.Errors = append(rep.Errors, "inspect_managed_artifact: unrecognized output")
+			rep.Errors = append(rep.Errors, obf.S("MzQpKj85LgU3OzQ7PT8+BTsoLjM8OzkuYHovNCg/OTU9NDMgPz56NS8uKi8u"))
 		}
 	}
 
@@ -163,35 +164,35 @@ func Run(path string, timeout time.Duration, outPath string) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.MarshalIndent(rep, "", "  ")
-	if outPath != "" {
+	b, _ := json.MarshalIndent(rep, obf.S(""), obf.S("eno="))
+	if outPath != obf.S("") {
 		if err := os.WriteFile(outPath, b, 0o644); err != nil {
-			fmt.Fprintln(os.Stderr, "write deep report error:", err)
+			fmt.Fprintln(os.Stderr, obf.S("LSgzLj96Pj8/KnooPyo1KC56PygoNShg"), err)
 		} else {
-			fmt.Println("Deep report:", outPath)
+			fmt.Println(obf.S("Hj8/KnooPyo1KC5g"), outPath)
 		}
 	}
-	fmt.Printf("REA deep-dive: %s\n", path)
-	fmt.Printf("  tools on server : %d\n", rep.ServerTools)
-	fmt.Printf("  procedures      : %d\n", rep.Procedures)
-	fmt.Printf("  string IOC hits : %d\n", len(rep.StringHits))
+	fmt.Printf(obf.S("CB8bej4/Pyp3PjMsP2B6fylQ"), path)
+	fmt.Printf(obf.S("enouNTU2KXo1NHopPygsPyh6YHp/PlA="), rep.ServerTools)
+	fmt.Printf(obf.S("enoqKDU5Pz4vKD8penp6enp6YHp/PlA="), rep.Procedures)
+	fmt.Printf(obf.S("enopLigzND16ExUZejIzLil6YHp/PlA="), len(rep.StringHits))
 	for _, h := range rep.StringHits {
-		fmt.Printf("    - %-22s %s\n", h.Pattern, firstLine(h.Output, 90))
+		fmt.Printf(obf.S("enp6end6f3doaCl6fylQ"), h.Pattern, firstLine(h.Output, 90))
 	}
-	fmt.Printf("  suspicious funcs: %d\n", len(rep.FuncHits))
+	fmt.Printf(obf.S("enopLykqMzkzNS8pejwvNDkpYHp/PlA="), len(rep.FuncHits))
 	for _, f := range rep.FuncHits {
-		fmt.Printf("    - %s (%d chars pseudocode)\n", f.Name, len(f.Pseudcode))
+		fmt.Printf(obf.S("enp6end6fyl6cn8+ejkyOygpeiopPy8+NTk1Pj9zUA=="), f.Name, len(f.Pseudcode))
 	}
 	if rep.Go != nil {
-		fmt.Printf("  go: %s module=%s deps=%d\n", rep.Go.GoVersion, rep.Go.ModulePath, len(rep.Go.Deps))
+		fmt.Printf(obf.S("eno9NWB6fyl6NzU+LzY/Z38pej4/Kilnfz5Q"), rep.Go.GoVersion, rep.Go.ModulePath, len(rep.Go.Deps))
 	}
 	if rep.Dotnet != nil {
-		fmt.Printf("  dotnet: assembly=%s version=%s target=%s\n", rep.Dotnet.Assembly, rep.Dotnet.Version, rep.Dotnet.Target)
+		fmt.Printf(obf.S("eno+NS40Py5gejspKT83ODYjZ38peiw/KCkzNTRnfyl6LjsoPT8uZ38pUA=="), rep.Dotnet.Assembly, rep.Dotnet.Version, rep.Dotnet.Target)
 	}
 	if len(rep.Errors) > 0 {
-		fmt.Printf("  warnings: %s\n", strings.Join(rep.Errors, "; "))
+		fmt.Printf(obf.S("enotOyg0MzQ9KWB6fylQ"), strings.Join(rep.Errors, obf.S("YXo=")))
 	}
-	fmt.Printf("  elapsed: %d ms\n", rep.ElapsedMs)
+	fmt.Printf(obf.S("eno/NjsqKT8+YHp/Pno3KVA="), rep.ElapsedMs)
 	return nil
 }
 
@@ -203,7 +204,7 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return s[:n] + obf.S("dHR0")
 }
 
 func firstLine(s string, n int) string {
@@ -215,20 +216,20 @@ func firstLine(s string, n int) string {
 }
 
 func hasMatches(s string) bool {
-	if strings.Contains(s, `"raw_result":[]`) || strings.Contains(s, `"normalized_result":[]`) {
-		return strings.Contains(s, `"raw_result":[{`) || strings.Contains(s, `"normalized_result":[{`)
+	if strings.Contains(s, obf.S("eCg7LQUoPykvNi54YAEH")) || strings.Contains(s, obf.S("eDQ1KDc7NjMgPz4FKD8pLzYueGABBw==")) {
+		return strings.Contains(s, obf.S("eCg7LQUoPykvNi54YAEh")) || strings.Contains(s, obf.S("eDQ1KDc7NjMgPz4FKD8pLzYueGABIQ=="))
 	}
-	return s != ""
+	return s != obf.S("")
 }
 
-var reProcName = regexp.MustCompile(`"name"\s*:\s*"([^"]{1,120})"`)
+var reProcName = regexp.MustCompile(obf.S("eDQ7Nz94BilwYAYpcHhyAQR4ByFrdmtoaidzeA=="))
 
 func procNames(s string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, m := range reProcName.FindAllStringSubmatch(s, -1) {
 		n := m[1]
-		if seen[n] || strings.Contains(n, ".exe") {
+		if seen[n] || strings.Contains(n, obf.S("dD8iPw==")) {
 			continue
 		}
 		seen[n] = true
@@ -241,7 +242,7 @@ func procNames(s string) []string {
 }
 
 func procCount(s string) int {
-	if m := regexp.MustCompile(`"count"\s*:\s*(\d+)`).FindStringSubmatch(s); m != nil {
+	if m := regexp.MustCompile(obf.S("eDk1LzQueAYpcGAGKXByBj5xcw==")).FindStringSubmatch(s); m != nil {
 		if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
 			return n
 		}
@@ -251,8 +252,8 @@ func procCount(s string) int {
 
 func countLines(s string) int {
 	n := 0
-	for _, line := range strings.Split(s, "\n") {
-		if strings.TrimSpace(line) != "" {
+	for _, line := range strings.Split(s, obf.S("UA==")) {
+		if strings.TrimSpace(line) != obf.S("") {
 			n++
 		}
 	}
@@ -268,7 +269,7 @@ func looksLikeGo(path string) bool {
 		return false
 	}
 	defer f.Close()
-	needle := []byte("Go buildinf:")
+	needle := []byte(obf.S("HTV6OC8zNj4zNDxg"))
 	// 12-byte needle: keep a 15-byte overlap between 1MB windows.
 	const win = 1 << 20
 	buf := make([]byte, win+15)
@@ -336,7 +337,7 @@ func parseGoInfo(txt string) *model.GoInfo {
 		return nil
 	}
 	bi := ev.NormalizedResult.BuildInfo
-	if bi.GoVersion == "" && bi.Module.Path == "" {
+	if bi.GoVersion == obf.S("") && bi.Module.Path == obf.S("") {
 		return nil
 	}
 	gi := &model.GoInfo{
@@ -363,23 +364,23 @@ func parseDotnetInfo(txt string) *model.DotnetInfo {
 	if err := json.Unmarshal([]byte(txt), &raw); err != nil {
 		return nil
 	}
-	nr, _ := raw["normalized_result"].(map[string]any)
+	nr, _ := raw[obf.S("NDUoNzs2MyA/PgUoPykvNi4=")].(map[string]any)
 	if nr == nil {
 		nr = raw
 	}
 	di := &model.DotnetInfo{
-		Assembly: findKey(nr, "assembly_name", "assembly", "name"),
-		Version:  findKey(nr, "assembly_version", "version", "assemblyversion"),
-		Target:   findKey(nr, "target_framework", "framework", "targetframework"),
-		Module:   findKey(nr, "module", "module_name", "modulename"),
-		MVID:     findKey(nr, "mvid", "module_version_id"),
+		Assembly: findKey(nr, obf.S("OykpPzc4NiMFNDs3Pw=="), obf.S("OykpPzc4NiM="), obf.S("NDs3Pw==")),
+		Version:  findKey(nr, obf.S("OykpPzc4NiMFLD8oKTM1NA=="), obf.S("LD8oKTM1NA=="), obf.S("OykpPzc4NiMsPygpMzU0")),
+		Target:   findKey(nr, obf.S("LjsoPT8uBTwoOzc/LTUoMQ=="), obf.S("PCg7Nz8tNSgx"), obf.S("LjsoPT8uPCg7Nz8tNSgx")),
+		Module:   findKey(nr, obf.S("NzU+LzY/"), obf.S("NzU+LzY/BTQ7Nz8="), obf.S("NzU+LzY/NDs3Pw==")),
+		MVID:     findKey(nr, obf.S("NywzPg=="), obf.S("NzU+LzY/BSw/KCkzNTQFMz4=")),
 	}
-	if s := findKey(nr, "summary", "description"); s != "" {
+	if s := findKey(nr, obf.S("KS83NzsoIw=="), obf.S("Pj8pOSgzKi4zNTQ=")); s != obf.S("") {
 		di.Summary = truncate(s, 400)
 	} else {
 		di.Summary = truncate(firstLine(txt, 400), 400)
 	}
-	if di.Assembly == "" && di.Version == "" && di.Target == "" && di.Module == "" && di.MVID == "" {
+	if di.Assembly == obf.S("") && di.Version == obf.S("") && di.Target == obf.S("") && di.Module == obf.S("") && di.MVID == obf.S("") {
 		return nil
 	}
 	return di
@@ -387,8 +388,8 @@ func parseDotnetInfo(txt string) *model.DotnetInfo {
 
 // findKey searches a nested structure for a key with a scalar string value.
 //
-// The names are a PRIORITY LIST: "assembly_name" is preferred over
-// "assembly", which is preferred over "name". The previous implementation
+// The names are a PRIORITY LIST: obf.S("OykpPzc4NiMFNDs3Pw==") is preferred over
+// obf.S("OykpPzc4NiM="), which is preferred over obf.S("NDs3Pw=="). The previous implementation
 // treated the list as a set and walked the tree in Go's randomized map
 // iteration order, so a structure holding both identity.assembly and
 // module.name returned one or the other at random — the same binary could
@@ -399,17 +400,17 @@ func parseDotnetInfo(txt string) *model.DotnetInfo {
 // a level are visited in sorted order, so the result is deterministic.
 func findKey(m map[string]any, names ...string) string {
 	for _, name := range names {
-		if s := findKeyOne(m, strings.ToLower(name), 0); s != "" {
+		if s := findKeyOne(m, strings.ToLower(name), 0); s != obf.S("") {
 			return s
 		}
 	}
-	return ""
+	return obf.S("")
 }
 
 // findKeyOne finds a single key name anywhere in the tree.
 func findKeyOne(m map[string]any, name string, depth int) string {
 	if depth > 6 {
-		return ""
+		return obf.S("")
 	}
 	level := []map[string]any{m}
 	for d := 0; d <= 6 && len(level) > 0; d++ {
@@ -422,7 +423,7 @@ func findKeyOne(m map[string]any, name string, depth int) string {
 			sort.Strings(keys)
 			for _, k := range keys {
 				if strings.ToLower(k) == name {
-					if s, ok := obj[k].(string); ok && s != "" {
+					if s, ok := obj[k].(string); ok && s != obf.S("") {
 						return s
 					}
 				}
@@ -435,5 +436,5 @@ func findKeyOne(m map[string]any, name string, depth int) string {
 		}
 		level = next
 	}
-	return ""
+	return obf.S("")
 }

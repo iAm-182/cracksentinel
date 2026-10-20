@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -126,6 +127,12 @@ type Verdict struct {
 	IsTrojanized float64 `json:"is_trojanized"`
 	// IsTrojanizedAlt is the same question asked with a different framing.
 	IsTrojanizedAlt float64 `json:"is_trojanized_alt"`
+	// Calibrated holds the calibrated probabilities when a calibrator was
+	// applied, so the report shows what the decision was actually based
+	// on.
+	Calibrated        float64 `json:"calibrated,omitempty"`
+	CalibratedAlt     float64 `json:"calibrated_alt,omitempty"`
+	CalibrationMethod string  `json:"calibration_method,omitempty"`
 	// Spread is the distance between the two answers. A wide spread means
 	// the model is not stable on this file and the verdict should be
 	// treated as uncertain rather than as a number.
@@ -442,6 +449,41 @@ func snippet(b []byte) string {
 		s = s[:300] + "..."
 	}
 	return s
+}
+
+// ApplyCalibration maps the raw probabilities through a fitted calibrator.
+// The raw answer is kept: the report shows both, so a reader can see what
+// the model said and what the calibrated number was.
+func (v *Verdict) ApplyCalibration(c *Calibrator) {
+	if v == nil || c == nil {
+		return
+	}
+	v.Calibrated = c.Apply(v.IsTrojanized)
+	v.CalibratedAlt = c.Apply(v.IsTrojanizedAlt)
+	v.CalibrationMethod = c.Method
+}
+
+// Decision returns the probability the decision should be based on: the
+// conservative combination of the two framings, in calibrated space when
+// a calibrator was applied.
+//
+// The two framings are combined with the MINIMUM, not the average. Calling
+// a file malicious is an accusation, and an accusation has to survive both
+// framings: if either one doubts it, the file is not called malicious. The
+// average would let a confident framing carry a doubtful one, which is how
+// a legitimate utility ends up on a delete list.
+func (v *Verdict) Decision() float64 {
+	if v == nil {
+		return 0
+	}
+	p1, p2 := v.IsTrojanized, v.IsTrojanizedAlt
+	if v.CalibrationMethod != "" {
+		p1, p2 = v.Calibrated, v.CalibratedAlt
+	}
+	if p2 <= 0 {
+		return p1
+	}
+	return math.Min(p1, p2)
 }
 
 // Agree reports whether both framings of the trojanized question land on

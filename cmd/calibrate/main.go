@@ -36,6 +36,9 @@ type caseSpec struct {
 	Path  string `json:"path"`
 	Label string `json:"label"`
 	Note  string `json:"note"`
+	// Split is "fit" or "holdout". When it is empty the case is assigned
+	// to a stratified split automatically.
+	Split string `json:"split"`
 }
 
 func main() {
@@ -46,6 +49,7 @@ func main() {
 		jevModel     = flag.String("jev-model", jev.DefaultModel, "model used for adjudication")
 		jevURL       = flag.String("jev-url", jev.DefaultBaseURL, "System One endpoint")
 		dump         = flag.String("dump", "", "write the full result as JSON to this path")
+		holdoutEvery = flag.Int("holdout-every", 3, "every Nth case of each class goes to the holdout split")
 	)
 	flag.Parse()
 
@@ -107,10 +111,17 @@ func main() {
 			Evidence:               ev,
 			Want:                   want,
 			Note:                   c.Note,
+			Split:                  c.Split,
 			DeterministicVerdict:   res.Verdict.String(),
 			DeterministicMalicious: res.Verdict == model.VerdictMalicious,
 		})
 	}
+
+	// Stratified fit/holdout assignment. The threshold is chosen on the fit
+	// split and scored on the holdout split; picking a threshold and
+	// evaluating it on the same cases is how a tool convinces itself it
+	// works.
+	cases = jev.AssignSplits(cases, *holdoutEvery)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()

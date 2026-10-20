@@ -1,5 +1,7 @@
 package rules
 
+import "gamecrack-scanner/internal/obf"
+
 // Rule classification for the semantic adjudicator.
 //
 // The deterministic engine produces findings without saying HOW MUCH they
@@ -29,20 +31,20 @@ const (
 // bypass routinely produces. Hooking the game's own API is the whole point
 // of a crack.
 var crackExpectedRules = map[string]bool{
-	"imp_keylogger":             true, // hooking is how an emulator redirects SteamAPI
-	"imp_injection":             true, // same, and how the crack patches the executable
-	"crack_whitelist":           true,
-	"emu_steamapi":              true,
-	"packer":                    true, // crack tools are frequently packed
-	"dotnet":                    true,
-	"pe_parse":                  true,
-	"yara:gc_crack_emu_info":    true,
-	"yara:gc_keylogger_strings": true, // same hooking APIs as imp_keylogger
-	"yara:gc_injection_apis":    true,
-	"container_expanded":        true,
-	"container_not_expanded":    true,
-	"nested_result":             true,
-	"nested_worst":              true,
+	obf.S("MzcqBTE/IzY1PT0/KA=="):                 true, // hooking is how an emulator redirects SteamAPI
+	obf.S("MzcqBTM0MD85LjM1NA=="):                 true, // same, and how the crack patches the executable
+	obf.S("OSg7OTEFLTIzLj82Myku"):                 true,
+	obf.S("PzcvBSkuPzs3Oyoz"):                     true,
+	obf.S("Kjs5MT8o"):                             true, // crack tools are frequently packed
+	obf.S("PjUuND8u"):                             true,
+	obf.S("Kj8FKjsoKT8="):                         true,
+	obf.S("IzsoO2A9OQU5KDs5MQU/Ny8FMzQ8NQ=="):     true,
+	obf.S("IzsoO2A9OQUxPyM2NT09PygFKS4oMzQ9KQ=="): true, // same hooking APIs as imp_keylogger
+	obf.S("IzsoO2A9OQUzNDA/OS4zNTQFOyozKQ=="):     true,
+	obf.S("OTU0LjszND8oBT8iKjs0Pj8+"):             true,
+	obf.S("OTU0LjszND8oBTQ1LgU/Iio7ND4/Pg=="):     true,
+	obf.S("ND8pLj8+BSg/KS82Lg=="):                 true,
+	obf.S("ND8pLj8+BS01KCku"):                     true,
 }
 
 // payloadRules are findings that never belong in a legitimate crack.
@@ -56,49 +58,49 @@ var crackExpectedRules = map[string]bool{
 // a trojan. Those rules stay neutral and the model weighs them in context.
 var payloadRules = map[string]bool{
 	// Import-based payload behaviour.
-	"imp_credential":  true, // credential/cookie decryption
-	"imp_persistence": true, // run keys, services
+	obf.S("MzcqBTkoPz4/NC4zOzY="): true, // credential/cookie decryption
+	obf.S("MzcqBSo/KCkzKS4/NDk/"): true, // run keys, services
 	// Combination rules: a stack that only makes sense as a payload.
-	"combo_stealer_stack": true,
-	"combo_keylog_exfil":  true,
+	obf.S("OTU3ODUFKS4/OzY/KAUpLjs5MQ=="): true,
+	obf.S("OTU3ODUFMT8jNjU9BT8iPDM2"):     true,
 	// String-level payload evidence: a C2 channel or a stolen-data target.
-	"discord_webhook":       true,
-	"telegram_token":        true,
-	"ip_port":               true,
-	"ps_encoded":            true,
-	"download_cradle":       true,
-	"wallet_browser_target": true,
-	"keylog_word":           true,
-	"keylog_word2":          true,
-	"persistence_string":    true,
+	obf.S("PjMpOTUoPgUtPzgyNTUx"):         true,
+	obf.S("Lj82Pz0oOzcFLjUxPzQ="):         true,
+	obf.S("MyoFKjUoLg=="):                 true,
+	obf.S("KikFPzQ5NT4/Pg=="):             true,
+	obf.S("PjUtNDY1Oz4FOSg7PjY/"):         true,
+	obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"): true,
+	obf.S("MT8jNjU9BS01KD4="):             true,
+	obf.S("MT8jNjU9BS01KD5o"):             true,
+	obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"):     true,
 	// Script behaviour that is unambiguously malicious.
-	"script_cred_paths":      true,
-	"script_hook_api":        true,
-	"script_defender_bypass": true,
-	"script_crypto_miner":    true,
-	"script_reverse_shell":   true,
+	obf.S("KTkoMyouBTkoPz4FKjsuMik="):         true,
+	obf.S("KTkoMyouBTI1NTEFOyoz"):             true,
+	obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="): true,
+	obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="):     true,
+	obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="):     true,
 	// Shortcut, document and archive behaviour.
-	"shortcut_remote":      true,
-	"doc_macro":            true,
-	"doc_dde":              true,
-	"archive_double_ext":   true,
-	"archive_office_macro": true,
-	"double_extension":     true,
+	obf.S("KTI1KC45Ly4FKD83NS4/"):         true,
+	obf.S("PjU5BTc7OSg1"):                 true,
+	obf.S("PjU5BT4+Pw=="):                 true,
+	obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"):     true,
+	obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="): true,
+	obf.S("PjUvODY/BT8iLj80KTM1NA=="):     true,
 	// Behavioural sandbox.
-	"behav_network_connect": true,
-	"behav_file_drop":       true,
-	"behav_child_process":   true,
-	"behav_killed":          true,
-	"behav_crash":           true,
-	"behav_failed":          true,
+	obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"): true,
+	obf.S("OD8yOywFPDM2PwU+KDUq"):         true,
+	obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="): true,
+	obf.S("OD8yOywFMTM2Nj8+"):             true,
+	obf.S("OD8yOywFOSg7KTI="):             true,
+	obf.S("OD8yOywFPDszNj8+"):             true,
 	// Test file.
-	"eicar": true,
+	obf.S("PzM5Oyg="): true,
 	// YARA payload rules.
-	"yara:gc_discord_webhook":    true,
-	"yara:gc_telegram_bot_token": true,
-	"yara:gc_stealer_strings":    true,
-	"yara:gc_hardcoded_c2":       true,
-	"yara:gc_powershell_encoded": true,
+	obf.S("IzsoO2A9OQU+Myk5NSg+BS0/ODI1NTE="):     true,
+	obf.S("IzsoO2A9OQUuPzY/PSg7NwU4NS4FLjUxPzQ="): true,
+	obf.S("IzsoO2A9OQUpLj87Nj8oBSkuKDM0PSk="):     true,
+	obf.S("IzsoO2A9OQUyOyg+OTU+Pz4FOWg="):         true,
+	obf.S("IzsoO2A9OQUqNS0/KCkyPzY2BT80OTU+Pz4="): true,
 }
 
 // ClassifyRule reports how strongly a rule argues for a malicious payload.

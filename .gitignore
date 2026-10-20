@@ -30,3 +30,6 @@ schema-depth.js
 dist/
 *.zip
 coverage.out
+
+__pycache__/
+*.pyc

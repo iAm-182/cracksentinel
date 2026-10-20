@@ -107,6 +107,7 @@ type JudgeResult struct {
 	Classification string             `json:"classification"`
 	IsTrojanized   float64            `json:"is_trojanized"`
 	IsMalicious    float64            `json:"is_malicious"`
+	Calibrated     float64            `json:"calibrated,omitempty"`
 	Probabilities  map[string]float64 `json:"probabilities,omitempty"`
 	Confidence     float64            `json:"confidence"`
 	Risk           float64            `json:"risk"`

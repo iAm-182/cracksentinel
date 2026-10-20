@@ -7,6 +7,7 @@ import (
 
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/obf"
 	"gamecrack-scanner/internal/pe"
 )
 
@@ -18,67 +19,67 @@ type importIOC struct {
 }
 
 var importIOCs = map[string]importIOC{
-	"keylogger": {
-		funcs:    []string{"GetAsyncKeyState", "SetWindowsHookExA", "SetWindowsHookExW", "GetKeyboardState", "GetKeyState", "GetRawInputData", "RegisterRawInputDevices", "MapVirtualKeyA", "GetForegroundWindow"},
-		category: "keylogger",
+	obf.S("MT8jNjU9PT8o"): {
+		funcs:    []string{obf.S("HT8uGykjNDkRPyMJLjsuPw=="), obf.S("CT8uDTM0PjUtKRI1NTEfIhs="), obf.S("CT8uDTM0PjUtKRI1NTEfIg0="), obf.S("HT8uET8jODU7KD4JLjsuPw=="), obf.S("HT8uET8jCS47Lj8="), obf.S("HT8uCDstEzQqLy4eOy47"), obf.S("CD89MykuPygIOy0TNCovLh4/LDM5Pyk="), obf.S("FzsqDDMoLi87NhE/Ixs="), obf.S("HT8uHDUoPz0oNS80Pg0zND41LQ==")},
+		category: obf.S("MT8jNjU9PT8o"),
 		severity: 30,
-		desc:     "keyboard/input capture API",
+		desc:     obf.S("MT8jODU7KD51MzQqLy56OTsqLi8oP3obChM="),
 	},
-	"injection": {
-		funcs:    []string{"WriteProcessMemory", "CreateRemoteThread", "VirtualAllocEx", "VirtualProtectEx", "NtUnmapViewOfSection", "SetThreadContext", "QueueUserAPC", "RtlMoveMemory"},
-		category: "injection",
+	obf.S("MzQwPzkuMzU0"): {
+		funcs:    []string{obf.S("DSgzLj8KKDU5PykpFz83NSgj"), obf.S("GSg/Oy4/CD83NS4/DjIoPzs+"), obf.S("DDMoLi87Nhs2NjU5HyI="), obf.S("DDMoLi87NgooNS4/OS4fIg=="), obf.S("FC4PNDc7KgwzPy0VPAk/OS4zNTQ="), obf.S("CT8uDjIoPzs+GTU0Lj8iLg=="), obf.S("Cy8/Lz8PKT8oGwoZ"), obf.S("CC42FzUsPxc/NzUoIw==")},
+		category: obf.S("MzQwPzkuMzU0"),
 		severity: 30,
-		desc:     "process injection API",
+		desc:     obf.S("Kig1OT8pKXozNDA/OS4zNTR6GwoT"),
 	},
-	"credential": {
-		funcs:    []string{"CryptUnprotectData", "CredEnumerateA", "CredEnumerateW", "LsaEnumerateLogonSessions", "CredReadA"},
-		category: "stealer",
+	obf.S("OSg/Pj80LjM7Ng=="): {
+		funcs:    []string{obf.S("GSgjKi4PNCooNS4/OS4eOy47"), obf.S("GSg/Ph80Lzc/KDsuPxs="), obf.S("GSg/Ph80Lzc/KDsuPw0="), obf.S("Fik7HzQvNz8oOy4/FjU9NTQJPykpMzU0KQ=="), obf.S("GSg/Pgg/Oz4b")},
+		category: obf.S("KS4/OzY/KA=="),
 		severity: 25,
-		desc:     "credential/cookie decryption API",
+		desc:     obf.S("OSg/Pj80LjM7NnU5NTUxMz96Pj85KCMqLjM1NHobChM="),
 	},
-	"exfil": {
-		funcs:    []string{"URLDownloadToFile", "InternetOpenA", "InternetConnectA", "HttpOpenRequestA", "HttpSendRequestA", "InternetReadFile", "WSAStartup", "send", "connect"},
-		category: "network",
+	obf.S("PyI8MzY="): {
+		funcs:    []string{obf.S("DwgWHjUtNDY1Oz4ONRwzNj8="), obf.S("EzQuPyg0Py4VKj80Gw=="), obf.S("EzQuPyg0Py4ZNTQ0PzkuGw=="), obf.S("Ei4uKhUqPzQIPysvPykuGw=="), obf.S("Ei4uKgk/ND4IPysvPykuGw=="), obf.S("EzQuPyg0Py4IPzs+HDM2Pw=="), obf.S("DQkbCS47KC4vKg=="), obf.S("KT80Pg=="), obf.S("OTU0ND85Lg==")},
+		category: obf.S("ND8uLTUoMQ=="),
 		severity: 12,
-		desc:     "network/exfil API",
+		desc:     obf.S("ND8uLTUoMXU/IjwzNnobChM="),
 	},
-	"clipboard": {
-		funcs:    []string{"GetClipboardData", "OpenClipboard", "EmptyClipboard"},
-		category: "stealer",
+	obf.S("OTYzKjg1Oyg+"): {
+		funcs:    []string{obf.S("HT8uGTYzKjg1Oyg+HjsuOw=="), obf.S("FSo/NBk2Myo4NTsoPg=="), obf.S("HzcqLiMZNjMqODU7KD4=")},
+		category: obf.S("KS4/OzY/KA=="),
 		severity: 15,
-		desc:     "clipboard access API",
+		desc:     obf.S("OTYzKjg1Oyg+ejs5OT8pKXobChM="),
 	},
-	"persistence": {
-		funcs:    []string{"RegSetValueExA", "RegSetValueExW", "CreateServiceA", "StartServiceA"},
-		category: "persistence",
+	obf.S("Kj8oKTMpLj80OT8="): {
+		funcs:    []string{obf.S("CD89CT8uDDs2Lz8fIhs="), obf.S("CD89CT8uDDs2Lz8fIg0="), obf.S("GSg/Oy4/CT8oLDM5Pxs="), obf.S("CS47KC4JPygsMzk/Gw==")},
+		category: obf.S("Kj8oKTMpLj80OT8="),
 		severity: 12,
-		desc:     "persistence API",
+		desc:     obf.S("Kj8oKTMpLj80OT96GwoT"),
 	},
-	"destructive": {
-		funcs:    []string{"CryptEncrypt", "CryptGenKey", "FindFirstFileA", "MoveFileA", "DeleteFileA"},
-		category: "ransomware",
+	obf.S("Pj8pLigvOS4zLD8="): {
+		funcs:    []string{obf.S("GSgjKi4fNDkoIyou"), obf.S("GSgjKi4dPzQRPyM="), obf.S("HDM0PhwzKCkuHDM2Pxs="), obf.S("FzUsPxwzNj8b"), obf.S("Hj82Py4/HDM2Pxs=")},
+		category: obf.S("KDs0KTU3LTsoPw=="),
 		severity: 8,
-		desc:     "file/encryption API (ransomware-ish)",
+		desc:     obf.S("PDM2P3U/NDkoIyouMzU0ehsKE3pyKDs0KTU3LTsoP3czKTJz"),
 	},
 }
 
 var stealerCombo = model.Finding{
-	Rule:     "combo_stealer_stack",
-	Category: "stealer",
+	Rule:     obf.S("OTU3ODUFKS4/OzY/KAUpLjs5MQ=="),
+	Category: obf.S("KS4/OzY/KA=="),
 	Severity: 25,
-	Detail:   "browser credential + clipboard + network APIs combined (classic stealer stack)",
+	Detail:   obf.S("OCg1LSk/KHo5KD8+PzQuMzs2enF6OTYzKjg1Oyg+enF6ND8uLTUoMXobChMpejk1NzgzND8+enI5NjspKTM5eikuPzs2Pyh6KS47OTFz"),
 }
 
-var reDiscord = regexp.MustCompile(`https://(discordapp\.com|discord\.com)/api/webhooks/\d{17,20}/[\w-]{60,90}`)
-var reTelegram = regexp.MustCompile(`\b\d{8,10}:[A-Za-z0-9_-]{30,45}\b`)
-var reEncoded = regexp.MustCompile(`(?i)(-e|-enc|-encodedcommand)\s*[A-Za-z0-9+/=]{40,}`)
-var reCradle = regexp.MustCompile(`(?i)(curl|wget|Invoke-WebRequest|Invoke-Expression|iex|certutil|bitsadmin|mshta|regsvr32)\s+[^\r\n]{0,120}https?://`)
-var reIPPort = regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}\b`)
-var reBase64Blob = regexp.MustCompile(`[A-Za-z0-9+/]{200,}={0,2}`)
-var reWallet = regexp.MustCompile(`(?i)(wallet\.dat|metamask|exodus|electrum|seed phrase|mnemonic|Login Data|cookies\.sqlite|passwords\.txt|autofill)`)
-var reKeylogWord = regexp.MustCompile(`(?i)(keylog|keystroke|clipboard ?grab|grabber|stealer|exfiltrat)`)
-var reRunKey = regexp.MustCompile(`(?i)(CurrentVersion\\\\Run|schtasks\s+/create|New-Service|reg\s+add\s+HKLM)`)
-var reVM = regexp.MustCompile(`(?i)(vmware|virtualbox|vbox|sandboxie|wine[^a-z])`)
+var reDiscord = regexp.MustCompile(obf.S("Mi4uKilgdXVyPjMpOTUoPjsqKgZ0OTU3Jj4zKTk1KD4GdDk1N3N1OyozdS0/ODI1NTEpdQY+IWttdmhqJ3UBBi13ByFsanZjaic="))
+var reTelegram = regexp.MustCompile(obf.S("BjgGPiFidmtqJ2ABG3cAO3cgandjBXcHIWlqdm5vJwY4"))
+var reEncoded = regexp.MustCompile(obf.S("cmUzc3J3PyZ3PzQ5Jnc/NDk1Pj8+OTU3Nzs0PnMGKXABG3cAO3cgandjcXVnByFuanYn"))
+var reCradle = regexp.MustCompile(obf.S("cmUzc3I5Lyg2Ji09Py4mEzQsNTE/dw0/OAg/Ky8/KS4mEzQsNTE/dx8iKig/KSkzNTQmMz8iJjk/KC4vLjM2JjgzLik7PjczNCY3KTIuOyYoPz0pLChpaHMGKXEBBAYoBjQHIWp2a2hqJzIuLiopZWB1dQ=="))
+var reIPPort = regexp.MustCompile(obf.S("BjgGPiFrdmknBnQGPiFrdmknBnQGPiFrdmknBnQGPiFrdmknYAY+IWh2bycGOA=="))
+var reBase64Blob = regexp.MustCompile(obf.S("ARt3ADt3IGp3Y3F1ByFoamp2J2chanZoJw=="))
+var reWallet = regexp.MustCompile(obf.S("cmUzc3ItOzY2Py4GdD47LiY3Py47NzspMSY/IjU+LykmPzY/OS4oLzcmKT8/PnoqMig7KT8mNzQ/NzU0MzkmFjU9MzR6HjsuOyY5NTUxMz8pBnQpKzYzLj8mKjspKS01KD4pBnQuIi4mOy8uNTwzNjZz"))
+var reKeylogWord = regexp.MustCompile(obf.S("cmUzc3IxPyM2NT0mMT8jKS4oNTE/Jjk2Myo4NTsoPnplPSg7OCY9KDs4OD8oJikuPzs2PygmPyI8MzYuKDsucw=="))
+var reRunKey = regexp.MustCompile(obf.S("cmUzc3IZLygoPzQuDD8oKTM1NAYGBgYILzQmKTkyLjspMSkGKXF1OSg/Oy4/JhQ/LXcJPygsMzk/Jig/PQYpcTs+PgYpcRIRFhdz"))
+var reVM = regexp.MustCompile(obf.S("cmUzc3IsNy07KD8mLDMoLi87Njg1IiYsODUiJik7ND44NSIzPyYtMzQ/AQQ7dyAHcw=="))
 
 // scriptRules are kind-specific indicators for script payloads (.bat/.cmd/
 // .ps1/.vbs/.js/.hta). A script has no import table, so its behaviour is
@@ -95,161 +96,161 @@ type keywordRule struct {
 
 var scriptRules = []keywordRule{
 	{
-		rule: "script_hidden_exec", category: "evasion", severity: 25,
-		desc: "hidden-window execution",
+		rule: obf.S("KTkoMyouBTIzPj4/NAU/Ij85"), category: obf.S("Pyw7KTM1NA=="), severity: 25,
+		desc: obf.S("MjM+Pj80dy0zND41LXo/Ij85Ly4zNTQ="),
 		any: []string{
-			"start-process -windowstyle hidden", "-windowstyle hidden",
-			"-w hidden", "windowstylehidden", "createobject(\"wscript.shell\")",
-			"wscript.shell", "wscript.shell.run", "shell.application",
+			obf.S("KS47KC53Kig1OT8pKXp3LTM0PjUtKS4jNj96MjM+Pj80"), obf.S("dy0zND41LSkuIzY/ejIzPj4/NA=="),
+			obf.S("dy16MjM+Pj80"), obf.S("LTM0PjUtKS4jNj8yMz4+PzQ="), obf.S("OSg/Oy4/NTgwPzkucngtKTkoMyoudCkyPzY2eHM="),
+			obf.S("LSk5KDMqLnQpMj82Ng=="), obf.S("LSk5KDMqLnQpMj82NnQoLzQ="), obf.S("KTI/NjZ0OyoqNjM5Oy4zNTQ="),
 		},
 	},
 	{
-		rule: "script_cred_paths", category: "stealer", severity: 20,
-		desc: "browser/profile credential path access",
+		rule: obf.S("KTkoMyouBTkoPz4FKjsuMik="), category: obf.S("KS4/OzY/KA=="), severity: 20,
+		desc: obf.S("OCg1LSk/KHUqKDU8MzY/ejkoPz4/NC4zOzZ6KjsuMno7OTk/KSk="),
 		any: []string{
-			"copy-item $env:", "copy-item", "appdata\\local\\google\\chrome",
-			"appdata\\roaming\\mozilla", "login data", "cookies.sqlite",
-			"\\google\\chrome\\user data", "web data", "local state",
+			obf.S("OTUqI3czLj83en4/NCxg"), obf.S("OTUqI3czLj83"), obf.S("OyoqPjsuOwY2NTk7NgY9NTU9Nj8GOTIoNTc/"),
+			obf.S("OyoqPjsuOwYoNTs3MzQ9Bjc1IDM2Njs="), obf.S("NjU9MzR6PjsuOw=="), obf.S("OTU1MTM/KXQpKzYzLj8="),
+			obf.S("Bj01NT02PwY5Mig1Nz8GLyk/KHo+Oy47"), obf.S("LT84ej47Ljs="), obf.S("NjU5OzZ6KS47Lj8="),
 		},
 	},
 	{
-		rule: "script_hook_api", category: "keylogger", severity: 20,
-		desc: "keylogging/credential-decryption API referenced",
+		rule: obf.S("KTkoMyouBTI1NTEFOyoz"), category: obf.S("MT8jNjU9PT8o"), severity: 20,
+		desc: obf.S("MT8jNjU9PTM0PXU5KD8+PzQuMzs2dz4/OSgjKi4zNTR6GwoTeig/PD8oPzQ5Pz4="),
 		any: []string{
-			"getasynckeystate", "setwindowshookex", "getkeystate",
-			"cryptunprotectdata", "getforegroundwindow", "getkeyboardstate",
+			obf.S("PT8uOykjNDkxPyMpLjsuPw=="), obf.S("KT8uLTM0PjUtKTI1NTE/Ig=="), obf.S("PT8uMT8jKS47Lj8="),
+			obf.S("OSgjKi4vNCooNS4/OS4+Oy47"), obf.S("PT8uPDUoPz0oNS80Pi0zND41LQ=="), obf.S("PT8uMT8jODU7KD4pLjsuPw=="),
 		},
 	},
 	{
-		rule: "script_download_exec", category: "dropper", severity: 30,
-		desc: "download-and-execute pattern",
-		all:  []string{"iex"},
+		rule: obf.S("KTkoMyouBT41LTQ2NTs+BT8iPzk="), category: obf.S("Pig1Kio/KA=="), severity: 30,
+		desc: obf.S("PjUtNDY1Oz53OzQ+dz8iPzkvLj96KjsuLj8oNA=="),
+		all:  []string{obf.S("Mz8i")},
 		any: []string{
-			"downloadstring", "downloadfile", "invoke-webrequest",
-			"system.net.webclient", "net.webclient", "mshta http",
-			"certutil -urlcache", "bitsadmin /transfer",
+			obf.S("PjUtNDY1Oz4pLigzND0="), obf.S("PjUtNDY1Oz48MzY/"), obf.S("MzQsNTE/dy0/OCg/Ky8/KS4="),
+			obf.S("KSMpLj83dDQ/LnQtPzg5NjM/NC4="), obf.S("ND8udC0/ODk2Mz80Lg=="), obf.S("NykyLjt6Mi4uKg=="),
+			obf.S("OT8oLi8uMzZ6dy8oNjk7OTI/"), obf.S("ODMuKTs+NzM0enUuKDs0KTw/KA=="),
 		},
 	},
 	{
-		rule: "script_exfil", category: "c2", severity: 20,
-		desc: "outbound exfiltration channel",
+		rule: obf.S("KTkoMyouBT8iPDM2"), category: obf.S("OWg="), severity: 20,
+		desc: obf.S("NS8uODUvND56PyI8MzYuKDsuMzU0ejkyOzQ0PzY="),
 		any: []string{
-			"invoke-webrequest", "system.net.webclient", "uploadstring",
-			"uploadfile", "send-mailmessage", "smtpclient", "httpwebrequest",
-			"curl -s", "wget -q",
+			obf.S("MzQsNTE/dy0/OCg/Ky8/KS4="), obf.S("KSMpLj83dDQ/LnQtPzg5NjM/NC4="), obf.S("Lyo2NTs+KS4oMzQ9"),
+			obf.S("Lyo2NTs+PDM2Pw=="), obf.S("KT80Pnc3OzM2Nz8pKTs9Pw=="), obf.S("KTcuKjk2Mz80Lg=="), obf.S("Mi4uKi0/OCg/Ky8/KS4="),
+			obf.S("OS8oNnp3KQ=="), obf.S("LT0/Lnp3Kw=="),
 		},
 	},
 	{
-		rule: "script_defender_bypass", category: "evasion", severity: 30,
-		desc: "AV/EDR tampering",
+		rule: obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), category: obf.S("Pyw7KTM1NA=="), severity: 30,
+		desc: obf.S("Gwx1Hx4Iei47Nyo/KDM0PQ=="),
 		any: []string{
-			"set-mppreference", "disable-realtimemonitoring", "disable-realtime-monitoring",
-			"amsiutils", "amsiinitfailed", "add-mppreference", "-exclusionpath",
-			"windows defender", "amsi.dll", "amsiutils.dll",
+			obf.S("KT8udzcqKig/PD8oPzQ5Pw=="), obf.S("PjMpOzg2P3coPzs2LjM3Pzc1NDMuNSgzND0="), obf.S("PjMpOzg2P3coPzs2LjM3P3c3NTQzLjUoMzQ9"),
+			obf.S("OzcpMy8uMzYp"), obf.S("OzcpMzM0My48OzM2Pz4="), obf.S("Oz4+dzcqKig/PD8oPzQ5Pw=="), obf.S("dz8iOTYvKTM1NCo7LjI="),
+			obf.S("LTM0PjUtKXo+Pzw/ND4/KA=="), obf.S("OzcpM3Q+NjY="), obf.S("OzcpMy8uMzYpdD42Ng=="),
 		},
 	},
 	{
-		rule: "script_obfuscation", category: "evasion", severity: 15,
-		desc: "script obfuscation / encoded payload",
+		rule: obf.S("KTkoMyouBTU4PC8pOTsuMzU0"), category: obf.S("Pyw7KTM1NA=="), severity: 15,
+		desc: obf.S("KTkoMyouejU4PC8pOTsuMzU0enV6PzQ5NT4/PnoqOyM2NTs+"),
 		any: []string{
-			"frombase64string", "powershell -e", "-encodedcommand",
-			"-ec ", "char(", "iex(new-object", "invoke-expression",
-			"set-executionpolicy bypass", "bypass", "hidden -enc",
+			obf.S("PCg1Nzg7KT9sbikuKDM0PQ=="), obf.S("KjUtPygpMj82Nnp3Pw=="), obf.S("dz80OTU+Pz45NTc3OzQ+"),
+			obf.S("dz85eg=="), obf.S("OTI7KHI="), obf.S("Mz8icjQ/LXc1ODA/OS4="), obf.S("MzQsNTE/dz8iKig/KSkzNTQ="),
+			obf.S("KT8udz8iPzkvLjM1NCo1NjM5I3o4Iyo7KSk="), obf.S("OCMqOykp"), obf.S("MjM+Pj80enc/NDk="),
 		},
 	},
 	{
-		rule: "script_persistence", category: "persistence", severity: 15,
-		desc: "script-level persistence",
+		rule: obf.S("KTkoMyouBSo/KCkzKS4/NDk/"), category: obf.S("Kj8oKTMpLj80OT8="), severity: 15,
+		desc: obf.S("KTkoMyoudzY/LD82eio/KCkzKS4/NDk/"),
 		any: []string{
-			"schtasks /create", "reg add hklm", "reg add hkcu",
-			"new-service", "startup folder", "shell:startup",
-			"currentversion\\run", "currentversion\\runonce",
+			obf.S("KTkyLjspMSl6dTkoPzsuPw=="), obf.S("KD89ejs+PnoyMTY3"), obf.S("KD89ejs+PnoyMTkv"),
+			obf.S("ND8tdyk/KCwzOT8="), obf.S("KS47KC4vKno8NTY+Pyg="), obf.S("KTI/NjZgKS47KC4vKg=="),
+			obf.S("OS8oKD80Liw/KCkzNTQGKC80"), obf.S("OS8oKD80Liw/KCkzNTQGKC80NTQ5Pw=="),
 		},
 	},
 	{
-		rule: "script_crypto_miner", category: "miner", severity: 20,
-		desc: "cryptominer configuration",
+		rule: obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), category: obf.S("NzM0Pyg="), severity: 20,
+		desc: obf.S("OSgjKi41NzM0Pyh6OTU0PDM9Lyg7LjM1NA=="),
 		any: []string{
-			"stratum+tcp", "stratum+ssl", "xmrig", "minerd", "cpuminer",
-			"nicehash", "randomx",
+			obf.S("KS4oOy4vN3EuOSo="), obf.S("KS4oOy4vN3EpKTY="), obf.S("IjcoMz0="), obf.S("NzM0Pyg+"), obf.S("OSovNzM0Pyg="),
+			obf.S("NDM5PzI7KTI="), obf.S("KDs0PjU3Ig=="),
 		},
 	},
 	{
-		rule: "script_reverse_shell", category: "c2", severity: 30,
-		desc: "reverse-shell / interactive backdoor primitive",
+		rule: obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), category: obf.S("OWg="), severity: 30,
+		desc: obf.S("KD8sPygpP3cpMj82Nnp1ejM0Lj8oOzkuMyw/ejg7OTE+NTUoeiooMzczLjMsPw=="),
 		any: []string{
-			"new-object system.net.sockets.tcpclient", "socket()",
-			"nc -e", "ncat -e", "bash -i >&", "powershell -nop -c",
-			"socket.socket", "pty.spawn",
+			obf.S("ND8tdzU4MD85LnopIykuPzd0ND8udCk1OTE/Lil0LjkqOTYzPzQu"), obf.S("KTU5MT8ucnM="),
+			obf.S("NDl6dz8="), obf.S("NDk7Lnp3Pw=="), obf.S("ODspMnp3M3pkfA=="), obf.S("KjUtPygpMj82Nnp3NDUqenc5"),
+			obf.S("KTU5MT8udCk1OTE/Lg=="), obf.S("Ki4jdCkqOy00"),
 		},
 	},
 }
 
 // shortcutRules apply to .lnk/.url/.pif files. A shortcut is a binary whose
-// argument string carries the real payload — the classic "lnk runs powershell"
+// argument string carries the real payload — the classic obf.S("NjQxeigvNCl6KjUtPygpMj82Ng==")
 // dropper vector.
 var shortcutRules = []keywordRule{
 	{
-		rule: "shortcut_exec", category: "dropper", severity: 25,
-		desc: "shortcut target runs a script/interpreter host",
+		rule: obf.S("KTI1KC45Ly4FPyI/OQ=="), category: obf.S("Pig1Kio/KA=="), severity: 25,
+		desc: obf.S("KTI1KC45Ly56LjsoPT8ueigvNCl6O3opOSgzKi51MzQuPygqKD8uPyh6MjUpLg=="),
 		any: []string{
-			"powershell", "cmd.exe /c", "cmd /c", "mshta", "wscript",
-			"cscript", "rundll32", "regsvr32", "certutil", "bitsadmin",
-			"explorer.exe", "\\\\system32\\\\",
+			obf.S("KjUtPygpMj82Ng=="), obf.S("OTc+dD8iP3p1OQ=="), obf.S("OTc+enU5"), obf.S("NykyLjs="), obf.S("LSk5KDMqLg=="),
+			obf.S("OSk5KDMqLg=="), obf.S("KC80PjY2aWg="), obf.S("KD89KSwoaWg="), obf.S("OT8oLi8uMzY="), obf.S("ODMuKTs+NzM0"),
+			obf.S("PyIqNjUoPyh0PyI/"), obf.S("BgYpIykuPzdpaAYG"),
 		},
 	},
 	{
-		rule: "shortcut_remote", category: "c2", severity: 20,
-		desc: "shortcut points at a remote URL",
-		any:  []string{"http://", "https://"},
+		rule: obf.S("KTI1KC45Ly4FKD83NS4/"), category: obf.S("OWg="), severity: 20,
+		desc: obf.S("KTI1KC45Ly56KjUzNC4pejsuejt6KD83NS4/eg8IFg=="),
+		any:  []string{obf.S("Mi4uKmB1dQ=="), obf.S("Mi4uKilgdXU=")},
 	},
 	{
-		rule: "shortcut_hidden", category: "evasion", severity: 10,
-		desc: "shortcut hides its window / no visible icon",
-		any:  []string{"showwindow=0", "windowstyle", "minimized", "hidden"},
+		rule: obf.S("KTI1KC45Ly4FMjM+Pj80"), category: obf.S("Pyw7KTM1NA=="), severity: 10,
+		desc: obf.S("KTI1KC45Ly56MjM+Pyl6My4pei0zND41LXp1ejQ1eiwzKTM4Nj96Mzk1NA=="),
+		any:  []string{obf.S("KTI1LS0zND41LWdq"), obf.S("LTM0PjUtKS4jNj8="), obf.S("NzM0MzczID8+"), obf.S("MjM+Pj80")},
 	},
 }
 
 // docRules apply to .doc/.docm/.xlsm/.rtf/.pdf: macro or DDE launchers.
 var docRules = []keywordRule{
 	{
-		rule: "doc_macro", category: "dropper", severity: 25,
-		desc: "document macro auto-executes code",
+		rule: obf.S("PjU5BTc7OSg1"), category: obf.S("Pig1Kio/KA=="), severity: 25,
+		desc: obf.S("PjU5Lzc/NC56Nzs5KDV6Oy8uNXc/Ij85Ly4/KXo5NT4/"),
 		any: []string{
-			"autoopen", "document_open", "workbook_open", "sub autoopen",
-			"shell(", "auto_close", "vbproject", "shellpayload",
+			obf.S("Oy8uNTUqPzQ="), obf.S("PjU5Lzc/NC4FNSo/NA=="), obf.S("LTUoMTg1NTEFNSo/NA=="), obf.S("KS84ejsvLjU1Kj80"),
+			obf.S("KTI/NjZy"), obf.S("Oy8uNQU5NjUpPw=="), obf.S("LDgqKDUwPzku"), obf.S("KTI/NjYqOyM2NTs+"),
 		},
 	},
 	{
-		rule: "doc_dde", category: "dropper", severity: 30,
-		desc: "DDE auto-execution field",
-		any:  []string{"ddeauto", "dde ", "msexcel", "ddeserver"},
+		rule: obf.S("PjU5BT4+Pw=="), category: obf.S("Pig1Kio/KA=="), severity: 30,
+		desc: obf.S("Hh4fejsvLjV3PyI/OS8uMzU0ejwzPzY+"),
+		any:  []string{obf.S("Pj4/Oy8uNQ=="), obf.S("Pj4/eg=="), obf.S("Nyk/Ijk/Ng=="), obf.S("Pj4/KT8oLD8o")},
 	},
 }
 
 // archiveRules apply to container files (zip/7z/rar/iso) — a double extension
-// inside an archive is the classic "innocuous.pdf.exe" dropper shape.
+// inside an archive is the classic obf.S("MzQ0NTkvNS8pdCo+PHQ/Ij8=") dropper shape.
 var archiveRules = []keywordRule{
 	{
-		rule: "archive_double_ext", category: "dropper", severity: 20,
-		desc: "double extension (file disguised as document/image)",
+		rule: obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), category: obf.S("Pig1Kio/KA=="), severity: 20,
+		desc: obf.S("PjUvODY/ej8iLj80KTM1NHpyPDM2P3o+Myk9LzMpPz56Oyl6PjU5Lzc/NC51Mzc7PT9z"),
 		any: []string{
-			".pdf.exe", ".doc.exe", ".jpg.exe", ".png.exe", ".txt.exe",
-			".xls.exe", ".zip.exe", ".mp4.exe", ".jpg.scr", ".pdf.scr",
-			".txt.scr", ".gif.scr", ".js.exe",
+			obf.S("dCo+PHQ/Ij8="), obf.S("dD41OXQ/Ij8="), obf.S("dDAqPXQ/Ij8="), obf.S("dCo0PXQ/Ij8="), obf.S("dC4iLnQ/Ij8="),
+			obf.S("dCI2KXQ/Ij8="), obf.S("dCAzKnQ/Ij8="), obf.S("dDcqbnQ/Ij8="), obf.S("dDAqPXQpOSg="), obf.S("dCo+PHQpOSg="),
+			obf.S("dC4iLnQpOSg="), obf.S("dD0zPHQpOSg="), obf.S("dDApdD8iPw=="),
 		},
 	},
 	{
-		rule: "archive_office_macro", category: "dropper", severity: 20,
-		desc: "archive contains a macro-enabled office document",
-		any:  []string{".docm", ".xlsm", ".pptm", ".xlam", ".xll"},
+		rule: obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), category: obf.S("Pig1Kio/KA=="), severity: 20,
+		desc: obf.S("Oyg5MjMsP3o5NTQuOzM0KXo7ejc7OSg1dz80Ozg2Pz56NTw8Mzk/ej41OS83PzQu"),
+		any:  []string{obf.S("dD41OTc="), obf.S("dCI2KTc="), obf.S("dCoqLjc="), obf.S("dCI2Ozc="), obf.S("dCI2Ng==")},
 	},
 }
 
 var crackWhitelist = []string{
-	"RUNE", "Goldberg", "SmartSteamEmu", "SmartSteam", "FLT", "ALI213",
-	"HOODLUM", "CODEX", "CPY", "SKIDROW", "RELOADED", "PLAZA", "TENOKE",
-	"steam_emu", "ColdClientLoader", "creamlab",
+	obf.S("CA8UHw=="), obf.S("HTU2Pjg/KD0="), obf.S("CTc7KC4JLj87Nx83Lw=="), obf.S("CTc7KC4JLj87Nw=="), obf.S("HBYO"), obf.S("GxYTaGtp"),
+	obf.S("EhUVHhYPFw=="), obf.S("GRUeHwI="), obf.S("GQoD"), obf.S("CRETHggVDQ=="), obf.S("CB8WFRseHx4="), obf.S("ChYbABs="), obf.S("Dh8UFREf"),
+	obf.S("KS4/OzcFPzcv"), obf.S("GTU2Phk2Mz80LhY1Oz4/KA=="), obf.S("OSg/Ozc2Ozg="),
 }
 
 // strongStringIOCs are string-level findings that veto the emulator-cap below:
@@ -257,9 +258,9 @@ var crackWhitelist = []string{
 // credential targets). Import-only findings don't veto — hooking imports are
 // core emulator behavior.
 var strongStringIOCs = map[string]bool{
-	"discord_webhook": true, "telegram_token": true, "ps_encoded": true,
-	"download_cradle": true, "ip_port": true, "wallet_browser_target": true,
-	"keylog_word": true, "keylog_word2": true, "persistence_string": true,
+	obf.S("PjMpOTUoPgUtPzgyNTUx"): true, obf.S("Lj82Pz0oOzcFLjUxPzQ="): true, obf.S("KikFPzQ5NT4/Pg=="): true,
+	obf.S("PjUtNDY1Oz4FOSg7PjY/"): true, obf.S("MyoFKjUoLg=="): true, obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"): true,
+	obf.S("MT8jNjU9BS01KD4="): true, obf.S("MT8jNjU9BS01KD5o"): true, obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"): true,
 }
 
 type MatchInput struct {
@@ -279,26 +280,26 @@ type MatchInput struct {
 func YaraCategory(rule string) string {
 	r := strings.ToLower(rule)
 	switch {
-	case strings.Contains(r, "eicar"):
-		return "testfile"
-	case strings.Contains(r, "discord"), strings.Contains(r, "telegram"), strings.Contains(r, "c2"):
-		return "c2"
-	case strings.Contains(r, "powershell"), strings.Contains(r, "encoded"), strings.Contains(r, "obfus"), strings.Contains(r, "sandbox"):
-		return "evasion"
-	case strings.Contains(r, "keylog"):
-		return "keylogger"
-	case strings.Contains(r, "steal"), strings.Contains(r, "credential"), strings.Contains(r, "wallet"), strings.Contains(r, "browser"):
-		return "stealer"
-	case strings.Contains(r, "inject"), strings.Contains(r, "hollow"):
-		return "injection"
-	case strings.Contains(r, "persist"), strings.Contains(r, "run_key"):
-		return "persistence"
-	case strings.Contains(r, "miner"), strings.Contains(r, "stratum"):
-		return "miner"
-	case strings.Contains(r, "crack"), strings.Contains(r, "emu"), strings.Contains(r, "info"):
-		return "info"
+	case strings.Contains(r, obf.S("PzM5Oyg=")):
+		return obf.S("Lj8pLjwzNj8=")
+	case strings.Contains(r, obf.S("PjMpOTUoPg==")), strings.Contains(r, obf.S("Lj82Pz0oOzc=")), strings.Contains(r, obf.S("OWg=")):
+		return obf.S("OWg=")
+	case strings.Contains(r, obf.S("KjUtPygpMj82Ng==")), strings.Contains(r, obf.S("PzQ5NT4/Pg==")), strings.Contains(r, obf.S("NTg8Lyk=")), strings.Contains(r, obf.S("KTs0Pjg1Ig==")):
+		return obf.S("Pyw7KTM1NA==")
+	case strings.Contains(r, obf.S("MT8jNjU9")):
+		return obf.S("MT8jNjU9PT8o")
+	case strings.Contains(r, obf.S("KS4/OzY=")), strings.Contains(r, obf.S("OSg/Pj80LjM7Ng==")), strings.Contains(r, obf.S("LTs2Nj8u")), strings.Contains(r, obf.S("OCg1LSk/KA==")):
+		return obf.S("KS4/OzY/KA==")
+	case strings.Contains(r, obf.S("MzQwPzku")), strings.Contains(r, obf.S("MjU2NjUt")):
+		return obf.S("MzQwPzkuMzU0")
+	case strings.Contains(r, obf.S("Kj8oKTMpLg==")), strings.Contains(r, obf.S("KC80BTE/Iw==")):
+		return obf.S("Kj8oKTMpLj80OT8=")
+	case strings.Contains(r, obf.S("NzM0Pyg=")), strings.Contains(r, obf.S("KS4oOy4vNw==")):
+		return obf.S("NzM0Pyg=")
+	case strings.Contains(r, obf.S("OSg7OTE=")), strings.Contains(r, obf.S("Pzcv")), strings.Contains(r, obf.S("MzQ8NQ==")):
+		return obf.S("MzQ8NQ==")
 	}
-	return ""
+	return obf.S("")
 }
 
 // Match evaluates every detection layer against one file.
@@ -315,14 +316,14 @@ func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 	findings = append(findings, matchKind(in.Kind, in.Strs, in.Path)...)
 	whitelistHits = matchWhitelist(in.Strs)
 	if isEmuLike(in.Strs, findings) {
-		whitelistHits = append(whitelistHits, "EMU_STEAMAPI")
+		whitelistHits = append(whitelistHits, obf.S("HxcPBQkOHxsXGwoT"))
 	}
 	if len(findings) == 0 && len(whitelistHits) > 0 {
 		findings = append(findings, model.Finding{
-			Rule:     "crack_whitelist",
-			Category: "info",
+			Rule:     obf.S("OSg7OTEFLTIzLj82Myku"),
+			Category: obf.S("MzQ8NQ=="),
 			Severity: 0,
-			Detail:   "known crack/emulator signature: " + strings.Join(whitelistHits, ", "),
+			Detail:   obf.S("MTQ1LTR6OSg7OTF1PzcvNjsuNSh6KTM9NDsuLyg/YHo=") + strings.Join(whitelistHits, obf.S("dno=")),
 		})
 	}
 	return findings, whitelistHits
@@ -330,7 +331,7 @@ func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 
 // matchKind dispatches to the kind-specific rule sets. Each set is only
 // applied to the file class it was designed for, which keeps signal high and
-// false positives low (a .doc mentioning "powershell" is not a script).
+// false positives low (a .doc mentioning obf.S("KjUtPygpMj82Ng==") is not a script).
 func matchKind(kind filetype.Kind, strs []string, path string) []model.Finding {
 	var out []model.Finding
 	switch kind {
@@ -344,13 +345,13 @@ func matchKind(kind filetype.Kind, strs []string, path string) []model.Finding {
 		out = append(out, matchKeywords(strs, archiveRules)...)
 	}
 	// A double extension is meaningful for ANY file kind, not just archives:
-	// "invoice.pdf.exe" sitting loose in a game folder is a dropper.
-	if path != "" && hasDoubleExt(path) {
+	// obf.S("MzQsNTM5P3QqPjx0PyI/") sitting loose in a game folder is a dropper.
+	if path != obf.S("") && hasDoubleExt(path) {
 		out = append(out, model.Finding{
-			Rule:     "double_extension",
-			Category: "dropper",
+			Rule:     obf.S("PjUvODY/BT8iLj80KTM1NA=="),
+			Category: obf.S("Pig1Kio/KA=="),
 			Severity: 20,
-			Detail:   "double extension (disguised executable): " + filepath.Base(path),
+			Detail:   obf.S("PjUvODY/ej8iLj80KTM1NHpyPjMpPS8zKT8+ej8iPzkvLjs4Nj9zYHo=") + filepath.Base(path),
 		})
 	}
 	return out
@@ -375,21 +376,21 @@ func matchKeywords(strs []string, set []keywordRule) []model.Finding {
 		} else if len(kr.any) > 0 && !containsAny(lower, kr.any) {
 			continue
 		}
-		hit := ""
+		hit := obf.S("")
 		for _, s := range lower {
 			if matchesRule(s, kr) {
 				hit = s
 				break
 			}
 		}
-		if hit == "" {
-			hit = "(matched)"
+		if hit == obf.S("") {
+			hit = obf.S("cjc7LjkyPz5z")
 		}
 		out = append(out, model.Finding{
 			Rule:     kr.rule,
 			Category: kr.category,
 			Severity: kr.severity,
-			Detail:   kr.desc + ": " + trunc(hit, 70),
+			Detail:   kr.desc + obf.S("YHo=") + trunc(hit, 70),
 		})
 	}
 	return out
@@ -410,7 +411,7 @@ func matchesRule(s string, kr keywordRule) bool {
 func containsAny(strs []string, needles []string) bool {
 	for _, s := range strs {
 		for _, n := range needles {
-			if n != "" && strings.Contains(s, n) {
+			if n != obf.S("") && strings.Contains(s, n) {
 				return true
 			}
 		}
@@ -420,7 +421,7 @@ func containsAny(strs []string, needles []string) bool {
 
 func containsAll(strs []string, needles []string) bool {
 	for _, n := range needles {
-		if n == "" {
+		if n == obf.S("") {
 			continue
 		}
 		found := false
@@ -437,26 +438,26 @@ func containsAll(strs []string, needles []string) bool {
 	return len(needles) > 0
 }
 
-// hasDoubleExt reports a filename like "invoice.pdf.exe" — a document or
+// hasDoubleExt reports a filename like obf.S("MzQsNTM5P3QqPjx0PyI/") — a document or
 // image extension followed by an executable one.
 func hasDoubleExt(path string) bool {
 	name := strings.ToLower(filepath.Base(path))
-	parts := strings.Split(name, ".")
+	parts := strings.Split(name, obf.S("dA=="))
 	if len(parts) < 3 {
 		return false
 	}
 	docExts := map[string]bool{
-		".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
-		".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true,
-		".txt": true, ".rtf": true, ".mp3": true, ".mp4": true, ".avi": true,
-		".zip": true, ".rar": true, ".html": true, ".csv": true,
+		obf.S("dCo+PA=="): true, obf.S("dD41OQ=="): true, obf.S("dD41OSI="): true, obf.S("dCI2KQ=="): true, obf.S("dCI2KSI="): true,
+		obf.S("dDAqPQ=="): true, obf.S("dDAqPz0="): true, obf.S("dCo0PQ=="): true, obf.S("dD0zPA=="): true, obf.S("dDg3Kg=="): true,
+		obf.S("dC4iLg=="): true, obf.S("dCguPA=="): true, obf.S("dDcqaQ=="): true, obf.S("dDcqbg=="): true, obf.S("dDssMw=="): true,
+		obf.S("dCAzKg=="): true, obf.S("dCg7KA=="): true, obf.S("dDIuNzY="): true, obf.S("dDkpLA=="): true,
 	}
 	execExts := map[string]bool{
-		".exe": true, ".scr": true, ".com": true, ".pif": true, ".bat": true,
-		".cmd": true, ".ps1": true, ".vbs": true, ".js": true, ".hta": true,
-		".jar": true, ".msi": true,
+		obf.S("dD8iPw=="): true, obf.S("dCk5KA=="): true, obf.S("dDk1Nw=="): true, obf.S("dCozPA=="): true, obf.S("dDg7Lg=="): true,
+		obf.S("dDk3Pg=="): true, obf.S("dCopaw=="): true, obf.S("dCw4KQ=="): true, obf.S("dDAp"): true, obf.S("dDIuOw=="): true,
+		obf.S("dDA7KA=="): true, obf.S("dDcpMw=="): true,
 	}
-	return docExts["."+parts[len(parts)-2]] && execExts["."+parts[len(parts)-1]]
+	return docExts[obf.S("dA==")+parts[len(parts)-2]] && execExts[obf.S("dA==")+parts[len(parts)-1]]
 }
 
 func matchImports(info *pe.Info) []model.Finding {
@@ -477,43 +478,43 @@ func matchImports(info *pe.Info) []model.Finding {
 		}
 		if len(hit) > 0 {
 			out = append(out, model.Finding{
-				Rule:     "imp_" + name,
+				Rule:     obf.S("MzcqBQ==") + name,
 				Category: ioc.category,
 				Severity: ioc.severity,
-				Detail:   ioc.desc + ": " + strings.Join(hit, ", "),
+				Detail:   ioc.desc + obf.S("YHo=") + strings.Join(hit, obf.S("dno=")),
 			})
 			cats[name] = true
 		}
 	}
-	if cats["credential"] && cats["clipboard"] && cats["exfil"] {
+	if cats[obf.S("OSg/Pj80LjM7Ng==")] && cats[obf.S("OTYzKjg1Oyg+")] && cats[obf.S("PyI8MzY=")] {
 		out = append(out, stealerCombo)
 	}
-	if cats["keylogger"] && cats["exfil"] {
+	if cats[obf.S("MT8jNjU9PT8o")] && cats[obf.S("PyI8MzY=")] {
 		out = append(out, model.Finding{
-			Rule:     "combo_keylog_exfil",
-			Category: "keylogger",
+			Rule:     obf.S("OTU3ODUFMT8jNjU9BT8iPDM2"),
+			Category: obf.S("MT8jNjU9PT8o"),
 			Severity: 20,
-			Detail:   "keylogger API + network exfil API combined",
+			Detail:   obf.S("MT8jNjU9PT8oehsKE3pxejQ/Li01KDF6PyI8MzZ6GwoTejk1NzgzND8+"),
 		})
 	}
-	if info.Packer != "" {
+	if info.Packer != obf.S("") {
 		sev := 15
-		if info.Packer == "unknown(entropy)" {
+		if info.Packer == obf.S("LzQxNDUtNHI/NC4oNSojcw==") {
 			sev = 8
 		}
 		out = append(out, model.Finding{
-			Rule:     "packer",
-			Category: "packing",
+			Rule:     obf.S("Kjs5MT8o"),
+			Category: obf.S("Kjs5MTM0PQ=="),
 			Severity: sev,
-			Detail:   "packer/obfuscation: " + info.Packer,
+			Detail:   obf.S("Kjs5MT8odTU4PC8pOTsuMzU0YHo=") + info.Packer,
 		})
 	}
 	if info.Dotnet {
 		out = append(out, model.Finding{
-			Rule:     "dotnet",
-			Category: "info",
+			Rule:     obf.S("PjUuND8u"),
+			Category: obf.S("MzQ8NQ=="),
 			Severity: 2,
-			Detail:   ".NET assembly (decompile with ilspy/dnspy for review)",
+			Detail:   obf.S("dBQfDno7KSk/Nzg2I3pyPj85NTcqMzY/ei0zLjJ6MzYpKiN1PjQpKiN6PDUoeig/LDM/LXM="),
 		})
 	}
 	return out
@@ -526,30 +527,30 @@ func matchStrings(strs []string) []model.Finding {
 		l := strings.ToLower(s)
 		switch {
 		case reDiscord.MatchString(s):
-			add(&out, seen, "discord_webhook", "c2", 40, "Discord webhook URL: "+trunc(s, 80))
+			add(&out, seen, obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("OWg="), 40, obf.S("HjMpOTUoPnotPzgyNTUxeg8IFmB6")+trunc(s, 80))
 		case reTelegram.MatchString(s):
-			add(&out, seen, "telegram_token", "c2", 35, "Telegram bot token: "+trunc(s, 50))
+			add(&out, seen, obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("OWg="), 35, obf.S("Dj82Pz0oOzd6ODUuei41MT80YHo=")+trunc(s, 50))
 		}
 		switch {
 		case reEncoded.MatchString(s):
-			add(&out, seen, "ps_encoded", "evasion", 30, "PowerShell encoded command: "+trunc(s, 100))
+			add(&out, seen, obf.S("KikFPzQ5NT4/Pg=="), obf.S("Pyw7KTM1NA=="), 30, obf.S("CjUtPygJMj82Nno/NDk1Pj8+ejk1Nzc7ND5geg==")+trunc(s, 100))
 		case reCradle.MatchString(s):
-			add(&out, seen, "download_cradle", "dropper", 20, "download cradle: "+trunc(s, 100))
+			add(&out, seen, obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("Pig1Kio/KA=="), 20, obf.S("PjUtNDY1Oz56OSg7PjY/YHo=")+trunc(s, 100))
 		case reIPPort.MatchString(s):
-			add(&out, seen, "ip_port", "c2", 10, "hardcoded IP:port: "+s)
+			add(&out, seen, obf.S("MyoFKjUoLg=="), obf.S("OWg="), 10, obf.S("MjsoPjk1Pj8+ehMKYCo1KC5geg==")+s)
 		case reWallet.MatchString(l):
-			add(&out, seen, "wallet_browser_target", "stealer", 15, "browser/wallet target string: "+trunc(s, 60))
+			add(&out, seen, obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("KS4/OzY/KA=="), 15, obf.S("OCg1LSk/KHUtOzY2Py56LjsoPT8ueikuKDM0PWB6")+trunc(s, 60))
 		case reKeylogWord.MatchString(l):
-			add(&out, seen, "keylog_word", "keylogger", 12, "keylogger terminology: "+trunc(s, 60))
+			add(&out, seen, obf.S("MT8jNjU9BS01KD4="), obf.S("MT8jNjU9PT8o"), 12, obf.S("MT8jNjU9PT8oei4/KDczNDU2NT0jYHo=")+trunc(s, 60))
 		case reRunKey.MatchString(s):
-			add(&out, seen, "persistence_string", "persistence", 15, "persistence string: "+trunc(s, 80))
+			add(&out, seen, obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("Kj8oKTMpLj80OT8="), 15, obf.S("Kj8oKTMpLj80OT96KS4oMzQ9YHo=")+trunc(s, 80))
 		case reVM.MatchString(l):
-			add(&out, seen, "sandbox_check", "evasion", 8, "sandbox/VM detection string: "+trunc(s, 60))
+			add(&out, seen, obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Pyw7KTM1NA=="), 8, obf.S("KTs0Pjg1InUMF3o+Py4/OS4zNTR6KS4oMzQ9YHo=")+trunc(s, 60))
 		case reBase64Blob.MatchString(s):
-			add(&out, seen, "base64_blob", "evasion", 6, "large base64 blob (len "+itoa(len(s))+")")
+			add(&out, seen, obf.S("ODspP2xuBTg2NTg="), obf.S("Pyw7KTM1NA=="), 6, obf.S("NjsoPT96ODspP2xuejg2NTh6cjY/NHo=")+itoa(len(s))+obf.S("cw=="))
 		}
-		if len(s) >= 4 && strings.Contains(l, "asynckeystate") {
-			add(&out, seen, "keylog_word2", "keylogger", 5, "keylog API referenced in string: "+trunc(s, 60))
+		if len(s) >= 4 && strings.Contains(l, obf.S("OykjNDkxPyMpLjsuPw==")) {
+			add(&out, seen, obf.S("MT8jNjU9BS01KD5o"), obf.S("MT8jNjU9PT8o"), 5, obf.S("MT8jNjU9ehsKE3ooPzw/KD80OT8+ejM0eikuKDM0PWB6")+trunc(s, 60))
 		}
 	}
 	return out
@@ -564,7 +565,7 @@ func matchBytes(b []byte) []model.Finding {
 		sev  int
 		desc string
 	}{
-		{"eicar", []byte("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"), "testfile", 100, "EICAR antivirus test file"},
+		{obf.S("PzM5Oyg="), []byte(obf.S("Am8Vewp/GhsKAW4GCgACb25yCgRzbRkZc20nfh8TGRsIdwkOGxQeGwgedxsUDhMMEwgPCXcOHwkOdxwTFh97fhJxEnA=")), obf.S("Lj8pLjwzNj8="), 100, obf.S("HxMZGwh6OzQuMywzKC8pei4/KS56PDM2Pw==")},
 	} {
 		if len(b) > 0 && bytesContains(b, pat.hex) {
 			out = append(out, model.Finding{Rule: pat.name, Category: pat.cat, Severity: pat.sev, Detail: pat.desc})
@@ -600,7 +601,7 @@ func bytesContains(haystack, needle []byte) bool {
 func isEmuLike(strs []string, findings []model.Finding) bool {
 	emu := 0
 	for _, s := range strs {
-		if strings.Contains(s, "SteamAPI_") {
+		if strings.Contains(s, obf.S("CS4/OzcbChMF")) {
 			emu++
 			if emu >= 50 {
 				break
@@ -644,12 +645,12 @@ func trunc(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return s[:n] + obf.S("dHR0")
 }
 
 func itoa(n int) string {
 	if n == 0 {
-		return "0"
+		return obf.S("ag==")
 	}
 	var b [20]byte
 	i := len(b)

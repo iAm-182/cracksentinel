@@ -143,7 +143,6 @@ semantic adjudication (advisory, needs TYPESAFE_API_KEY):
 }
 
 func runWatch(args []string) {
-	args = reorderArgs(args)
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
 	var (
 		interval          int
@@ -217,6 +216,7 @@ func runWatch(args []string) {
 	fs.BoolVar(&jevValidate, "jev-validate", true, "validate every payload claim individually")
 	fs.Float64Var(&jevClaimThreshold, "jev-claim-threshold", 0.5, "support probability a claim needs to keep counting")
 	fs.Float64Var(&jevThreshold, "jev-threshold", 0.3, "trojanized probability that counts as a yes (calibrated)")
+	args = reorderArgs(args, boolFlagSet(fs))
 	fs.Parse(args)
 
 	root := fs.Arg(0)
@@ -308,7 +308,6 @@ func runWatch(args []string) {
 }
 
 func runScan(args []string) {
-	os.Args = append(os.Args[:1], reorderArgs(args)...)
 	var (
 		workers           int
 		maxSizeMB         int64
@@ -351,6 +350,7 @@ func runScan(args []string) {
 		jevValidate       bool
 		jevClaimThreshold float64
 		jevThreshold      float64
+		jevCalib          string
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -393,6 +393,10 @@ func runScan(args []string) {
 	flag.BoolVar(&jevValidate, "jev-validate", true, "validate every payload claim individually; a claim that cannot be defended stops counting towards the score")
 	flag.Float64Var(&jevClaimThreshold, "jev-claim-threshold", 0.5, "support probability a claim needs to keep counting")
 	flag.Float64Var(&jevThreshold, "jev-threshold", 0.3, "trojanized probability that counts as a yes (calibrated, see cmd/calibrate)")
+	flag.StringVar(&jevCalib, "jev-calibration", "", "fitted probability calibrator (JSON written by scripts/jevlab_report.py); maps the raw model score onto a calibrated probability")
+	// The flags are registered now, so the boolean set is known and the
+	// arguments can be reordered safely.
+	os.Args = append(os.Args[:1], reorderArgs(args, boolFlagSet(flag.CommandLine))...)
 	flag.Parse()
 
 	if vtKey == "" {
@@ -482,6 +486,16 @@ func runScan(args []string) {
 			fmt.Fprintf(os.Stderr, "warning: -jev requested but no API key (set %s or TYPESAFE_API_KEY); adjudication disabled\n", jev.EnvKey)
 		}
 	}
+	var calib *jev.Calibrator
+	if jevCalib != "" {
+		c, err := jev.LoadCalibrator(jevCalib)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "calibration load error:", err)
+			os.Exit(1)
+		}
+		calib = c
+		fmt.Println(c.Describe())
+	}
 
 	cfg := scan.Config{
 		Root:                root,
@@ -513,6 +527,7 @@ func runScan(args []string) {
 		JudgeValidate:       jevValidate,
 		JudgeClaimThreshold: jevClaimThreshold,
 		JudgeThreshold:      jevThreshold,
+		JudgeCalibration:    calib,
 	}
 
 	fmt.Printf("CrackSentinel %s  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",
@@ -596,18 +611,29 @@ func runDeep(args []string) {
 	}
 }
 
-func reorderArgs(args []string) []string {
-	boolFlags := map[string]bool{
-		"-quiet": true, "--quiet": true,
-		"-no-cache": true, "--no-cache": true,
-		"-skip-assets": true, "--skip-assets": true,
-		"-online": true, "--online": true,
-		"-no-yara": true, "--no-yara": true,
-		"-detonate": true, "--detonate": true,
-		"-no-unpack": true, "--no-unpack": true,
-		"-once": true, "--once": true,
-		"-quarantine": true, "--quarantine": true,
-	}
+// boolFlagSet collects the registered boolean flags.
+//
+// The argument reordering has to know which flags take a value and which
+// do not, because a boolean flag followed by another flag would otherwise
+// swallow it. The list used to be hardcoded, and every boolean flag that
+// was added later was silently missing from it: "-jev" ate the flag after
+// it, and the value of a completely unrelated flag ended up in the wrong
+// place. Deriving the set from the registered flags removes the whole
+// class of bug.
+func boolFlagSet(fs *flag.FlagSet) map[string]bool {
+	out := map[string]bool{}
+	fs.VisitAll(func(f *flag.Flag) {
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+			out["-"+f.Name] = true
+			out["--"+f.Name] = true
+		}
+	})
+	return out
+}
+
+// reorderArgs moves the positional arguments to the end so that a folder
+// path can be written first and the flags can be written in any order.
+func reorderArgs(args []string, boolFlags map[string]bool) []string {
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]

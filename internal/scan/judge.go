@@ -18,7 +18,6 @@ package scan
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,6 +86,11 @@ func (s *Scanner) judgeFile(res *model.FileResult, strs []string, whitelist []st
 		})
 		return
 	}
+	// Map the raw answer through the fitted calibrator, if there is one.
+	// The raw probability is a score, not a probability: on the reference
+	// corpus its expected calibration error was 0.195, so the numbers
+	// could not be compared against a threshold directly.
+	v.ApplyCalibration(s.cfg.JudgeCalibration)
 
 	jr := &model.JudgeResult{
 		Classification: v.Classification,
@@ -101,6 +105,7 @@ func (s *Scanner) judgeFile(res *model.FileResult, strs []string, whitelist []st
 		InputTokens:    v.InputTokens,
 		OutputTokens:   v.OutputTokens,
 		Summary:        v.Format(),
+		Calibrated:     v.Decision(),
 	}
 	res.Judge = jr
 	res.Findings = append(res.Findings, model.Finding{
@@ -143,10 +148,7 @@ func (s *Scanner) judgeFile(res *model.FileResult, strs []string, whitelist []st
 	if thr <= 0 {
 		thr = 0.3
 	}
-	p := v.IsTrojanized
-	if v.IsTrojanizedAlt > 0 {
-		p = math.Min(p, v.IsTrojanizedAlt)
-	}
+	p := v.Decision()
 	if p < thr && (v.Prob(jev.ClassLegitimate) > 0.5 || v.Prob(jev.ClassUtility) > 0.5) && res.Verdict == model.VerdictMalicious {
 		res.Verdict = model.VerdictSuspicious
 		res.Findings = append(res.Findings, model.Finding{

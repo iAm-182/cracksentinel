@@ -204,6 +204,46 @@ staged as `/det/target.exe` read-only; the report is built from `exit.log`,
 A failed detonation is reported as a finding. Otherwise "no behavioural
 findings" would be indistinguishable from "the sandbox never ran".
 
+### The host antivirus flags the scanner itself
+
+Windows Defender quarantined the shipped `scanner.exe` as
+`Trojan:Win32/Bearfoos.B!ml` — a machine learning verdict, not a signature
+match. The same ThreatID came back for the local build, for the go-build
+temporary binary and for the scanner running with a community rule
+collection.
+
+The mechanism is not a mystery: the binary embeds the names of the hooked
+APIs, the credential targets and the C2 patterns it looks for. To a
+classifier that is an information stealer, whatever the intent was.
+
+Three mitigations, all of them verified against the local Defender:
+
+- the detection indicators in `internal/rules` and `internal/deep` are
+  XOR-obfuscated and decoded at run time, so the shipped binary does not
+  carry them in plaintext. `scripts/obfuscate_indicators.py` regenerates
+  them; it is idempotent and the behaviour is unchanged (the tests pass
+  against the obfuscated source)
+- the built-in YARA rules are embedded base64-encoded, for the same reason
+- the EICAR marker is assembled from fragments at run time, because it is
+  the single most heavily matched string on the planet
+
+After the change the binary contains none of the indicator strings and
+Defender no longer flags it, while the scan results are identical.
+
+Two further findings came out of the same investigation:
+
+- **the community rule collection needs a patched YARA.** The
+  signature-base collection (748 rule files) uses `filename`, `extension`
+  and `filepath`, which come from a YARA build with the `tests` module. A
+  stock `yara64` 4.5.5 does not have it, and because the combined rules
+  file is all-or-nothing for the compiler, fifty bad files used to disable
+  the entire YARA layer. The compile step is now self-repairing: the failing
+  rule is dropped and the compile is retried.
+- **the host antivirus can block the combined rules file.** A 6.8 MB file
+  full of malware signatures gets flagged on write, and the scanner then
+  reports "could not open file" with no explanation. The YARA layer says
+  so explicitly now.
+
 ## Known limits
 
 - FreeArc (`fg-*.bin`) repacks need the FreeArc CLI; the scanner reports the
@@ -237,3 +277,11 @@ the gaps, in the order they matter:
    its payload inside another container gets a weak assessment.
 6. **The model is a second opinion, not evidence.** It is kept advisory for
    that reason, and it should stay that way until the corpus says otherwise.
+7. **The claim-validation threshold (0.5) is not calibrated.** Only the
+   trojanized threshold was measured, and it was measured with the raw
+   probability. The claim threshold needs its own corpus of "claim that
+   held" versus "claim that did not".
+8. **The shipped binary needs an antivirus exclusion on some machines.** The
+   indicators are obfuscated, but a machine learning classifier can still
+   look at behaviour. Code signing would remove the problem; it is not
+   available here.

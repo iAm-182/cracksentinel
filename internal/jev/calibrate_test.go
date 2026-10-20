@@ -84,7 +84,7 @@ func TestCalibrateSeparatesClasses(t *testing.T) {
 	if cal.F1 != 1.0 {
 		t.Errorf("F1 = %.2f, want 1.00", cal.F1)
 	}
-	m, ok := cal.Margin()
+	m, ok := cal.ComputeMargin()
 	if !ok {
 		t.Fatal("no margin reported")
 	}
@@ -111,7 +111,7 @@ func TestCalibrateDetectsOverlap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, ok := cal.Margin()
+	m, ok := cal.ComputeMargin()
 	if !ok {
 		t.Fatal("no margin reported")
 	}

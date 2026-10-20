@@ -50,12 +50,23 @@ type Case struct {
 	Want Label
 	// Note explains why the label was assigned.
 	Note string
+	// Split is "fit" or "holdout". The calibrators are fitted on the fit
+	// split and scored on the holdout split. Putting a case, its
+	// variants and its near duplicates in the same split is what keeps
+	// the evaluation honest.
+	Split string
 	// DeterministicVerdict is the scanner's own verdict, when known. It
 	// is used to measure how often the two layers disagree.
 	DeterministicVerdict string
 	// DeterministicMalicious is the scanner's own conclusion, when known.
 	DeterministicMalicious bool
 }
+
+// Split names for the fit/holdout discipline.
+const (
+	SplitFit     = "fit"
+	SplitHoldout = "holdout"
+)
 
 // CaseResult is the outcome for one case.
 type CaseResult struct {
@@ -92,6 +103,15 @@ type Calibration struct {
 	BestThreshold float64
 	// BestF1 is the F1 at BestThreshold.
 	BestF1 float64
+	// Margin is the gap between the highest legitimate probability and the
+	// lowest malicious one. A positive margin means the classes are
+	// separated; a negative one means no threshold can separate them.
+	Margin float64
+	// HasMargin records whether a margin could be computed.
+	HasMargin bool
+	// FitCases and HoldoutCases are the counts per split.
+	FitCases     int
+	HoldoutCases int
 	// Results holds every case outcome.
 	Results []CaseResult
 	// Disagreements holds the cases where the model and the deterministic
@@ -100,6 +120,56 @@ type Calibration struct {
 	// Unstable holds the cases where the two framings of the question
 	// disagreed by more than the stability threshold.
 	Unstable []CaseResult
+}
+
+// AssignSplits puts the cases into the fit and holdout splits, stratified
+// by class so both splits keep the same class balance.
+//
+// A corpus that does not declare its own split gets a deterministic
+// stratified assignment: every third case of each class goes to the
+// holdout. The split is stable across runs, so a measurement can be
+// repeated.
+//
+// The holdout exists so the threshold is chosen on one set of cases and
+// scored on another. Choosing a threshold and evaluating it on the same
+// cases is how a tool convinces itself it works.
+func AssignSplits(cases []Case, holdoutEvery int) []Case {
+	if holdoutEvery <= 0 {
+		holdoutEvery = 3
+	}
+	out := make([]Case, len(cases))
+	copy(out, cases)
+	perClass := map[Label]int{}
+	for i := range out {
+		if out[i].Split == SplitFit || out[i].Split == SplitHoldout {
+			continue
+		}
+		perClass[out[i].Want]++
+		if perClass[out[i].Want]%holdoutEvery == 0 {
+			out[i].Split = SplitHoldout
+		} else {
+			out[i].Split = SplitFit
+		}
+	}
+	// Both splits must be non-empty for a calibration to mean anything.
+	hasFit, hasHold := false, false
+	for _, c := range out {
+		if c.Split == SplitHoldout {
+			hasHold = true
+		} else {
+			hasFit = true
+		}
+	}
+	if !hasFit || !hasHold {
+		for i := range out {
+			if i%2 == 0 {
+				out[i].Split = SplitFit
+			} else {
+				out[i].Split = SplitHoldout
+			}
+		}
+	}
+	return out
 }
 
 // Calibrate runs the adjudicator over a labelled corpus and measures it.
@@ -130,6 +200,14 @@ func (c *Client) Calibrate(ctx context.Context, cases []Case, threshold float64)
 	}
 	cal.score(threshold)
 	cal.BestThreshold, cal.BestF1 = cal.bestThreshold()
+	cal.Margin, cal.HasMargin = cal.ComputeMargin()
+	for _, r := range cal.Results {
+		if r.Split == SplitHoldout {
+			cal.HoldoutCases++
+		} else {
+			cal.FitCases++
+		}
+	}
 	return cal, nil
 }
 
@@ -144,11 +222,7 @@ func labelFor(v *Verdict, threshold float64) Label {
 	if v == nil {
 		return LabelLegitimate
 	}
-	p := v.IsTrojanized
-	if v.IsTrojanizedAlt > 0 {
-		p = math.Min(p, v.IsTrojanizedAlt)
-	}
-	if p >= threshold {
+	if v.Decision() >= threshold {
 		return LabelMalicious
 	}
 	return LabelLegitimate
@@ -234,7 +308,7 @@ func (cal *Calibration) bestThreshold() (float64, float64) {
 // separated and a threshold between them is safe; a negative margin means
 // the adjudicator cannot separate them on this corpus, whatever the F1
 // says.
-func (cal *Calibration) Margin() (float64, bool) {
+func (cal *Calibration) ComputeMargin() (float64, bool) {
 	lowestMal := 1.0
 	highestLegit := 0.0
 	haveMal, haveLegit := false, false
@@ -267,13 +341,14 @@ func (cal *Calibration) Summary() string {
 	s = append(s, "Adjudicator calibration")
 	s = append(s, fmt.Sprintf("corpus          : %d case(s), %d correct (%.0f%%)", cal.Total, cal.Correct, cal.Accuracy*100))
 	s = append(s, fmt.Sprintf("threshold       : %.2f  (best on this corpus: %.2f -> F1 %.2f)", cal.Threshold, cal.BestThreshold, cal.BestF1))
-	if m, ok := cal.Margin(); ok {
+	if m, ok := cal.ComputeMargin(); ok {
 		note := "classes are separated"
 		if m < 0 {
 			note = "CLASSES OVERLAP: the adjudicator cannot separate them on this corpus"
 		}
 		s = append(s, fmt.Sprintf("margin          : %+.2f (%s)", m, note))
 	}
+	s = append(s, fmt.Sprintf("splits          : %d fit / %d holdout", cal.FitCases, cal.HoldoutCases))
 	s = append(s, fmt.Sprintf("confusion       : TP=%d FP=%d TN=%d FN=%d", cal.TP, cal.FP, cal.TN, cal.FN))
 	s = append(s, fmt.Sprintf("precision       : %.2f", cal.Precision))
 	s = append(s, fmt.Sprintf("recall          : %.2f", cal.Recall))

@@ -84,6 +84,10 @@ type Config struct {
 	// trojanized answer counts as a yes. It is calibrated against a
 	// labelled corpus, not guessed: see cmd/calibrate and corpus.json.
 	JudgeThreshold float64
+	// JudgeCalibration is a fitted probability calibrator. The raw
+	// probability the model returns is a score, not a probability, and
+	// applying the fitted map is what makes the threshold meaningful.
+	JudgeCalibration *jev.Calibrator
 }
 
 type Scanner struct {

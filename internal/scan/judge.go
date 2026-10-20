@@ -276,6 +276,10 @@ func buildEvidence(res *model.FileResult, strs []string) jev.Evidence {
 		"file_name": filepath.Base(res.Path),
 		"file_type": res.Type,
 	}
+	if res.Signer != "" {
+		ev.Context["signer"] = res.Signer
+		ev.Context["signature_status"] = res.SignatureStatus
+	}
 	return ev
 }
 

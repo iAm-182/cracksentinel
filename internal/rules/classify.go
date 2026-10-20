@@ -29,7 +29,7 @@ func ClassifyEvidence(rule string) EvidenceClass {
 			return EvidenceCrackExpected
 		}
 	}
-	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg=")} {
+	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky")} {
 		if rule == r {
 			return EvidencePayload
 		}
@@ -136,6 +136,7 @@ var payloadRules = map[string]bool{
 	obf.S("IzsoO2A9OQUpLj87Nj8oBSkuKDM0PSk="):     true,
 	obf.S("IzsoO2A9OQUyOyg+OTU+Pz4FOWg="):         true,
 	obf.S("IzsoO2A9OQUqNS0/KCkyPzY2BT80OTU+Pz4="): true,
+	obf.S("KTM9NDsuLyg/BTczKTc7Ljky"):             true, // the content no longer matches the signature it carries
 }
 
 // ClassifyRule reports how strongly a rule argues for a malicious payload.

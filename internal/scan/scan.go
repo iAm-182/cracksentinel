@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gamecrack-scanner/internal/authenticode"
 	"gamecrack-scanner/internal/cache"
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/jev"
@@ -622,6 +623,48 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 			Rule: "no_readable_strings", Category: "packing", Severity: 20,
 			Detail: fmt.Sprintf("a %.1f MB binary with no readable strings - the payload is encrypted or packed", float64(info.Size())/(1<<20)),
 		})
+	}
+	// The Authenticode signature.
+	//
+	// "The file carries a certificate table" is not evidence of anything:
+	// a trojanized repack ships a real signature next to an injected
+	// payload, and the certificate table is still there. The signature is
+	// only evidence when the content still matches it, so the file is
+	// checked against its own signature here.
+	//
+	// A mismatch - the content no longer matches the signature - means
+	// the file was modified after signing. Nothing else in the scanner can
+	// see that, and it is a strong malicious signal.
+	if kind == filetype.KindPE {
+		if vr, err := authenticode.Verify(path); err == nil && vr.Signed() {
+			res.SignatureStatus = vr.Status.String()
+			res.Signer = vr.Signer
+			switch vr.Status {
+			case authenticode.StatusIntact:
+				// Only an intact signature may lower a score.
+				res.Signed = true
+				findings = append(findings, model.Finding{
+					Rule: "signed_by", Category: "info", Severity: 0,
+					Detail: fmt.Sprintf("signed by %q (chain intact, %d certificate(s))", vr.Signer, vr.Chain),
+				})
+			case authenticode.StatusMismatch:
+				// The signature is there but the content does not match
+				// it: the file was modified after it was signed.
+				res.Signed = false
+				findings = append(findings, model.Finding{
+					Rule: "signature_mismatch", Category: "tampering", Severity: 40,
+					Detail: fmt.Sprintf("the file claims a signature from %q but the content no longer matches it - it was modified after signing", vr.Signer),
+				})
+			default:
+				res.Signed = false
+				findings = append(findings, model.Finding{
+					Rule: "signed_unreadable", Category: "info", Severity: 0,
+					Detail: "the file carries a certificate table but the signature could not be parsed",
+				})
+			}
+		} else if err == nil {
+			res.SignatureStatus = "none"
+		}
 	}
 	res.Findings = findings
 

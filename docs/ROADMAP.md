@@ -323,6 +323,40 @@ What the adjudicator IS good for is the case the deterministic engine
 cannot reason about on its own: the packed, encrypted crack DLL, where the
 only honest answer is "the payload is hidden, look at this by hand".
 
+### The signature is verified, not assumed
+
+The scanner used to treat "the PE has a certificate table" as "the file is
+signed" and then used that to lower the score. Both halves of that were
+wrong. A trojanized repack ships a real signature next to an injected
+payload, and the certificate table is still there; and a certificate table
+is not a valid signature.
+
+`internal/authenticode` verifies the signature properly. It computes the
+Authenticode PE image hash - the digest over the file with the checksum
+field, the certificate table directory entry and the certificate table
+itself excluded - and compares it against the digest in the signed
+attributes. It also reads the certificate chain to name the signer.
+
+The outcome is one of three:
+
+- **intact** - signed by a named publisher and the content matches. This
+  is the only case that may lower a score.
+- **mismatch** - the content no longer matches the signature: the file was
+  modified after signing. That is a strong malicious signal and nothing
+  else in the scanner can see it, because the strings and the imports are
+  all still the vendor's.
+- **none** - no signature.
+
+A repack that legitimately patches a signed installer will also show a
+mismatch, so the finding is worth 40 points and lands on SUSPICIOUS rather
+than MALICIOUS on its own.
+
+The implementation is pure Go - `encoding/asn1` for the PKCS#7 structure,
+`crypto/x509` for the certificates - with no cgo, no external tool and no
+dependency. The native `WinVerifyTrust` route was tried and abandoned: the
+struct marshalling crashed the process, and a crash in a security tool is
+not acceptable.
+
 ## Known limits
 
 - FreeArc (`fg-*.bin`) repacks need the FreeArc CLI; the scanner reports the

@@ -293,6 +293,35 @@ classes still overlap. It calls a game library and a game cheat
 trojanized. That is why the adjudication stays advisory, and why the
 default confidence for an override is 0.9 rather than 0.7.
 
+## The signature is checked, not assumed
+
+A file that carries an Authenticode certificate is not automatically
+legitimate, and a file without one is not automatically malicious. A
+trojanized repack ships a real signature next to an injected payload, and
+the certificate table is still there.
+
+So the signature is verified: the Authenticode PE image hash is computed
+(the digest over the file with the checksum field, the certificate table
+entry and the certificate table itself excluded) and compared against the
+digest in the signed attributes. The result is one of:
+
+| Result | Meaning |
+|---|---|
+| `intact` | signed by a named publisher, content matches the signature — a legitimate tool |
+| `mismatch` | **the file was modified after it was signed** — nothing else in the scanner can see this |
+| `none` | no signature |
+
+Only an `intact` signature may lower a file's score. A mismatch is a
+finding in the other direction.
+
+```
+[40] signature_mismatch: the file claims a signature from "Microsoft Corporation"
+    but the content no longer matches it - it was modified after signing
+```
+
+Pure Go: `encoding/asn1` for the PKCS#7 blob, `crypto/x509` for the
+certificates. No cgo, no external tool, no dependency.
+
 ## Reports
 
 - **console** — verdict + score + top findings per file

@@ -95,7 +95,13 @@ type FileResult struct {
 	Sections []string    `json:"sections,omitempty"`
 	Signed   bool        `json:"signed,omitempty"`
 	Packer   string      `json:"packer,omitempty"`
-	ScanMs   int64       `json:"scan_ms"`
+	// Signer is the common name of the signing certificate, empty when
+	// the file is not signed.
+	Signer string `json:"signer,omitempty"`
+	// SignatureStatus is "intact", "mismatch", "unreadable" or "none".
+	// A mismatch means the file was modified after it was signed.
+	SignatureStatus string `json:"signature_status,omitempty"`
+	ScanMs          int64  `json:"scan_ms"`
 	// Judge is the independent semantic assessment, when the adjudication
 	// layer ran. It is advisory: the deterministic Score and Verdict stay
 	// authoritative unless the user opted into an override.

@@ -322,6 +322,35 @@ finding in the other direction.
 Pure Go: `encoding/asn1` for the PKCS#7 blob, `crypto/x509` for the
 certificates. No cgo, no external tool, no dependency.
 
+## The game data is not a blind spot
+
+In a repack the game data is one huge blob — 3.8 GB for The Liar Princess and
+the Blind Prince, which is 99% of the bytes in the folder. The scanner used to
+skip a file that was too large to read, which meant the largest and least
+examined file in the folder was the one most likely to hide something.
+
+So a file that is larger than the analysis window is searched for embedded
+executables: the bytes are scanned for an `MZ` header with a real PE header
+behind it, and anything found is extracted and analysed like any other
+binary. The findings of the embedded image are reported against the file that
+carries it.
+
+```
+[MALICIOUS] score=100  data.dat
+    [32] embedded_pe: an executable is embedded at offset 104857600 (x64, about 42.0 KB)
+    [40] discord_webhook: [embedded] Discord webhook URL: https://discord.com/...
+    [30] ps_encoded: [embedded] powershell -enc SQBFAFgAKAAoAE4AZQ...
+    [15] persistence_string: [embedded] schtasks /create /tn upd /tr payload.bat
+```
+
+The search runs at memory speed (about 400 MB/s) and is only applied where
+the scanner would otherwise be blind, so it costs nothing on the normal path.
+`-carve` turns it off, `-carve-max-mb` bounds it.
+
+The extraction deliberately runs to the end of the file and not to the end of
+the section table: a PE can carry an overlay after its last section, and that
+overlay is where the indicators often sit.
+
 ## Reports
 
 - **console** — verdict + score + top findings per file

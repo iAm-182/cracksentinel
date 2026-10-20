@@ -351,6 +351,8 @@ func runScan(args []string) {
 		jevClaimThreshold float64
 		jevThreshold      float64
 		jevCalib          string
+		carve             bool
+		carveMaxMB        int64
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -394,6 +396,8 @@ func runScan(args []string) {
 	flag.Float64Var(&jevClaimThreshold, "jev-claim-threshold", 0.5, "support probability a claim needs to keep counting")
 	flag.Float64Var(&jevThreshold, "jev-threshold", 0.3, "trojanized probability that counts as a yes (calibrated, see cmd/calibrate)")
 	flag.StringVar(&jevCalib, "jev-calibration", "", "fitted probability calibrator (JSON written by scripts/jevlab_report.py); maps the raw model score onto a calibrated probability")
+	flag.BoolVar(&carve, "carve", true, "search files that are too large to read for embedded executables (a repack hides the payload in the game data)")
+	flag.Int64Var(&carveMaxMB, "carve-max-mb", 16384, "largest file that is carved, in MB")
 	// The flags are registered now, so the boolean set is known and the
 	// arguments can be reordered safely.
 	os.Args = append(os.Args[:1], reorderArgs(args, boolFlagSet(flag.CommandLine))...)
@@ -528,6 +532,8 @@ func runScan(args []string) {
 		JudgeClaimThreshold: jevClaimThreshold,
 		JudgeThreshold:      jevThreshold,
 		JudgeCalibration:    calib,
+		Carve:               carve,
+		CarveMaxMB:          carveMaxMB,
 	}
 
 	fmt.Printf("CrackSentinel %s  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",

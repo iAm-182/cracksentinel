@@ -89,6 +89,12 @@ type Config struct {
 	// probability the model returns is a score, not a probability, and
 	// applying the fitted map is what makes the threshold meaningful.
 	JudgeCalibration *jev.Calibrator
+	// Carve turns a file that is too large to read into a search for
+	// embedded executables. In a repack the game data is one huge blob
+	// and a trojanized one can hide a payload inside it.
+	Carve bool
+	// CarveMaxMB bounds the size of a file that is carved.
+	CarveMaxMB int64
 }
 
 type Scanner struct {
@@ -397,7 +403,7 @@ func (s *Scanner) Run() (*model.Summary, error) {
 			if info != nil {
 				sz = info.Size()
 			}
-			results <- model.FileResult{Path: path, Size: sz, Verdict: model.VerdictClean, Skipped: true}
+			results <- s.carveSkipped(path, sz)
 			return nil
 		}
 		jobs <- path
@@ -488,6 +494,124 @@ func (s *Scanner) summarize(all []model.FileResult, scanned, walked int64) (*mod
 		}
 	}
 	return sum, nil
+}
+
+// carveSkipped handles a file the scanner skipped because it is too large.
+//
+// A file that is too big to read is exactly where a payload can hide: in a
+// repack the game data is one huge blob, and a trojanized one can append an
+// executable to it where no import table, no string and no certificate
+// reaches. So instead of skipping the file silently, it is searched for
+// embedded executables.
+func (s *Scanner) carveSkipped(path string, size int64) model.FileResult {
+	res := model.FileResult{Path: path, Size: size, Verdict: model.VerdictClean, Skipped: true}
+	findings := s.carveInto(nil, path, size, 0)
+	if len(findings) == 0 {
+		return res
+	}
+	res.Findings = findings
+	res.Skipped = false
+	res.Type = "data"
+	score, verdict, extra := computeScore(res.Findings, nil, false)
+	res.Findings = append(res.Findings, extra...)
+	res.Score = score
+	res.Verdict = verdict
+	return res
+}
+
+// carveInto searches a file for embedded executables and returns the
+// findings it produced.
+//
+// It runs on every file that is larger than the analysis window, not only
+// on the ones that were skipped: a 200 MB file is scanned, but only its
+// first 32 MB are read, so an executable hidden further in is missed just
+// the same.
+//
+// The result is always recorded, even when nothing was found, so the report
+// can show that the file was examined.
+func (s *Scanner) carveInto(findings []model.Finding, path string, size int64, depth int) []model.Finding {
+	if !s.cfg.Carve {
+		return findings
+	}
+	limit := s.cfg.CarveMaxMB * 1024 * 1024
+	if limit <= 0 {
+		limit = 16 * 1024 * 1024 * 1024
+	}
+	if size > limit {
+		return findings
+	}
+	window := s.cfg.FullReadMB * 1024 * 1024
+	if window <= 0 {
+		window = 32 * 1024 * 1024
+	}
+	if size <= window {
+		// The whole file was read and analysed already.
+		return findings
+	}
+	start := time.Now()
+	carves, err := pe.CarvePEs(path, 8)
+	elapsed := time.Since(start)
+	if err != nil {
+		return append(findings, model.Finding{
+			Rule: "carve_failed", Category: "packing", Severity: 0,
+			Detail: fmt.Sprintf("could not search %.1f MB for embedded executables: %v", float64(size)/(1<<20), err),
+		})
+	}
+	if len(carves) == 0 {
+		return append(findings, model.Finding{
+			Rule: "carved", Category: "packing", Severity: 0,
+			Detail: fmt.Sprintf("searched %.1f MB of data for embedded executables and found none (%.1f s)", float64(size)/(1<<20), elapsed.Seconds()),
+		})
+	}
+	for _, c := range carves {
+		findings = append(findings, model.Finding{
+			Rule: "embedded_pe", Category: "packing", Severity: 32,
+			Detail: c.Describe(),
+		})
+		if s.tmp == "" {
+			findings = append(findings, model.Finding{
+				Rule: "carve_no_tmp", Category: "packing", Severity: 0,
+				Detail: "no extraction directory: the embedded executable was found but not analysed",
+			})
+			continue
+		} // The embedded image is extracted and analysed like any other
+		// binary. A payload hidden in a data blob is only useful if its
+		// content is actually looked at, and the findings belong to the
+		// file that carries it.
+		//
+		// The extraction runs to the end of the file, not to the end of
+		// the section table: a PE can carry an overlay after its last
+		// section, and that overlay is where the indicators often sit.
+		if c.Size > 0 && s.tmp != "" {
+			dst := filepath.Join(s.tmp, fmt.Sprintf("carve_%d_%d.exe", time.Now().UnixNano(), c.Offset))
+			if err := pe.ExtractEmbedded(path, c.Offset, 0, dst); err != nil {
+				findings = append(findings, model.Finding{
+					Rule: "carve_extract_failed", Category: "packing", Severity: 0,
+					Detail: "could not extract the embedded executable: " + err.Error(),
+				})
+			} else {
+				sub := s.scanFile(dst, depth+1, true)
+				findings = append(findings, model.Finding{
+					Rule: "embedded_analysis", Category: "packing", Severity: 0,
+					Detail: fmt.Sprintf("the embedded executable was extracted and analysed: %s, score %d, %d finding(s)",
+						sub.Verdict, sub.Score, len(sub.Findings)),
+				})
+				if len(sub.Findings) > 0 {
+					for _, f := range sub.Findings {
+						if f.Severity <= 0 {
+							continue
+						}
+						f.Detail = "[embedded] " + f.Detail
+						findings = append(findings, f)
+					}
+				}
+			}
+		}
+	}
+	return append(findings, model.Finding{
+		Rule: "carved", Category: "packing", Severity: 0,
+		Detail: fmt.Sprintf("searched %.1f MB of data for embedded executables and found %d (%.1f s)", float64(size)/(1<<20), len(carves), elapsed.Seconds()),
+	})
 }
 
 func (s *Scanner) skipFile(path string) bool {
@@ -624,6 +748,10 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 			Detail: fmt.Sprintf("a %.1f MB binary with no readable strings - the payload is encrypted or packed", float64(info.Size())/(1<<20)),
 		})
 	}
+	// A file larger than the analysis window is only partly read, so an
+	// executable hidden past that point is missed. In a repack the game
+	// data is one huge blob and a trojanized one hides the payload there.
+	findings = s.carveInto(findings, path, info.Size(), depth)
 	// The Authenticode signature.
 	//
 	// "The file carries a certificate table" is not evidence of anything:

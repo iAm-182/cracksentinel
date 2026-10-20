@@ -357,6 +357,32 @@ dependency. The native `WinVerifyTrust` route was tried and abandoned: the
 struct marshalling crashed the process, and a crash in a security tool is
 not acceptable.
 
+### The game data was the blind spot
+
+In the repack of The Liar Princess and the Blind Prince, `data.dat` is 3.8 GB
+- 99% of the bytes in the folder. The scanner skipped a file that was too
+large to read, so the largest and least examined file in a crack folder was
+also the one most likely to hide a payload. A trojanized repack can put an
+executable in that blob, where no import table, no string and no certificate
+reaches it.
+
+Files larger than the analysis window are now searched for embedded
+executables: the bytes are scanned for an `MZ` with a real PE header behind
+it, and whatever is found is extracted and analysed like any other binary.
+The findings of the embedded image are reported against the file that carries
+it, so a payload 100 MB into a game data blob is still reported as
+MALICIOUS with its indicators attached.
+
+Two things had to be right for that to work:
+
+- the extraction runs to the END OF THE FILE, not to the end of the section
+  table. A PE can carry an overlay after its last section, and the overlay
+  is where the indicators sit. The first version cut the extraction at the
+  section table end and found a perfectly good PE that was reported CLEAN,
+  because the indicators were in the 447 bytes it had cut off.
+- the search runs at about 400 MB/s and is only applied where the scanner
+  would otherwise be blind, so it costs nothing on the normal path.
+
 ## Known limits
 
 - FreeArc (`fg-*.bin`) repacks need the FreeArc CLI; the scanner reports the

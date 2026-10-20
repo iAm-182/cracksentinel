@@ -159,12 +159,16 @@ func TestJudgeEvidenceBuckets(t *testing.T) {
 			{Rule: "crack_whitelist", Category: "info", Severity: 0, Detail: "SmartSteamEmu"},
 			{Rule: "discord_webhook", Category: "c2", Severity: 40, Detail: "webhook URL"},
 			{Rule: "imp_clipboard", Category: "stealer", Severity: 15, Detail: "clipboard"},
+			{Rule: "ip_port", Category: "c2", Severity: 10, Detail: "hardcoded IP:port"},
 		},
 	}
 	ev := buildEvidence(&res, []string{"SteamAPI_Init1", "SteamAPI_Init2"})
 
-	if len(ev.ExpectedForCrack) != 3 {
-		t.Errorf("expected_for_a_crack = %v, want the 3 crack-expected rules", ev.ExpectedForCrack)
+	// The import-based findings are presented as ordinary behaviour: a
+	// model that sees "persistence API" in the payload bucket calls an
+	// installer a trojan.
+	if len(ev.ExpectedForCrack) != 4 {
+		t.Errorf("expected_for_a_crack = %v, want the 4 crack-expected rules", ev.ExpectedForCrack)
 	}
 	if len(ev.PayloadIndicators) != 1 {
 		t.Errorf("payload_indicators = %v, want only the webhook", ev.PayloadIndicators)
@@ -173,7 +177,7 @@ func TestJudgeEvidenceBuckets(t *testing.T) {
 		t.Errorf("payload_indicators[0] = %q", ev.PayloadIndicators[0])
 	}
 	if len(ev.OtherFindings) != 1 {
-		t.Errorf("other_findings = %v, want only the neutral clipboard rule", ev.OtherFindings)
+		t.Errorf("other_findings = %v, want only the neutral IP:port rule", ev.OtherFindings)
 	}
 	if ev.EmulatorProfile["steamapi_exports"] != 2 {
 		t.Errorf("steamapi_exports = %d, want 2", ev.EmulatorProfile["steamapi_exports"])
@@ -206,15 +210,16 @@ func TestJudgeEvidenceIsSanitised(t *testing.T) {
 			t.Errorf("instruction-shaped text reached the model: %q", line)
 		}
 	}
-	// The harmless detail must survive untouched.
+	// The harmless detail must survive untouched. It lands in the neutral
+	// bucket, not the payload one: an IP:port on its own is not intent.
 	found := false
-	for _, line := range ev.PayloadIndicators {
+	for _, line := range ev.OtherFindings {
 		if strings.Contains(line, "1.2.3.4:4444") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("a benign detail was lost: %v", ev.PayloadIndicators)
+		t.Errorf("a benign detail was lost: %v", ev.OtherFindings)
 	}
 }
 

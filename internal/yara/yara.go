@@ -292,8 +292,17 @@ func (r *Runner) compileWithRepair(path string, blocks []ruleBlock) error {
 		text := string(out)
 		m := failingRule.FindStringSubmatch(text)
 		if m == nil {
-			// The error does not name a rule: it is a real problem with
-			// the file, not with one rule.
+			// The error does not name a rule. Two cases matter here: a
+			// real problem with the file, and the host antivirus
+			// refusing to open the combined rules file. The second one
+			// looks identical to a missing file and used to be reported
+			// as a bare "could not open file".
+			if strings.Contains(text, "could not open file") {
+				return fmt.Errorf("yara could not read the combined rules file (%s). "+
+					"the host antivirus most likely blocked it: a rules file with hundreds of malware "+
+					"signatures is flagged on write. Add an exclusion for the temp directory, or run with -no-yara",
+					strings.TrimSpace(text))
+			}
 			return fmt.Errorf("yara rules failed to compile: %s: %s", err, strings.TrimSpace(text))
 		}
 		name := m[1]

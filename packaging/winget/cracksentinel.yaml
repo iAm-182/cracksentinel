@@ -1,0 +1,40 @@
+PackageIdentifier: iAm-182.CrackSentinel
+PackageVersion: 1.3.0
+Publisher: iAm-182
+PublisherUrl: https://github.com/iAm-182/cracksentinel
+PackageUrl: https://github.com/iAm-182/cracksentinel
+License: MIT
+LicenseUrl: https://github.com/iAm-182/cracksentinel/blob/main/LICENSE
+ShortDescription: Defensive malware scanner for cracked-game folders
+Description: |-
+  CrackSentinel is a defensive malware scanner for cracked-game folders.
+  It walks a folder, scores every file and tells you which ones carry a
+  payload: keyloggers, credential stealers, miners, droppers and RATs that
+  ship alongside a crack.
+
+  It reads only. It never runs, mounts or installs the files it inspects.
+  The only layer that executes anything is the optional behavioural
+  detonation sandbox, which runs the sample inside a container with no
+  network access.
+
+  Layers: PE static analysis (sections, entropy, imports, imphash, packer,
+  signature), a string and IOC engine, crack and emulator whitelisting,
+  container expansion (zip, 7z, rar, iso), VirusTotal and MalwareBazaar
+  hash reputation, a YARA layer, UPX auto-unpack, an optional semantic
+  adjudication layer, and a standalone HTML report.
+
+  Optional extras, all auto-detected: yara, upx, 7z, docker.
+PackageTags:
+  - security
+  - antivirus
+  - malware
+  - defender
+ReleaseNotesUrl: https://github.com/iAm-182/cracksentinel/releases/tag/v1.3.0
+InstallerType: zip
+InstallerUrl: https://github.com/iAm-182/cracksentinel/releases/download/v1.3.0/cracksentinel-1.3.0-windows-amd64.zip
+InstallerSha256: REPLACE_WITH_SHA256_OF_THE_ASSET
+NestedInstallerType: portable
+NestedInstallerFiles: relative\cracksentinel-1.3.0-windows-amd64\scanner.exe
+FileExtensions:
+  - exe
+ManifestType: installer

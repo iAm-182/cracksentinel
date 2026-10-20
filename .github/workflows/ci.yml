@@ -47,8 +47,10 @@ jobs:
           COMMIT="$(git rev-parse --short HEAD)"
           DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           LDFLAGS="-X gamecrack-scanner/internal/version.Version=${VERSION} -X gamecrack-scanner/internal/version.Commit=${COMMIT} -X gamecrack-scanner/internal/version.BuildDate=${DATE}"
+          # -s -w strips the symbol table: a smaller binary carries less
+          # string surface, which matters for a malware scanner.
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -trimpath -ldflags "$LDFLAGS" -o ${{ matrix.out }} ./cmd/scanner
+            go build -trimpath -ldflags "$LDFLAGS -s -w" -o ${{ matrix.out }} ./cmd/scanner
       - uses: actions/upload-artifact@v4
         with:
           name: scanner-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -99,4 +101,27 @@ jobs:
             Optional extras (auto-detected, everything works without them):
             `yara`/`yara64` (YARA layer), `upx` (packed-PE auto-unpack),
             `7z` (7z/rar/iso container expansion), `docker` (behavioural detonation).
+
+            ### If your antivirus flags the binary
+
+            A malware scanner looks for the names of the APIs it hunts and
+            the credential targets it knows, and a machine learning
+            classifier can read that as an information stealer. The
+            indicators in this build are obfuscated, but if your antivirus
+            still quarantines it, add an exclusion for the folder you put
+            it in:
+
+            ```powershell
+            Add-MpPreference -ExclusionPath "E:\tools\cracksentinel"
+            ```
+
+            Or run with `-no-yara`; the internal engine keeps working.
+
+            ### Build it yourself
+
+            The source is public and builds with one command:
+
+            ```
+            go build -trimpath -ldflags "-s -w" -o scanner.exe ./cmd/scanner
+            ```
 

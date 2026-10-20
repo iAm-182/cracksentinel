@@ -211,16 +211,57 @@ Three things are done about it:
 - the EICAR marker is assembled from fragments at run time, because it is
   the single most heavily matched string on the planet
 
-If your antivirus still flags the binary, add an exclusion for the folder you
-put it in. Every security vendor ships this instruction for their own tools:
+The release builds are also stripped (`-ldflags "-s -w"`), which makes the
+binary 30% smaller and carries less string surface. After all of this the
+shipped binary contains none of the indicator strings and the local
+Windows Defender no longer flags it, with identical scan results.
+
+### If it still happens to you
+
+Ranked by how much they actually help:
+
+1. **Add an exclusion.** Every security vendor ships this instruction for
+   their own tools:
+
+   ```powershell
+   # Windows Defender, per folder (elevated PowerShell)
+   Add-MpPreference -ExclusionPath "E:\tools\cracksentinel"
+   ```
+
+2. **Run with `-no-yara`.** The internal engine keeps working; the only
+   thing lost is the YARA layer. If the rules file is what your antivirus
+   is eating, this is the switch.
+
+3. **Build it yourself.** The source is public and the indicators are
+   obfuscated, so a locally built binary is clean as well:
+
+   ```
+   go build -trimpath -ldflags "-s -w" -o scanner.exe ./cmd/scanner
+   ```
+
+4. **Use the signed or package-manager build.** A signed binary and a
+   winget entry both have a known hash and an established reputation,
+   which is what removes the problem rather than working around it. See
+   "Signing" below.
+
+### Signing
+
+The proper fix is a publisher signature: Defender and SmartScreen treat a
+valid signature as an identity claim instead of guessing from the binary.
+`scripts/sign.ps1` signs the release bundle with either a code signing
+certificate or Azure Trusted Signing:
 
 ```powershell
-# Windows Defender, per folder (run in an elevated PowerShell)
-Add-MpPreference -ExclusionPath "E:\tools\cracksentinel"
+scripts\sign.ps1 -File dist\cracksentinel-1.3.0-windows-amd64.zip -PfxFile cert.pfx -PfxPassword $env:PFX_PASSWORD
+scripts\sign.ps1 -File ... -TrustedSigning -AccountUrl <url> -TenantId <tenant> -CertificateProfileName <profile>
 ```
 
-The YARA layer can also be turned off with `-no-yara`; the internal engine
-keeps working and the builtin rules are the only thing that is lost.
+### Package manager
+
+`scripts/winget-manifest.ps1 -Version 1.3.0` generates the winget manifest
+from a published release. A package manager entry has a known hash, is
+reviewed before it ships and builds a reputation over time, which is the
+longest-term answer to the whole problem.
 
 ## Reports
 

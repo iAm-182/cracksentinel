@@ -249,10 +249,10 @@ func buildEvidence(res *model.FileResult, strs []string) jev.Evidence {
 	}
 	for _, f := range res.Findings {
 		line := f.Rule + ": " + sanitizeEvidence(f.Detail)
-		switch rules.ClassifyRule(f.Rule) {
-		case rules.RuleCrackExpected:
+		switch rules.ClassifyEvidence(f.Rule) {
+		case rules.EvidenceCrackExpected:
 			ev.ExpectedForCrack = append(ev.ExpectedForCrack, line)
-		case rules.RulePayload:
+		case rules.EvidencePayload:
 			ev.PayloadIndicators = append(ev.PayloadIndicators, line)
 		default:
 			ev.OtherFindings = append(ev.OtherFindings, line)

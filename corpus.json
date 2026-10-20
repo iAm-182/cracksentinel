@@ -84,6 +84,17 @@
       "root": "C:/Users/USER/Desktop",
       "label": "legitimate",
       "note": "REAL: a notes file with an IP:port and a run key string in it"
+    },
+    {
+      "path": "steam_api64.dll",
+      "root": "E:/Games/The Liar Princess and the Blind Prince",
+      "label": "legitimate",
+      "note": "REAL: the TENOKE Steam emulator of an actual repack. 1225 SteamAPI_ exports, no C2, no credential targets - a clean crack emulator"
+    },
+    {
+      "path": "test_data/twin/steam_api64.dll",
+      "label": "malicious",
+      "note": "the trojanized TWIN of the file above: the same real crack emulator with a Discord webhook and browser credential targets appended. The capability findings are identical in both, so only the intent evidence separates them"
     }
   ]
 }

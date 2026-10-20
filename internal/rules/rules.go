@@ -376,7 +376,7 @@ func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 	// A file that cannot execute cannot be a payload. The evidence is
 	// still reported, but it stops counting towards the score: a
 	// base64 PowerShell command in a notes file, an IP:port in a log
-	// or a "schtasks /create" line in a readme are not threats while
+	// or a obf.S("KTkyLjspMSl6dTkoPzsuPw==") line in a readme are not threats while
 	// the file sits there as text.
 	if in.Kind == filetype.KindText {
 		for i := range findings {

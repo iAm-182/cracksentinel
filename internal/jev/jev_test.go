@@ -36,6 +36,7 @@ func okResponse() string {
 	  "model": "jev-1.13.0",
 	  "answers": {
 	    "is_trojanized": {"type": "noul", "noul": 0.91},
+	    "is_trojanized_alt": {"type": "noul", "noul": 0.88},
 	    "is_malicious": {"type": "noul", "noul": 0.88},
 	    "classification": {"type": "choice", "choice": "trojanized",
 	      "probabilities": {"legitimate_crack": 0.06, "trojanized": 0.91, "unknown": 0.03},
@@ -67,6 +68,12 @@ func TestAdjudicateParsesAnswers(t *testing.T) {
 	}
 	if v.IsTrojanized != 0.91 {
 		t.Errorf("IsTrojanized = %v, want 0.91", v.IsTrojanized)
+	}
+	if v.IsTrojanizedAlt != 0.88 {
+		t.Errorf("IsTrojanizedAlt = %v, want 0.88", v.IsTrojanizedAlt)
+	}
+	if !v.Stable {
+		t.Error("a 0.03 spread must count as stable")
 	}
 	if v.IsMalicious != 0.88 {
 		t.Errorf("IsMalicious = %v, want 0.88", v.IsMalicious)
@@ -120,16 +127,17 @@ func TestRequestShape(t *testing.T) {
 		t.Errorf("model = %v", body["model"])
 	}
 	qs, _ := body["questions"].(map[string]any)
-	if len(qs) != 6 {
-		t.Errorf("expected 6 questions, got %d: %v", len(qs), qs)
+	if len(qs) != 7 {
+		t.Errorf("expected 7 questions, got %d: %v", len(qs), qs)
 	}
 	wantTypes := map[string]string{
-		"is_trojanized":  "noul",
-		"is_malicious":   "noul",
-		"classification": "choice",
-		"risk":           "score",
-		"action":         "choice",
-		"family":         "choice",
+		"is_trojanized":     "noul",
+		"is_trojanized_alt": "noul",
+		"is_malicious":      "noul",
+		"classification":    "choice",
+		"risk":              "score",
+		"action":            "choice",
+		"family":            "choice",
 	}
 	for id, wantType := range wantTypes {
 		q, ok := qs[id].(map[string]any)

@@ -81,6 +81,12 @@ crack never does (C2 channels, credential theft, persistence). The answer is
 recorded next to the deterministic verdict and shown in the console, the JSON
 and the HTML report.
 
+**Claim validation**: every payload claim is put to the model on its own. A
+claim the model will not support loses its severity, so an unsupported
+conclusion cannot push a file into MALICIOUS. The review is always recorded
+(`jev_claims_reviewed`), so "every claim held" can be told apart from
+"nobody looked".
+
 The adjudication is **advisory**: it never replaces the deterministic score
 unless you pass `-jev-override`, and even then only a confident verdict can
 act. A model is not evidence.
@@ -92,6 +98,27 @@ scanner.exe "D:\Games\SomeGame" -jev
 Needs `TYPESAFE_API_KEY` in the environment. `-jev-min` / `-jev-max` bound the
 score band that is adjudicated (default 30–100, the ambiguous middle),
 `-jev-max-files` caps the number of calls per scan.
+
+### Measuring the adjudicator
+
+Thresholds picked by intuition are not thresholds. `cmd/calibrate` measures
+the adjudicator against a labelled corpus and reports the confusion matrix,
+precision, recall, F1, the class margin and the threshold that maximises F1:
+
+```
+go run ./cmd/calibrate -manifest corpus.json -root .
+```
+
+```
+corpus          : 7 case(s), 7 correct (100%)
+threshold       : 0.50  (best on this corpus: 0.27 -> F1 1.00)
+margin          : +0.40 (classes are separated)
+confusion       : TP=4 FP=0 TN=3 FN=0
+```
+
+`corpus.json` is meant to grow: every real crack folder that gets triaged
+adds its files with a label, and the next run measures the tool against your
+own data instead of against a guess.
 
 ## Usage
 
@@ -151,6 +178,7 @@ container with no network access.
 
 ```
 cmd/scanner/       CLI (scan + deep + watch subcommands)
+cmd/calibrate/    measures the adjudicator against a labelled corpus
 internal/scan/     walker, worker pool, scoring pipeline, container expansion
 internal/rules/    detection engine: import IOC table, string IOCs, kind rules
 internal/jev/      semantic adjudication client (TypeSafe System One)

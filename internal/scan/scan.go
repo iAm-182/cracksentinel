@@ -73,6 +73,17 @@ type Config struct {
 	JudgeMaxFiles int
 	// JudgeConcurrency bounds the in-flight adjudication calls.
 	JudgeConcurrency int
+	// JudgeValidate turns on the per-claim validation: every payload
+	// claim is put to the model separately and the ones that cannot be
+	// defended lose their severity.
+	JudgeValidate bool
+	// JudgeClaimThreshold is the support probability a claim needs to
+	// keep counting towards the score.
+	JudgeClaimThreshold float64
+	// JudgeThreshold is the probability at which the adjudicator's
+	// trojanized answer counts as a yes. It is calibrated against a
+	// labelled corpus, not guessed: see cmd/calibrate and corpus.json.
+	JudgeThreshold float64
 }
 
 type Scanner struct {
@@ -498,10 +509,18 @@ func (s *Scanner) skipFile(path string) bool {
 }
 
 func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
+	res, _ := s.scanFileEvidence(path, depth, sub)
+	return res
+}
+
+// scanFileEvidence is scanFile plus the evidence state for the semantic
+// adjudicator. The two are kept together so the evidence always describes
+// exactly the file that produced the findings.
+func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.FileResult, jev.Evidence) {
 	t0 := time.Now()
 	info, err := os.Stat(path)
 	if err != nil {
-		return model.FileResult{Path: path, Verdict: model.VerdictClean, ScanMs: time.Since(t0).Milliseconds()}
+		return model.FileResult{Path: path, Verdict: model.VerdictClean, ScanMs: time.Since(t0).Milliseconds()}, jev.Evidence{}
 	}
 	res := model.FileResult{Path: path, Size: info.Size(), ScanMs: 0}
 
@@ -517,7 +536,7 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 			res.Score = e.Score
 			res.Cached = true
 			res.ScanMs = time.Since(t0).Milliseconds()
-			return res
+			return res, jev.Evidence{}
 		}
 	}
 
@@ -744,12 +763,34 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 	}
 	// The semantic adjudication runs last, so it sees every finding the
 	// file produced, including the ones that came out of a container.
-	s.judgeFile(&res, strs)
-	if s.cache != nil && sha != "" && (score > 0 || onlineJSON != "") {
-		s.cache.PutOnline(sha, score, res.Verdict.String(), onlineJSON)
+	ev := buildEvidence(&res, strs)
+	forceMalicious := onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40
+	s.judgeFile(&res, strs, whitelist, forceMalicious)
+	if s.cache != nil && sha != "" && (res.Score > 0 || onlineJSON != "") {
+		s.cache.PutOnline(sha, res.Score, res.Verdict.String(), onlineJSON)
 	}
 	res.ScanMs = time.Since(t0).Milliseconds()
-	return res
+	return res, ev
+}
+
+// ScanOne scans a single file and returns the result together with the
+// adjudication evidence for it. It is the entry point for the calibration
+// harness, which needs both the deterministic findings and the state that
+// the model is given.
+func ScanOne(cfg Config, path string) (model.FileResult, jev.Evidence, error) {
+	if cfg.Workers <= 0 {
+		cfg.Workers = 1
+	}
+	if cfg.FullReadMB <= 0 {
+		cfg.FullReadMB = 32
+	}
+	s, err := New(cfg)
+	if err != nil {
+		return model.FileResult{}, jev.Evidence{}, err
+	}
+	defer s.Close()
+	res, ev := s.scanFileEvidence(path, 0, false)
+	return res, ev, nil
 }
 
 // computeScore is the scoring policy in one pure function so it can be

@@ -55,6 +55,30 @@ func PrintSummary(sum *model.Summary, topN int) {
 			fmt.Printf("    - [%s] %s: %s\n", f.Category, f.Rule, f.Detail)
 		}
 	}
+
+	// The disagreements are the part of the report that needs a human.
+	// A file the scanner calls MALICIOUS and the adjudicator calls
+	// legitimate is exactly the case that has to be looked at, and it is
+	// the one a summary table of scores buries.
+	var disagree []model.FileResult
+	for _, r := range sum.Results {
+		if r.Skipped || r.Judge == nil {
+			continue
+		}
+		judgeMalicious := r.Judge.Classification == "trojanized"
+		if judgeMalicious != (r.Verdict == model.VerdictMalicious) {
+			disagree = append(disagree, r)
+		}
+	}
+	if len(disagree) > 0 {
+		fmt.Println()
+		fmt.Println("----------------------------------------------")
+		fmt.Printf("NEEDS A HUMAN: %d file(s) where the scanner and the adjudicator disagree\n", len(disagree))
+		for _, r := range disagree {
+			fmt.Printf("  - %s\n      scanner: %s (%d)  |  adjudicator: %s\n",
+				r.Path, r.Verdict, r.Score, r.Judge.Summary)
+		}
+	}
 }
 
 func WriteJSON(path string, sum *model.Summary) error {

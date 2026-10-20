@@ -146,38 +146,41 @@ func runWatch(args []string) {
 	args = reorderArgs(args)
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
 	var (
-		interval      int
-		once          bool
-		quarantine    bool
-		notifyURL     string
-		threat        int
-		notifyAt      int
-		workers       int
-		maxSizeMB     int64
-		skipAssets    bool
-		excludes      string
-		noCache       bool
-		cachePath     string
-		onlineFlag    bool
-		vtKey         string
-		mbKey         string
-		vtIntervalS   int
-		noYara        bool
-		yaraRules     string
-		extractDep    int
-		extractMB     int64
-		quiet         bool
-		telemetryURL  string
-		telemetryKey  string
-		jevOn         bool
-		jevMin        int
-		jevMax        int
-		jevOverride   bool
-		jevConfidence float64
-		jevMaxFiles   int
-		jevConc       int
-		jevModel      string
-		jevURL        string
+		interval          int
+		once              bool
+		quarantine        bool
+		notifyURL         string
+		threat            int
+		notifyAt          int
+		workers           int
+		maxSizeMB         int64
+		skipAssets        bool
+		excludes          string
+		noCache           bool
+		cachePath         string
+		onlineFlag        bool
+		vtKey             string
+		mbKey             string
+		vtIntervalS       int
+		noYara            bool
+		yaraRules         string
+		extractDep        int
+		extractMB         int64
+		quiet             bool
+		telemetryURL      string
+		telemetryKey      string
+		jevOn             bool
+		jevMin            int
+		jevMax            int
+		jevOverride       bool
+		jevConfidence     float64
+		jevMaxFiles       int
+		jevConc           int
+		jevModel          string
+		jevURL            string
+		jevValidate       bool
+		jevClaimThreshold float64
+		jevThreshold      float64
 	)
 	fs.IntVar(&interval, "interval", 60, "seconds between watch passes")
 	fs.BoolVar(&once, "once", false, "single pass then exit")
@@ -211,6 +214,9 @@ func runWatch(args []string) {
 	fs.IntVar(&jevConc, "jev-concurrency", 4, "max concurrent adjudication calls")
 	fs.StringVar(&jevModel, "jev-model", jev.DefaultModel, "model used for adjudication")
 	fs.StringVar(&jevURL, "jev-url", jev.DefaultBaseURL, "TypeSafe System One endpoint")
+	fs.BoolVar(&jevValidate, "jev-validate", true, "validate every payload claim individually")
+	fs.Float64Var(&jevClaimThreshold, "jev-claim-threshold", 0.5, "support probability a claim needs to keep counting")
+	fs.Float64Var(&jevThreshold, "jev-threshold", 0.3, "trojanized probability that counts as a yes (calibrated)")
 	fs.Parse(args)
 
 	root := fs.Arg(0)
@@ -269,27 +275,30 @@ func runWatch(args []string) {
 		NotifyScore: notifyAt,
 		Quiet:       quiet,
 		Scan: scan.Config{
-			Root:               root,
-			Workers:            workers,
-			MaxSizeMB:          maxSizeMB,
-			SkipAssets:         skipAssets,
-			Excludes:           ex,
-			UseCache:           !noCache,
-			CachePath:          cachePath,
-			Quiet:              quiet,
-			FullReadMB:         32,
-			Online:             oc,
-			Yara:               yr,
-			ExtractDepth:       extractDep,
-			ExtractMaxMB:       extractMB,
-			Telemetry:          telemetry.New(telemetryURL, telemetryKey),
-			Judge:              judge,
-			JudgeMin:           jevMin,
-			JudgeMax:           jevMax,
-			JudgeOverride:      jevOverride,
-			JudgeMinConfidence: jevConfidence,
-			JudgeMaxFiles:      jevMaxFiles,
-			JudgeConcurrency:   jevConc,
+			Root:                root,
+			Workers:             workers,
+			MaxSizeMB:           maxSizeMB,
+			SkipAssets:          skipAssets,
+			Excludes:            ex,
+			UseCache:            !noCache,
+			CachePath:           cachePath,
+			Quiet:               quiet,
+			FullReadMB:          32,
+			Online:              oc,
+			Yara:                yr,
+			ExtractDepth:        extractDep,
+			ExtractMaxMB:        extractMB,
+			Telemetry:           telemetry.New(telemetryURL, telemetryKey),
+			Judge:               judge,
+			JudgeMin:            jevMin,
+			JudgeMax:            jevMax,
+			JudgeOverride:       jevOverride,
+			JudgeMinConfidence:  jevConfidence,
+			JudgeMaxFiles:       jevMaxFiles,
+			JudgeConcurrency:    jevConc,
+			JudgeValidate:       jevValidate,
+			JudgeClaimThreshold: jevClaimThreshold,
+			JudgeThreshold:      jevThreshold,
 		},
 	}
 	if err := watch.Run(cfg); err != nil {
@@ -301,44 +310,47 @@ func runWatch(args []string) {
 func runScan(args []string) {
 	os.Args = append(os.Args[:1], reorderArgs(args)...)
 	var (
-		workers       int
-		maxSizeMB     int64
-		skipAssets    bool
-		excludes      string
-		noCache       bool
-		cachePath     string
-		quiet         bool
-		jsonOut       string
-		mdOut         string
-		htmlOut       string
-		top           int
-		onlineFlag    bool
-		vtKey         string
-		mbKey         string
-		vtIntervalS   int
-		noYara        bool
-		yaraRules     string
-		extractDep    int
-		extractMB     int64
-		deepThreshold int
-		deepMax       int
-		deepBudget    int
-		detonateFlag  bool
-		detonateMin   int
-		detonatorDir  string
-		noUnpack      bool
-		telemetryURL  string
-		telemetryKey  string
-		tmpDir        string
-		jevOn         bool
-		jevMin        int
-		jevMax        int
-		jevOverride   bool
-		jevConfidence float64
-		jevMaxFiles   int
-		jevConc       int
-		jevModel      string
-		jevURL        string
+		workers           int
+		maxSizeMB         int64
+		skipAssets        bool
+		excludes          string
+		noCache           bool
+		cachePath         string
+		quiet             bool
+		jsonOut           string
+		mdOut             string
+		htmlOut           string
+		top               int
+		onlineFlag        bool
+		vtKey             string
+		mbKey             string
+		vtIntervalS       int
+		noYara            bool
+		yaraRules         string
+		extractDep        int
+		extractMB         int64
+		deepThreshold     int
+		deepMax           int
+		deepBudget        int
+		detonateFlag      bool
+		detonateMin       int
+		detonatorDir      string
+		noUnpack          bool
+		telemetryURL      string
+		telemetryKey      string
+		tmpDir            string
+		jevOn             bool
+		jevMin            int
+		jevMax            int
+		jevOverride       bool
+		jevConfidence     float64
+		jevMaxFiles       int
+		jevConc           int
+		jevModel          string
+		jevURL            string
+		jevValidate       bool
+		jevClaimThreshold float64
+		jevThreshold      float64
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -378,6 +390,9 @@ func runScan(args []string) {
 	flag.IntVar(&jevConc, "jev-concurrency", 4, "max concurrent adjudication calls")
 	flag.StringVar(&jevModel, "jev-model", jev.DefaultModel, "model used for adjudication")
 	flag.StringVar(&jevURL, "jev-url", jev.DefaultBaseURL, "TypeSafe System One endpoint")
+	flag.BoolVar(&jevValidate, "jev-validate", true, "validate every payload claim individually; a claim that cannot be defended stops counting towards the score")
+	flag.Float64Var(&jevClaimThreshold, "jev-claim-threshold", 0.5, "support probability a claim needs to keep counting")
+	flag.Float64Var(&jevThreshold, "jev-threshold", 0.3, "trojanized probability that counts as a yes (calibrated, see cmd/calibrate)")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -469,32 +484,35 @@ func runScan(args []string) {
 	}
 
 	cfg := scan.Config{
-		Root:               root,
-		Workers:            workers,
-		MaxSizeMB:          maxSizeMB,
-		SkipAssets:         skipAssets,
-		Excludes:           ex,
-		UseCache:           !noCache,
-		CachePath:          cachePath,
-		Quiet:              quiet,
-		FullReadMB:         32,
-		Online:             oc,
-		Yara:               yr,
-		ExtractDepth:       extractDep,
-		ExtractMaxMB:       extractMB,
-		Detonate:           detonateFlag,
-		DetonateMin:        detonateMin,
-		DetonatorDir:       detonatorDir,
-		NoUnpack:           noUnpack,
-		Telemetry:          tel,
-		TempDir:            tmpDir,
-		Judge:              judge,
-		JudgeMin:           jevMin,
-		JudgeMax:           jevMax,
-		JudgeOverride:      jevOverride,
-		JudgeMinConfidence: jevConfidence,
-		JudgeMaxFiles:      jevMaxFiles,
-		JudgeConcurrency:   jevConc,
+		Root:                root,
+		Workers:             workers,
+		MaxSizeMB:           maxSizeMB,
+		SkipAssets:          skipAssets,
+		Excludes:            ex,
+		UseCache:            !noCache,
+		CachePath:           cachePath,
+		Quiet:               quiet,
+		FullReadMB:          32,
+		Online:              oc,
+		Yara:                yr,
+		ExtractDepth:        extractDep,
+		ExtractMaxMB:        extractMB,
+		Detonate:            detonateFlag,
+		DetonateMin:         detonateMin,
+		DetonatorDir:        detonatorDir,
+		NoUnpack:            noUnpack,
+		Telemetry:           tel,
+		TempDir:             tmpDir,
+		Judge:               judge,
+		JudgeMin:            jevMin,
+		JudgeMax:            jevMax,
+		JudgeOverride:       jevOverride,
+		JudgeMinConfidence:  jevConfidence,
+		JudgeMaxFiles:       jevMaxFiles,
+		JudgeConcurrency:    jevConc,
+		JudgeValidate:       jevValidate,
+		JudgeClaimThreshold: jevClaimThreshold,
+		JudgeThreshold:      jevThreshold,
 	}
 
 	fmt.Printf("CrackSentinel %s  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",

@@ -1,0 +1,40 @@
+{
+  "_comment": "Labelled corpus for the semantic adjudicator. Every case names a file, its ground truth and why. The tool cmd/calibrate measures the adjudicator against this set. Add every real crack folder that gets triaged: the corpus is what turns the thresholds from a guess into a measurement. Paths are relative to the repository root.",
+  "cases": [
+    {
+      "path": "test_data/stealer.ps1",
+      "label": "malicious",
+      "note": "synthetic stealer: Discord webhook, Telegram token, browser credential paths"
+    },
+    {
+      "path": "test_data/keylogger.bat",
+      "label": "malicious",
+      "note": "synthetic keylogger dropper: encoded PowerShell, download cradle, keylogger terminology"
+    },
+    {
+      "path": "test_data/subdir/dropper.vbs",
+      "label": "malicious",
+      "note": "synthetic dropper: WScript.Shell + encoded PowerShell"
+    },
+    {
+      "path": "test_data/deep_probe.exe",
+      "label": "malicious",
+      "note": "synthetic probe: Discord webhook, encoded command, persistence, credential targets"
+    },
+    {
+      "path": "test_data/clean_notes.txt",
+      "label": "legitimate",
+      "note": "clean text file, no behaviour at all"
+    },
+    {
+      "path": "test_data/legit_crack/SmartSteamEmu.exe",
+      "label": "legitimate",
+      "note": "crack emulator (SmartSteamEmu): hooks and emulator exports, no payload"
+    },
+    {
+      "path": "test_data/assets/big.pak",
+      "label": "legitimate",
+      "note": "game asset, skipped by the scanner"
+    }
+  ]
+}

@@ -97,7 +97,7 @@ type Evidence struct {
 	// SizeBytes is the file size.
 	SizeBytes int64 `json:"size_bytes"`
 	// Signed reports an Authenticode signature.
-	Signed bool `json:"signed"`
+	Signed bool `json:"authenticode_signed"`
 	// Packer is the detected packer, empty when none.
 	Packer string `json:"packer"`
 	// Imphash is the import hash, empty when not a PE.
@@ -274,10 +274,12 @@ func (c *Client) buildRequest(ev Evidence) ([]byte, error) {
 			"is_trojanized": {
 				Type: "noul",
 				Instructions: untrustedState + "Is this file a trojanized crack, meaning a legitimate crack or emulator that has been bundled with a malicious payload, " +
-					"rather than a clean crack component? Look at `payload_indicators` for evidence of a payload and at `expected_for_a_crack` for behaviour that is normal in a crack.",
+					"rather than a clean crack component? Look at `payload_indicators` for evidence of a payload and at `expected_for_a_crack` for behaviour that is normal in a crack. " +
+					"Take `authenticode_signed` into account: a binary that carries a publisher certificate and hooks the keyboard is almost certainly a legitimate tool, " +
+					"not a payload.",
 				Criteria: map[string]any{
 					"true":  "The file carries a malicious payload: a C2 or exfiltration channel, credential theft, keylogging, persistence, an encoded or downloaded payload, or dropped files.",
-					"false": "The file only does what a crack, emulator or DRM bypass does. It has no C2 channel, no exfiltration, no credential theft and no persistence.",
+					"false": "The file only does what a crack, emulator or utility does. It has no C2 channel, no exfiltration, no credential theft and no persistence.",
 				},
 			},
 			// The same question asked a second time with a different
@@ -308,7 +310,9 @@ func (c *Client) buildRequest(ev Evidence) ([]byte, error) {
 				Instructions: untrustedState + "Does this file itself behave maliciously, regardless of whether it is a crack component? " +
 					"Consider stealing credentials, logging keystrokes, talking to a command-and-control server, exfiltrating data, " +
 					"encrypting files, or dropping and running another program. Reading a file, copying a hash to the clipboard, " +
-					"listing a directory, downloading an update or installing a service are normal behaviours of legitimate software.",
+					"listing a directory, downloading an update or installing a service are normal behaviours of legitimate software. " +
+					"Polling the keyboard for a game cheat and hooking a game's own API are normal too, and a binary that carries " +
+					"a publisher certificate is more likely to be a tool than a payload.",
 				Criteria: map[string]any{
 					"true":  "The file performs a malicious action: credential theft, keylogging, C2 communication, exfiltration, ransomware, or dropping and executing a payload.",
 					"false": "The file only does what its stated purpose requires. Nothing it does is malicious on its own.",

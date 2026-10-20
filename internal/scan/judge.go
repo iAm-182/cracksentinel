@@ -119,7 +119,7 @@ func (s *Scanner) judgeFile(res *model.FileResult, strs []string, whitelist []st
 		// The findings changed, so the score has to be recomputed. The
 		// whitelist and the emulator cap are re-applied by the same
 		// function, so the policy stays in one place.
-		score, verdict, extra := computeScore(res.Findings, whitelist)
+		score, verdict, extra := computeScore(res.Findings, whitelist, res.Signed)
 		res.Findings = append(res.Findings, extra...)
 		res.Score = score
 		res.Verdict = verdict

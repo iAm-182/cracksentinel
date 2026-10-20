@@ -42,7 +42,7 @@ func TestComputeScoreBoundaries(t *testing.T) {
 			if c.sev > 0 {
 				findings = append(findings, f("x", c.sev))
 			}
-			score, verdict, _ := computeScore(findings, nil)
+			score, verdict, _ := computeScore(findings, nil, false)
 			if score != c.score {
 				t.Errorf("score = %d, want %d", score, c.score)
 			}
@@ -69,7 +69,7 @@ func TestComputeScoreWhitelistDiscount(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, _ := computeScore([]model.Finding{f("x", c.sev)}, c.whitelist)
+			score, _, _ := computeScore([]model.Finding{f("x", c.sev)}, c.whitelist, false)
 			if score != c.want {
 				t.Errorf("score = %d, want %d", score, c.want)
 			}
@@ -79,8 +79,84 @@ func TestComputeScoreWhitelistDiscount(t *testing.T) {
 
 // TestComputeScoreEmuCap checks that a Steam-emulator-like DLL can never
 // auto-escalate to MALICIOUS.
+// TestComputeScoreCapabilityCap is the regression test for the real-folder
+// false positives. The score used to be a plain sum, so a legitimate tool
+// that does five different things (hook the keyboard, inject, persist,
+// use the network, use the clipboard) added up to 100 and was called
+// MALICIOUS. Google's adb.exe was reported MALICIOUS for exactly that
+// reason.
+func TestComputeScoreCapabilityCap(t *testing.T) {
+	// Six capability findings, 30 points each: a tool that does a lot.
+	var caps []model.Finding
+	for i := 0; i < 6; i++ {
+		caps = append(caps, f("imp_something", 30))
+	}
+	score, verdict, _ := computeScore(caps, nil, false)
+	if score != capabilityCap {
+		t.Errorf("score = %d, want the capability cap %d", score, capabilityCap)
+	}
+	if verdict != model.VerdictSuspicious {
+		t.Errorf("verdict = %v, want SUSPICIOUS", verdict)
+	}
+}
+
+// TestComputeScoreIntentIsNotCapped checks that the intent findings are
+// not capped: that is what makes a trojanized crack MALICIOUS.
+func TestComputeScoreIntentIsNotCapped(t *testing.T) {
+	var intent []model.Finding
+	for i := 0; i < 4; i++ {
+		intent = append(intent, f("discord_webhook", 40))
+	}
+	score, verdict, _ := computeScore(intent, nil, false)
+	if score != 100 {
+		t.Errorf("score = %d, want 100 (intent is not capped)", score)
+	}
+	if verdict != model.VerdictMalicious {
+		t.Errorf("verdict = %v, want MALICIOUS", verdict)
+	}
+}
+
+// TestComputeScoreSignedCapIsLower checks that a signed binary gets a much
+// lower capability cap: a binary carrying an Authenticode certificate that
+// hooks things is a tool, not a payload.
+func TestComputeScoreSignedCapIsLower(t *testing.T) {
+	var caps []model.Finding
+	for i := 0; i < 6; i++ {
+		caps = append(caps, f("imp_something", 30))
+	}
+	unsigned, _, _ := computeScore(caps, nil, false)
+	signed, verdict, _ := computeScore(caps, nil, true)
+	if signed >= unsigned {
+		t.Errorf("signed score %d is not below the unsigned score %d", signed, unsigned)
+	}
+	if signed != signedCapabilityCap {
+		t.Errorf("signed score = %d, want %d", signed, signedCapabilityCap)
+	}
+	if verdict != model.VerdictClean {
+		t.Errorf("verdict = %v, want CLEAN for a signed binary with only capability findings", verdict)
+	}
+}
+
+// TestComputeScoreCapabilityCapIsThePolicy checks the arithmetic: the cap
+// is applied to the capability bucket only.
+func TestComputeScoreCapabilityCapIsThePolicy(t *testing.T) {
+	findings := []model.Finding{
+		f("imp_keylogger", 30),
+		f("imp_injection", 30),
+		f("discord_webhook", 40),
+	}
+	score, verdict, _ := computeScore(findings, nil, false)
+	// capability 30 + 30 = 60 -> capped to 35, plus intent 40.
+	if score != 75 {
+		t.Errorf("score = %d, want 75 (capability capped at %d, intent added)", score, capabilityCap)
+	}
+	if verdict != model.VerdictMalicious {
+		t.Errorf("verdict = %v, want MALICIOUS", verdict)
+	}
+}
+
 func TestComputeScoreEmuCap(t *testing.T) {
-	score, verdict, extra := computeScore([]model.Finding{f("x", 100)}, []string{"EMU_STEAMAPI"})
+	score, verdict, extra := computeScore([]model.Finding{f("x", 100)}, []string{"EMU_STEAMAPI"}, false)
 	if score != 59 {
 		t.Errorf("emu cap: score = %d, want 59", score)
 	}
@@ -97,7 +173,7 @@ func TestComputeScoreEmuCap(t *testing.T) {
 // between the two whitelist policies: the generic -15 discount applies
 // first (EMU_STEAMAPI is a whitelist entry), the 59 cap second.
 func TestComputeScoreEmuCapKeepsVerdict(t *testing.T) {
-	score, verdict, _ := computeScore([]model.Finding{f("x", 10)}, []string{"EMU_STEAMAPI"})
+	score, verdict, _ := computeScore([]model.Finding{f("x", 10)}, []string{"EMU_STEAMAPI"}, false)
 	if score != 0 {
 		t.Errorf("score = %d, want 0 (10 - 15 whitelist discount)", score)
 	}
@@ -105,7 +181,7 @@ func TestComputeScoreEmuCapKeepsVerdict(t *testing.T) {
 		t.Errorf("verdict = %v, want CLEAN", verdict)
 	}
 	// A heavily-flagged emu DLL is capped, not escalated.
-	score, verdict, _ = computeScore([]model.Finding{f("x", 100)}, []string{"EMU_STEAMAPI"})
+	score, verdict, _ = computeScore([]model.Finding{f("x", 100)}, []string{"EMU_STEAMAPI"}, false)
 	if score != 59 {
 		t.Errorf("score = %d, want 59 (emu cap)", score)
 	}
@@ -130,7 +206,7 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 // TestScanNestedContainer is the regression test for the nested-archive
-// defect: a payload at "setup/bin/payload.txt" inside a container was
+// defect: a payload at "setup/bin/payload.ps1" inside a container was
 // invisible because only the archive's top level was walked.
 func TestScanNestedContainer(t *testing.T) {
 	dir := t.TempDir()
@@ -141,7 +217,7 @@ func TestScanNestedContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	zw := zip.NewWriter(f)
-	entry, err := zw.Create("setup/bin/payload.txt")
+	entry, err := zw.Create("setup/bin/payload.ps1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +248,7 @@ func TestScanNestedContainer(t *testing.T) {
 	}
 	var sawNested bool
 	for _, fd := range r.Findings {
-		if fd.Rule == "nested_result" && strings.Contains(fd.Detail, "setup/bin/payload.txt") {
+		if fd.Rule == "nested_result" && strings.Contains(fd.Detail, "setup/bin/payload.ps1") {
 			sawNested = true
 		}
 	}
@@ -190,7 +266,7 @@ func TestScanZipTopLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 	zw := zip.NewWriter(f)
-	e, _ := zw.Create("payload.txt")
+	e, _ := zw.Create("payload.ps1")
 	e.Write([]byte(webhook()))
 	zw.Close()
 	f.Close()
@@ -214,7 +290,7 @@ func TestScanZipTopLevel(t *testing.T) {
 func TestScanSingleFile(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "clean.txt")
-	bad := filepath.Join(dir, "bad.txt")
+	bad := filepath.Join(dir, "bad.ps1")
 	writeFile(t, good, "hello world")
 	writeFile(t, bad, webhook())
 

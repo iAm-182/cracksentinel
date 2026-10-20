@@ -46,7 +46,7 @@ func TestImportIOCs(t *testing.T) {
 		"crypt32.dll":  {"CryptUnprotectData"},
 		"kernel32.dll": {"VirtualAllocEx", "WriteProcessMemory", "CreateRemoteThread"},
 	}}
-	fs := matchImports(info)
+	fs := matchImports(info, false)
 	want := map[string]bool{"imp_keylogger": false, "imp_injection": false, "imp_credential": false, "imp_exfil": false}
 	for _, f := range fs {
 		if _, ok := want[f.Rule]; ok {

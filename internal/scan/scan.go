@@ -570,18 +570,58 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	}
 
 	findings, whitelist := rules.Match(rules.MatchInput{
-		Kind:  kind,
-		PE:    peInfo,
-		Strs:  strs,
-		Bytes: readBytes,
-		Path:  path,
+		Kind:   kind,
+		PE:     peInfo,
+		Strs:   strs,
+		Bytes:  readBytes,
+		Path:   path,
+		Signed: res.Signed,
 	})
 	if len(readBytes) == 0 && head != nil {
-		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path})
+		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path, Signed: res.Signed})
 		findings = append(findings, f2...)
 	}
 	if peErr != "" {
 		findings = append(findings, model.Finding{Rule: "pe_parse", Category: "info", Severity: 1, Detail: "PE parse failed: " + peErr})
+	}
+	// Packed or encrypted payloads.
+	//
+	// A trojanized crack is usually encrypted so that it does not show up
+	// in a scanner. An encrypted binary has no readable strings, no
+	// imports worth reporting and a high entropy - which means the
+	// deterministic engine has nothing to say about it and the file comes
+	// out CLEAN. The structure of the file gives it away instead: the
+	// original sections have a virtual size but no data on disk, the
+	// payload sits in one high-entropy section, and the section names are
+	// not the ordinary ones.
+	if peInfo != nil {
+		if peInfo.NoRawSections >= 2 {
+			findings = append(findings, model.Finding{
+				Rule: "crypter_no_raw_sections", Category: "packing", Severity: 25,
+				Detail: fmt.Sprintf("%d section(s) have a virtual size but no data on disk - the code is unpacked into memory at run time (crypter)", peInfo.NoRawSections),
+			})
+		}
+		if peInfo.EncryptedSize > 1<<20 {
+			findings = append(findings, model.Finding{
+				Rule: "encrypted_payload", Category: "packing", Severity: 20,
+				Detail: fmt.Sprintf("%.1f MB of high-entropy section data (encrypted or compressed payload)", float64(peInfo.EncryptedSize)/(1<<20)),
+			})
+		}
+		if len(peInfo.OddSections) >= 2 {
+			findings = append(findings, model.Finding{
+				Rule: "nonstandard_sections", Category: "packing", Severity: 10,
+				Detail: "non-standard section names: " + strings.Join(peInfo.OddSections, ", "),
+			})
+		}
+	}
+	// A multi-megabyte binary with no readable strings at all is
+	// encrypted or packed. Legitimate binaries always carry strings:
+	// error messages, resource names, format strings.
+	if kind == filetype.KindPE && info.Size() > 1<<20 && len(strs) < 5 {
+		findings = append(findings, model.Finding{
+			Rule: "no_readable_strings", Category: "packing", Severity: 20,
+			Detail: fmt.Sprintf("a %.1f MB binary with no readable strings - the payload is encrypted or packed", float64(info.Size())/(1<<20)),
+		})
 	}
 	res.Findings = findings
 
@@ -752,7 +792,7 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		}
 	}
 
-	score, verdict, extra := computeScore(findings, whitelist)
+	score, verdict, extra := computeScore(findings, whitelist, res.Signed)
 	if len(extra) > 0 {
 		findings = append(findings, extra...)
 		res.Findings = findings
@@ -801,7 +841,17 @@ func ScanOne(cfg Config, path string) (model.FileResult, jev.Evidence, error) {
 // unit-tested without touching the filesystem.
 //
 // Policy:
-//   - the score is the sum of all finding severities, capped at 100
+//   - CAPABILITY and INTENT are scored separately. The import-based
+//     findings say what a file CAN do (it hooks the keyboard, it injects,
+//     it uses the network); the string-based findings say what it DOES
+//     (it talks to a C2 URL, it targets browser credentials, it installs
+//     a run key). A crack emulator has capability and no intent. A
+//     trojanized crack has both.
+//   - so the capability findings are capped: a legitimate tool that does
+//     five different things must not add up to MALICIOUS. The intent
+//     findings are not capped.
+//   - a signed binary gets a much lower capability cap: a binary that
+//     carries an Authenticode certificate and hooks things is a tool
 //   - a crack/emulator whitelist hit discounts 15 points, but only while
 //     the score is below 60 — a whitelisted string never rescues a file
 //     that is already strongly malicious
@@ -811,11 +861,23 @@ func ScanOne(cfg Config, path string) (model.FileResult, jev.Evidence, error) {
 //
 // extra carries findings the policy itself wants to record (the emu cap
 // note) so the caller can merge them into the result.
-func computeScore(findings []model.Finding, whitelist []string) (int, model.Verdict, []model.Finding) {
-	score := 0
+func computeScore(findings []model.Finding, whitelist []string, signed bool) (int, model.Verdict, []model.Finding) {
+	capScore, intentScore := 0, 0
 	for _, f := range findings {
-		score += f.Severity
+		if rules.IsCapability(f.Rule) {
+			capScore += f.Severity
+		} else {
+			intentScore += f.Severity
+		}
 	}
+	cap := capabilityCap
+	if signed {
+		cap = signedCapabilityCap
+	}
+	if capScore > cap {
+		capScore = cap
+	}
+	score := capScore + intentScore
 	if score > 100 {
 		score = 100
 	}
@@ -847,6 +909,15 @@ func computeScore(findings []model.Finding, whitelist []string) (int, model.Verd
 	}
 	return score, verdict, extra
 }
+
+// The capability caps. The scan of a real Desktop folder showed why they
+// are needed: Google's adb.exe hooks the keyboard and the network, and an
+// auto-clicker does five suspicious-looking things at once. Both added up
+// to 100 and were called MALICIOUS.
+const (
+	capabilityCap       = 35
+	signedCapabilityCap = 15
+)
 
 var containerSeq int64
 

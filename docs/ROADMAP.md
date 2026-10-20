@@ -244,6 +244,85 @@ Two further findings came out of the same investigation:
   reports "could not open file" with no explanation. The YARA layer says
   so explicitly now.
 
+## What the real-folder test changed
+
+The first test on a real folder (a Desktop with 131 files) found more than the
+corpus did, and every finding was a false positive:
+
+| File | Was | Actually is |
+|---|---|---|
+| `adb.exe` | MALICIOUS 100 | Google's adb, Authenticode signed |
+| `SDL2.dll` | SUSPICIOUS 65 | the SDL2 game library |
+| `AutoClicker-3.0.exe` | MALICIOUS 100 | a game auto-clicker |
+| four `.txt` notes files | SUSPICIOUS 40-60 | plain text |
+| `iremovalpro.dll` | **CLEAN 0** | a **packed crack DLL** with a 22 MB encrypted section |
+
+Five fixes came out of it.
+
+**A file that cannot execute cannot be a payload.** A base64 PowerShell
+command in a notes file is not a threat while the file sits there as text.
+The evidence is still reported, but it stops counting towards the score.
+
+**Capability is not intent.** The score used to be a plain sum, so a
+legitimate tool that does five different things (hook the keyboard, inject,
+persist, use the network, use the clipboard) added up to 100. A crack
+emulator has *capability*; a trojanized crack has capability **and**
+intent. So the import-based findings are capped (35 points, 15 for a signed
+binary) and the string-based findings are not. A crack emulator lands at
+the cap and stays reviewable; a trojanized crack adds its payload on top
+and goes MALICIOUS.
+
+**Generic input APIs are not keyloggers.** `MapVirtualKeyA`, `GetKeyState`,
+`GetKeyboardState` and `GetForegroundWindow` moved out of the keylogger
+category into a weak `input` category. `adb.exe` was called a keylogger for
+`MapVirtualKeyA`.
+
+**Substrings are not words.** `SDL_WINDOWS_ENABLE_MENU_MNEMONICS` matched
+the wallet rule because "MNEMONIC" is a substring of "MENU_MNEMONICS", and
+`SSL_CTX_get_keylog_callback` matched the keylogger rule because it
+contains "keylog" — it is a TLS debug function for Wireshark.
+
+**A packed binary is not a clean binary.** The false negative was the worst
+of the five. `iremovalpro.dll` is a crypter: six sections have a virtual
+size but no data on disk, and the payload sits in one 22 MB section with
+7.86 entropy. It has no strings, so the string engine had nothing to say,
+and the score came out CLEAN. The structure gives it away, and it is now
+reported.
+
+After the fixes, on the same folder:
+
+```
+before: 2 MALICIOUS (both false positives), 8 SUSPICIOUS
+after:  0 MALICIOUS, 5 SUSPICIOUS — every one of them worth a look
+```
+
+and the malware fixtures still score exactly as before.
+
+### The adjudicator is weaker than the deterministic engine
+
+The same real files were put through the semantic adjudicator, and the
+result is not flattering:
+
+```
+corpus 15 case(s), 12 correct (80%)
+F1 0.73, precision 0.57, recall 1.00
+margin -0.33  CLASSES OVERLAP
+false positives: SDL2.dll, libcurl.dll, AutoClicker-3.0.exe
+```
+
+On seven synthetic fixtures the adjudicator looked perfect (F1 1.00). On
+real files it is not: it calls a game library and a game cheat trojanized.
+Adding the signature status to the evidence fixed one of the four false
+positives, which is how the gap was found at all.
+
+So the deterministic engine is the one that decides, and the adjudicator
+stays advisory. The default confidence for an override went from 0.7 to
+0.9 because a measured precision of 0.57 does not justify a lower bar.
+
+What the adjudicator IS good for is the case the deterministic engine
+cannot reason about on its own: the packed, encrypted crack DLL, where the
+only honest answer is "the payload is hidden, look at this by hand".
+
 ## Known limits
 
 - FreeArc (`fg-*.bin`) repacks need the FreeArc CLI; the scanner reports the

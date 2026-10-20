@@ -263,6 +263,36 @@ from a published release. A package manager entry has a known hash, is
 reviewed before it ships and builds a reputation over time, which is the
 longest-term answer to the whole problem.
 
+## What a real folder test changed
+
+The first test on a real folder (a Desktop with 131 files) found five false
+positives and one false negative, and every fix came from that test rather
+than from theory:
+
+- a file that **cannot execute** cannot be a payload — a base64 PowerShell
+  command in a notes file stops counting towards the score
+- **capability is not intent** — the import-based findings (what the file
+  *can* do) are capped, the string-based findings (what it *does*) are not.
+  A crack emulator has capability and no intent; a trojanized crack has
+  both
+- generic input APIs (`MapVirtualKeyA`, `GetKeyState`) are not keyloggers
+- substrings are not words — `MENU_MNEMONICS` matched the wallet rule and
+  `SSL_CTX_get_keylog_callback` matched the keylogger rule
+- a **packed** binary is not a clean binary — sections with a virtual size
+  but no data on disk, plus a high-entropy payload section, is the
+  signature of a crypter, and a trojanized crack is usually encrypted for
+  exactly that reason
+
+On that folder the result went from 2 MALICIOUS (both false positives) to
+0, with the genuine "worth a look" files still reported, and the malware
+fixtures still scoring exactly as before.
+
+The same real files were put through the semantic adjudicator, and it is
+weaker than the deterministic engine: F1 0.73, precision 0.57, and the
+classes still overlap. It calls a game library and a game cheat
+trojanized. That is why the adjudication stays advisory, and why the
+default confidence for an override is 0.9 rather than 0.7.
+
 ## Reports
 
 - **console** — verdict + score + top findings per file

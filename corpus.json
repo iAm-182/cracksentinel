@@ -1,5 +1,5 @@
 {
-  "_comment": "Labelled corpus for the semantic adjudicator. Every case names a file, its ground truth and why. The tool cmd/calibrate measures the adjudicator against this set. Add every real crack folder that gets triaged: the corpus is what turns the thresholds from a guess into a measurement. Paths are relative to the repository root.",
+  "_comment": "Labelled corpus for the semantic adjudicator. Every case names a file, its ground truth and why. The tool cmd/calibrate measures the adjudicator against this set. Add every real crack folder that gets triaged: the corpus is what turns the thresholds from a guess into a measurement. Paths are relative to the corpus root, or to the per-case 'root' when the file comes from somewhere else.",
   "cases": [
     {
       "path": "test_data/stealer.ps1",
@@ -35,6 +35,55 @@
       "path": "test_data/assets/big.pak",
       "label": "legitimate",
       "note": "game asset, skipped by the scanner"
+    },
+
+    {
+      "path": "scrcpy-win64-v3.3.4/adb.exe",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: Google's adb, Authenticode signed. Was reported MALICIOUS 100 because it hooks the keyboard and the network, and because 'SSL_CTX_get_keylog_callback' (a TLS debug function) read as a keylogger"
+    },
+    {
+      "path": "scrcpy-win64-v3.3.4/SDL2.dll",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: the SDL2 game library. Uses GetAsyncKeyState and SetWindowsHookEx for controllers, and 'MENU_MNEMONICS' matched the wallet rule because MNEMONIC is a substring of it"
+    },
+    {
+      "path": "ref/ira1n/bin/libimobiledevice/win-x64/libcurl.dll",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: libcurl. Its file and network APIs read as destructive and exfiltration"
+    },
+    {
+      "path": "ref/ira1n/bin/libimobiledevice/win-x64/pthreadVC3.dll",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: a Windows runtime library that links against the process injection API"
+    },
+    {
+      "path": "AutoClicker-3.0.exe",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: a game auto-clicker. It polls the keyboard, injects and uses the network - dual use, worth a look, but not malware"
+    },
+    {
+      "path": "iremovalpro.dll",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: a crack emulator DLL, but packed: 6 sections with no raw data and a 22 MB encrypted section. The payload is hidden, so it is SUSPICIOUS, not CLEAN"
+    },
+    {
+      "path": "cek-auto.txt",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: a notes file that happens to contain a base64 PowerShell command. A text file cannot execute it"
+    },
+    {
+      "path": "train-base.txt",
+      "root": "C:/Users/USER/Desktop",
+      "label": "legitimate",
+      "note": "REAL: a notes file with an IP:port and a run key string in it"
     }
   ]
 }

@@ -19,8 +19,14 @@ type importIOC struct {
 }
 
 var importIOCs = map[string]importIOC{
+	obf.S("MzQqLy4="): {
+		funcs:    []string{obf.S("HT8uET8jODU7KD4JLjsuPw=="), obf.S("HT8uET8jCS47Lj8="), obf.S("FzsqDDMoLi87NhE/Ixs="), obf.S("HT8uHDUoPz0oNS80Pg0zND41LQ==")},
+		category: obf.S("MzQqLy4="),
+		severity: 6,
+		desc:     obf.S("PT80PygzOXozNCovLnobChN6cjE/Izg1Oyg+ejUoejc1Lyk/eikuOy4/c3p3ei0/OzF6NTR6My4pejUtNA=="),
+	},
 	obf.S("MT8jNjU9PT8o"): {
-		funcs:    []string{obf.S("HT8uGykjNDkRPyMJLjsuPw=="), obf.S("CT8uDTM0PjUtKRI1NTEfIhs="), obf.S("CT8uDTM0PjUtKRI1NTEfIg0="), obf.S("HT8uET8jODU7KD4JLjsuPw=="), obf.S("HT8uET8jCS47Lj8="), obf.S("HT8uCDstEzQqLy4eOy47"), obf.S("CD89MykuPygIOy0TNCovLh4/LDM5Pyk="), obf.S("FzsqDDMoLi87NhE/Ixs="), obf.S("HT8uHDUoPz0oNS80Pg0zND41LQ==")},
+		funcs:    []string{obf.S("HT8uGykjNDkRPyMJLjsuPw=="), obf.S("CT8uDTM0PjUtKRI1NTEfIhs="), obf.S("CT8uDTM0PjUtKRI1NTEfIg0="), obf.S("HT8uCDstEzQqLy4eOy47"), obf.S("CD89MykuPygIOy0TNCovLh4/LDM5Pyk=")},
 		category: obf.S("MT8jNjU9PT8o"),
 		severity: 30,
 		desc:     obf.S("MT8jODU7KD51MzQqLy56OTsqLi8oP3obChM="),
@@ -76,8 +82,8 @@ var reEncoded = regexp.MustCompile(obf.S("cmUzc3J3PyZ3PzQ5Jnc/NDk1Pj8+OTU3Nzs0Pn
 var reCradle = regexp.MustCompile(obf.S("cmUzc3I5Lyg2Ji09Py4mEzQsNTE/dw0/OAg/Ky8/KS4mEzQsNTE/dx8iKig/KSkzNTQmMz8iJjk/KC4vLjM2JjgzLik7PjczNCY3KTIuOyYoPz0pLChpaHMGKXEBBAYoBjQHIWp2a2hqJzIuLiopZWB1dQ=="))
 var reIPPort = regexp.MustCompile(obf.S("BjgGPiFrdmknBnQGPiFrdmknBnQGPiFrdmknBnQGPiFrdmknYAY+IWh2bycGOA=="))
 var reBase64Blob = regexp.MustCompile(obf.S("ARt3ADt3IGp3Y3F1ByFoamp2J2chanZoJw=="))
-var reWallet = regexp.MustCompile(obf.S("cmUzc3ItOzY2Py4GdD47LiY3Py47NzspMSY/IjU+LykmPzY/OS4oLzcmKT8/PnoqMig7KT8mNzQ/NzU0MzkmFjU9MzR6HjsuOyY5NTUxMz8pBnQpKzYzLj8mKjspKS01KD4pBnQuIi4mOy8uNTwzNjZz"))
-var reKeylogWord = regexp.MustCompile(obf.S("cmUzc3IxPyM2NT0mMT8jKS4oNTE/Jjk2Myo4NTsoPnplPSg7OCY9KDs4OD8oJikuPzs2PygmPyI8MzYuKDsucw=="))
+var reWallet = regexp.MustCompile(obf.S("cmUzc3ItOzY2Py4GdD47LiY3Py47NzspMSY/IjU+LykmPzY/OS4oLzcmKT8/PgF6BQcqMig7KT8mBjg3ND83NTQzOQY4JgY4FjU9MzR6HjsuOwY4Jjk1NTEzPykGdCkrNjMuPyYqOykpLTUoPikGdC4iLiY7Ly41PDM2NnM="))
+var reKeylogWord = regexp.MustCompile(obf.S("cmUzc3IGODE/IzY1PXI9PygmPTM0PSY9Pz5zZQY4JjE/IykuKDUxPyY5NjMqODU7KD56ZT0oOzgmPSg7ODg/KCYpLj87Nj8oJj8iPDM2Lig7LnM="))
 var reRunKey = regexp.MustCompile(obf.S("cmUzc3IZLygoPzQuDD8oKTM1NAYGBgYILzQmKTkyLjspMSkGKXF1OSg/Oy4/JhQ/LXcJPygsMzk/Jig/PQYpcTs+PgYpcRIRFhdz"))
 var reVM = regexp.MustCompile(obf.S("cmUzc3IsNy07KD8mLDMoLi87Njg1IiYsODUiJik7ND44NSIzPyYtMzQ/AQQ7dyAHcw=="))
 
@@ -263,12 +269,53 @@ var strongStringIOCs = map[string]bool{
 	obf.S("MT8jNjU9BS01KD4="): true, obf.S("MT8jNjU9BS01KD5o"): true, obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"): true,
 }
 
+// actionCategories are the finding categories that describe
+// something the file DOES. They only matter when the file can act.
+var actionCategories = map[string]bool{
+	obf.S("OWg="):             true,
+	obf.S("Pyw7KTM1NA=="):     true,
+	obf.S("Pig1Kio/KA=="):     true,
+	obf.S("KS4/OzY/KA=="):     true,
+	obf.S("MT8jNjU9PT8o"):     true,
+	obf.S("Kj8oKTMpLj80OT8="): true,
+	obf.S("ND8uLTUoMQ=="):     true,
+	obf.S("KDs0KTU3LTsoPw=="): true,
+	obf.S("NzM0Pyg="):         true,
+	obf.S("MzQwPzkuMzU0"):     true,
+	obf.S("OSg/Pj80LjM7Ng=="): true,
+}
+
+// IsCapability reports whether a finding describes what the file CAN
+// do rather than what it DOES.
+//
+// The import-based findings are capability: hooking the keyboard,
+// injecting, using the network. A crack emulator has capability and no
+// intent. The string-based findings are intent: a C2 URL, a browser
+// credential target, a run key. The scoring policy caps the capability
+// bucket so a legitimate tool that does five things at once does not
+// add up to MALICIOUS.
+func IsCapability(rule string) bool {
+	if strings.HasPrefix(rule, obf.S("MzcqBQ==")) {
+		return true
+	}
+	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg==")} {
+		if rule == r {
+			return true
+		}
+	}
+	return false
+}
+
 type MatchInput struct {
 	Kind  filetype.Kind
 	PE    *pe.Info
 	Strs  []string
 	Bytes []byte
 	Path  string
+	// Signed reports that the PE carries an Authenticode certificate
+	// table. The certificate is NOT verified, but its presence is
+	// still meaningful: a random trojanized crack rarely carries one.
+	Signed bool
 }
 
 // yaraCategory maps a YARA rule name to the internal finding category it
@@ -309,7 +356,7 @@ func YaraCategory(rule string) string {
 // specific and therefore carry higher confidence.
 func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 	if in.PE != nil {
-		findings = append(findings, matchImports(in.PE)...)
+		findings = append(findings, matchImports(in.PE, in.Signed)...)
 	}
 	findings = append(findings, matchStrings(in.Strs)...)
 	findings = append(findings, matchBytes(in.Bytes)...)
@@ -325,6 +372,19 @@ func Match(in MatchInput) (findings []model.Finding, whitelistHits []string) {
 			Severity: 0,
 			Detail:   obf.S("MTQ1LTR6OSg7OTF1PzcvNjsuNSh6KTM9NDsuLyg/YHo=") + strings.Join(whitelistHits, obf.S("dno=")),
 		})
+	}
+	// A file that cannot execute cannot be a payload. The evidence is
+	// still reported, but it stops counting towards the score: a
+	// base64 PowerShell command in a notes file, an IP:port in a log
+	// or a "schtasks /create" line in a readme are not threats while
+	// the file sits there as text.
+	if in.Kind == filetype.KindText {
+		for i := range findings {
+			if findings[i].Severity > 0 && actionCategories[findings[i].Category] {
+				findings[i].Severity = 0
+				findings[i].Detail = obf.S("AS4/Ii56PDM2P3Z6OTs0NDUuej8iPzkvLj8Heg==") + findings[i].Detail
+			}
+		}
 	}
 	return findings, whitelistHits
 }
@@ -460,7 +520,7 @@ func hasDoubleExt(path string) bool {
 	return docExts[obf.S("dA==")+parts[len(parts)-2]] && execExts[obf.S("dA==")+parts[len(parts)-1]]
 }
 
-func matchImports(info *pe.Info) []model.Finding {
+func matchImports(info *pe.Info, signed bool) []model.Finding {
 	var out []model.Finding
 	flat := map[string]bool{}
 	for _, funcs := range info.Imports {
@@ -477,10 +537,21 @@ func matchImports(info *pe.Info) []model.Finding {
 			}
 		}
 		if len(hit) > 0 {
+			sev := ioc.severity
+			// A signed binary that hooks things is a tool, not a
+			// payload: Google's adb, SDL2, an auto-clicker. The
+			// certificate is not verified, so the finding is
+			// discounted rather than dropped.
+			if signed {
+				sev -= 12
+				if sev < 0 {
+					sev = 0
+				}
+			}
 			out = append(out, model.Finding{
 				Rule:     obf.S("MzcqBQ==") + name,
 				Category: ioc.category,
-				Severity: ioc.severity,
+				Severity: sev,
 				Detail:   ioc.desc + obf.S("YHo=") + strings.Join(hit, obf.S("dno=")),
 			})
 			cats[name] = true

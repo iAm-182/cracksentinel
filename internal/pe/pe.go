@@ -21,6 +21,18 @@ type Info struct {
 	Dotnet     bool
 	Machine    string
 	ParseError string
+	// NoRawSections counts the sections that have a virtual size but no
+	// raw data on disk. That is how a crypter stores the original
+	// sections: they are unpacked into memory at run time.
+	NoRawSections int
+	// OddSections lists the section names that are not part of the
+	// ordinary set. A binary with several of them is packed.
+	OddSections []string
+	// EncryptedSize is the number of bytes in sections whose entropy is
+	// high enough to be encrypted or compressed.
+	EncryptedSize int64
+	// FileSize is the size of the file on disk.
+	FileSize int64
 }
 
 type Section struct {
@@ -31,6 +43,16 @@ type Section struct {
 }
 
 var packerNames = []string{"UPX!", "MPRESS", "ASPack", "PEC2", "pec2", "Themida", "VMProtect", ".enigma", "pepack", "PEtite", "FSG!", "nspack", "UPX0", "UPX1"}
+
+// standardSections are the ordinary section names of a compiled binary. A
+// name outside this set is a hint that the binary is packed.
+var standardSections = map[string]bool{
+	".text": true, ".rdata": true, ".data": true, ".pdata": true,
+	".rsrc": true, ".reloc": true, ".bss": true, ".idata": true,
+	".edata": true, ".tls": true, ".CRT": true, ".gfids": true,
+	".00cfg": true, ".retplne": true, "_RDATA": true, ".didat": true,
+	".textbss": true, ".pdata2": true, ".xdata": true, ".voltbl": true,
+}
 
 var machineNames = map[uint16]string{
 	0x14c:  "i386",
@@ -84,6 +106,27 @@ func analyze(f *pe.File, r io.ReaderAt) (*Info, error) {
 				break
 			}
 		}
+		// A section with a virtual size but no raw data is the way a
+		// crypter stores the original sections: they are unpacked into
+		// memory at run time, so the file on disk carries nothing.
+		if s.Size == 0 && s.VirtualSize > 0x1000 {
+			info.NoRawSections++
+		}
+		if !standardSections[name] && !strings.HasPrefix(name, ".") {
+			// a non-standard name that does not even look like one
+			info.OddSections = append(info.OddSections, name)
+		} else if !standardSections[name] {
+			info.OddSections = append(info.OddSections, name)
+		}
+		if ent > 7.2 {
+			info.EncryptedSize += int64(s.Size)
+		}
+	}
+	// The file size is the end of the last section that has data on disk.
+	for _, s := range f.Sections {
+		if end := int64(s.Offset) + int64(s.Size); end > info.FileSize {
+			info.FileSize = end
+		}
 	}
 
 	imps, n := parseImports(f, r)
@@ -101,6 +144,13 @@ func analyze(f *pe.File, r io.ReaderAt) (*Info, error) {
 		if high >= 2 && info.ImportN < 8 {
 			info.Packer = "unknown(entropy)"
 		}
+	}
+	// A crypter signature: the original sections have no raw data and the
+	// payload sits in one encrypted section. This is what a trojanized
+	// crack looks like, and without it such a file is invisible: it has
+	// no strings, no imports worth reporting and a high entropy.
+	if info.Packer == "" && info.NoRawSections >= 2 {
+		info.Packer = "crypter(sections without raw data)"
 	}
 	return info, nil
 }

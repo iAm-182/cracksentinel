@@ -39,6 +39,10 @@ type caseSpec struct {
 	// Split is "fit" or "holdout". When it is empty the case is assigned
 	// to a stratified split automatically.
 	Split string `json:"split"`
+	// Root overrides the corpus root for this case. It is what lets the
+	// corpus hold real files from a real folder (a crack the user
+	// triaged) next to the repository fixtures.
+	Root string `json:"root"`
 }
 
 func main() {
@@ -81,9 +85,13 @@ func main() {
 
 	var cases []jev.Case
 	for _, c := range m.Cases {
+		caseRoot := *root
+		if c.Root != "" {
+			caseRoot = c.Root
+		}
 		p := c.Path
 		if !filepath.IsAbs(p) {
-			p = filepath.Join(*root, c.Path)
+			p = filepath.Join(caseRoot, c.Path)
 		}
 		if _, err := os.Stat(p); err != nil {
 			fmt.Fprintf(os.Stderr, "skipping %s: %v\n", c.Path, err)

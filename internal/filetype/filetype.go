@@ -17,7 +17,19 @@ const (
 	KindShortcut
 	KindAsset
 	KindDoc
+	KindText
 )
+
+// textExt are files that hold text and cannot execute anything. A base64
+// PowerShell command in a notes file is not a threat on its own: it only
+// becomes one when the user renames it or pastes it somewhere runnable.
+var textExt = map[string]bool{
+	".txt": true, ".md": true, ".nfo": true, ".log": true, ".json": true,
+	".xml": true, ".csv": true, ".ini": true, ".cfg": true, ".conf": true,
+	".reg": true, ".srt": true, ".sub": true, ".yaml": true, ".yml": true,
+	".toml": true, ".htm": true, ".html": true, ".rtf": true, ".url": true,
+	".list": true, ".sha": true, ".md5": true, ".sfv": true, ".cue": true,
+}
 
 var scriptExt = map[string]bool{
 	".bat": true, ".cmd": true, ".ps1": true, ".vbs": true, ".js": true,
@@ -67,6 +79,8 @@ func Classify(path string) Kind {
 		return KindShortcut
 	case scriptExt[ext]:
 		return KindScript
+	case textExt[ext]:
+		return KindText
 	case containerExt[ext]:
 		// .7z/.rar/.iso/.cab/.tar have no reliable magic byte, so the
 		// extension is the only signal. Without this they land in

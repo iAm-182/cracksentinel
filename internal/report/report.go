@@ -60,15 +60,25 @@ func PrintSummary(sum *model.Summary, topN int) {
 	// A file the scanner calls MALICIOUS and the adjudicator calls
 	// legitimate is exactly the case that has to be looked at, and it is
 	// the one a summary table of scores buries.
+	//
+	// SUSPICIOUS against "trojanized" is NOT a disagreement: both lean
+	// bad, only the confidence differs. A disagreement is a genuine
+	// conflict of direction - one says malware, the other says clean.
 	var disagree []model.FileResult
 	for _, r := range sum.Results {
 		if r.Skipped || r.Judge == nil {
 			continue
 		}
 		judgeMalicious := r.Judge.Classification == "trojanized"
-		if judgeMalicious != (r.Verdict == model.VerdictMalicious) {
-			disagree = append(disagree, r)
+		switch {
+		case r.Verdict == model.VerdictMalicious && !judgeMalicious:
+			// The scanner says malware, the adjudicator does not.
+		case r.Verdict == model.VerdictClean && judgeMalicious:
+			// The scanner says clean, the adjudicator says payload.
+		default:
+			continue
 		}
+		disagree = append(disagree, r)
 	}
 	if len(disagree) > 0 {
 		fmt.Println()

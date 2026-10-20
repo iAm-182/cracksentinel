@@ -1,8 +1,8 @@
 package yara
 
 import (
-	"embed"
 	"context"
+	"embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,10 +20,10 @@ type Match struct {
 }
 
 type Runner struct {
-	bin      string
-	rules    string // single combined .yar file passed to the CLI
-	tmp      string
-	timeout  time.Duration
+	bin     string
+	rules   string // single combined .yar file passed to the CLI
+	tmp     string
+	timeout time.Duration
 }
 
 var ErrYaraMissing = fmt.Errorf("yara binary not found in PATH")

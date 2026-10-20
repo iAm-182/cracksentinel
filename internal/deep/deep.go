@@ -312,8 +312,8 @@ type goEvidence struct {
 		BuildInfo struct {
 			GoVersion string `json:"go_version"`
 			Module    struct {
-				Path         string `json:"path"`
-				Main         struct {
+				Path string `json:"path"`
+				Main struct {
 					Path    string `json:"path"`
 					Version string `json:"version"`
 				} `json:"main"`

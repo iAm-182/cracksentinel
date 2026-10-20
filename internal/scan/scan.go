@@ -18,6 +18,7 @@ import (
 
 	"gamecrack-scanner/internal/cache"
 	"gamecrack-scanner/internal/filetype"
+	"gamecrack-scanner/internal/jev"
 	"gamecrack-scanner/internal/model"
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/pe"
@@ -52,21 +53,46 @@ type Config struct {
 	// can write gigabytes, so it must be pointable at a volume with free
 	// space — the default system temp often lives on a small C: drive.
 	TempDir string
+	// Judge is the optional semantic adjudication layer. When it is set and
+	// enabled, files scoring inside the judge band get an independent
+	// assessment that is recorded next to the deterministic verdict.
+	Judge *jev.Client
+	// JudgeMin and JudgeMax bound the score band that is adjudicated.
+	// The band is the ambiguous middle: below it there is nothing to
+	// argue about, above it the evidence is already conclusive.
+	JudgeMin int
+	JudgeMax int
+	// JudgeOverride lets a confident adjudication change the final verdict.
+	// Off by default: a model is not evidence.
+	JudgeOverride bool
+	// JudgeMinConfidence is the confidence a verdict must reach before an
+	// override is applied.
+	JudgeMinConfidence float64
+	// JudgeMaxFiles caps how many files are adjudicated per scan, so a
+	// folder full of flagged files cannot turn into a hundred API calls.
+	JudgeMaxFiles int
+	// JudgeConcurrency bounds the in-flight adjudication calls.
+	JudgeConcurrency int
 }
 
 type Scanner struct {
-	cfg      Config
-	cache    *cache.Cache
-	tmp      string
-	detMu    sync.Mutex
-	detOk    bool
-	detFail  bool
+	cfg       Config
+	cache     *cache.Cache
+	tmp       string
+	detMu     sync.Mutex
+	detOk     bool
+	detFail   bool
 	upxMu     sync.Mutex
 	upxPath   string
 	upxProbed bool
 	tmpMu     sync.Mutex
 	warnMu    sync.Mutex
 	warned    map[string]bool
+	// judge budget and concurrency gate
+	judgeMu     sync.Mutex
+	judgeUsed   int
+	judgeSem    chan struct{}
+	judgeWarned bool
 }
 
 // warnOnce prints a warning at most once per key (concurrency-safe).
@@ -251,6 +277,13 @@ func behavioralFindings(r *sandbox.Report) []model.Finding {
 
 func New(cfg Config) (*Scanner, error) {
 	s := &Scanner{cfg: cfg}
+	if cfg.Judge != nil && cfg.Judge.Enabled() {
+		conc := cfg.JudgeConcurrency
+		if conc <= 0 {
+			conc = 4
+		}
+		s.judgeSem = make(chan struct{}, conc)
+	}
 	if cfg.ExtractDepth > 0 {
 		base := cfg.TempDir
 		if base == "" {
@@ -709,6 +742,9 @@ func (s *Scanner) scanFile(path string, depth int, sub bool) model.FileResult {
 	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsContainerExt(path)) {
 		s.expandContainer(path, depth, &res)
 	}
+	// The semantic adjudication runs last, so it sees every finding the
+	// file produced, including the ones that came out of a container.
+	s.judgeFile(&res, strs)
 	if s.cache != nil && sha != "" && (score > 0 || onlineJSON != "") {
 		s.cache.PutOnline(sha, score, res.Verdict.String(), onlineJSON)
 	}

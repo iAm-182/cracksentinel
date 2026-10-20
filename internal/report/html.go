@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"gamecrack-scanner/internal/jev"
 	"gamecrack-scanner/internal/model"
 )
 
@@ -98,6 +99,8 @@ padding:5px 0;border-bottom:1px dotted #21262d;font-size:12px}
 .finding .ct{color:var(--mut);font-size:11px}
 .finding .dt{color:var(--fg);word-break:break-word}
 .empty{color:var(--mut);padding:40px;text-align:center}
+.jline{display:flex;gap:7px;align-items:center;margin-bottom:5px;flex-wrap:wrap}
+.jt{color:var(--mut);font-size:11px}
 footer{padding:16px 26px;color:var(--mut);font-size:11px;border-top:1px solid var(--line)}
 @media(max-width:820px){.finding{grid-template-columns:44px 1fr}.finding .ct{grid-column:2}}
 </style></head><body>
@@ -222,6 +225,18 @@ func writeHTMLRow(b *strings.Builder, r model.FileResult) {
 	fmt.Fprintf(b, "<td>%s</td>", html.EscapeString(r.Type))
 	fmt.Fprintf(b, "<td class=\"hash\">%s</td>", html.EscapeString(short))
 	b.WriteString("<td>")
+	if r.Judge != nil {
+		jc := "sus"
+		switch r.Judge.Classification {
+		case jev.ClassLegitimate, jev.ClassUtility:
+			jc = "cln"
+		case jev.ClassTrojanized:
+			jc = "mal"
+		}
+		fmt.Fprintf(b, "<div class=\"jline\"><span class=\"sc %s\">%s</span><span class=\"jt\">trojanized %.0f%% &middot; malicious %.0f%% &middot; conf %.0f%%</span></div>",
+			jc, html.EscapeString(r.Judge.Classification),
+			r.Judge.IsTrojanized*100, r.Judge.IsMalicious*100, r.Judge.Confidence*100)
+	}
 	if len(r.Findings) == 0 {
 		b.WriteString("<span class=\"ct\">no findings</span>")
 	} else {

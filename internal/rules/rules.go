@@ -123,7 +123,7 @@ var scriptRules = []keywordRule{
 	{
 		rule: "script_download_exec", category: "dropper", severity: 30,
 		desc: "download-and-execute pattern",
-		all: []string{"iex"},
+		all:  []string{"iex"},
 		any: []string{
 			"downloadstring", "downloadfile", "invoke-webrequest",
 			"system.net.webclient", "net.webclient", "mshta http",
@@ -201,12 +201,12 @@ var shortcutRules = []keywordRule{
 	{
 		rule: "shortcut_remote", category: "c2", severity: 20,
 		desc: "shortcut points at a remote URL",
-		any: []string{"http://", "https://"},
+		any:  []string{"http://", "https://"},
 	},
 	{
 		rule: "shortcut_hidden", category: "evasion", severity: 10,
 		desc: "shortcut hides its window / no visible icon",
-		any: []string{"showwindow=0", "windowstyle", "minimized", "hidden"},
+		any:  []string{"showwindow=0", "windowstyle", "minimized", "hidden"},
 	},
 }
 
@@ -223,7 +223,7 @@ var docRules = []keywordRule{
 	{
 		rule: "doc_dde", category: "dropper", severity: 30,
 		desc: "DDE auto-execution field",
-		any: []string{"ddeauto", "dde ", "msexcel", "ddeserver"},
+		any:  []string{"ddeauto", "dde ", "msexcel", "ddeserver"},
 	},
 }
 
@@ -242,7 +242,7 @@ var archiveRules = []keywordRule{
 	{
 		rule: "archive_office_macro", category: "dropper", severity: 20,
 		desc: "archive contains a macro-enabled office document",
-		any: []string{".docm", ".xlsm", ".pptm", ".xlam", ".xll"},
+		any:  []string{".docm", ".xlsm", ".pptm", ".xlam", ".xll"},
 	},
 }
 

@@ -18,7 +18,8 @@
 | UPX auto-unpack + rescan | done |
 | Shared reputation (Cloudflare Worker + D1) | done |
 | JSON / Markdown / standalone HTML reports | done |
-| CI (vet + test + multi-platform build) + release bundle | done |
+| Semantic adjudication (Jev / TypeSafe System One) | done |
+| CI (vet + test + gofmt + multi-platform build) + release bundle | done |
 
 ## Design notes
 
@@ -73,8 +74,58 @@ Two 7-Zip subtleties are encoded in `internal/scan/container.go`:
 - on the **list** command `-i!` filters the listing down to nothing, so the
   listing is done unfiltered and the extension filter is applied in Go
 
-### Behavioural sandbox
+### The semantic adjudication layer
 
+The deterministic engine answers "does this file contain known-bad
+artefacts?". It cannot answer "is this crack carrying a payload?", because
+that is a question about meaning.
+
+A crack emulator hooks the game's API, patches the executable and ships
+unsigned DLLs. A trojanized crack does all of that AND exfiltrates
+credentials. Both produce the same import table.
+
+Jev (TypeSafe's System One model) is given the same evidence, but
+**structured**: the findings are split into `expected_for_a_crack` (hooking
+imports, emulator exports, whitelist hits), `payload_indicators` (C2
+channels, credential theft, persistence, encoded payloads) and
+`other_findings` (everything else). The split is the whole point — fed a
+flat list of findings, the model calls every emulator a trojan.
+
+The bucket assignment lives in `internal/rules/classify.go` and the bar for
+`payload_indicators` is deliberately high. Dual-use behaviour — reading a
+file, copying a hash to the clipboard, listing a directory, downloading an
+update, hiding a window — is **not** payload evidence. A checksum verifier,
+an archive tool and a crack launcher all do those things. Putting them in
+the payload bucket is what made the adjudicator call legitimate tools
+trojans.
+
+Measured against real cases:
+
+| File | Deterministic | Adjudication |
+|---|---|---|
+| crack carrying a Discord webhook + stealer targets | 100 MALICIOUS | `trojanized` 100%, malicious 93% → action *delete* |
+| crack emulator, 1212 SteamAPI exports, no payload | 100 MALICIOUS | `legitimate_crack` 78%, malicious 26% |
+| QuickSFV.EXE, a checksum verifier inside a repack | 69 MALICIOUS | `legitimate_utility` 93%, malicious 12% |
+
+The last row is the real false positive from the live FitGirl triage: a
+checksum tool was reported MALICIOUS because it copies a hash to the
+clipboard, enumerates files and carries a large embedded blob.
+
+### The adjudication is advisory
+
+Jev never replaces the deterministic score by default. Its answer is
+recorded next to the deterministic verdict so a reviewer sees both.
+`-jev-override` lets a confident verdict change the final verdict, and even
+then only a verdict above `-jev-confidence` (default 0.7) can act, and only
+in the ambiguous band. A model is not evidence.
+
+The calls are budgeted (`-jev-max-files`, default 8) and bounded
+(`-jev-concurrency`, default 4), so a folder full of flagged files cannot
+turn into a hundred API calls. 429 and 529 are retried with exponential
+backoff; 400/401/413/415/422 are not, because a request error cannot be
+fixed by trying again.
+
+### Behavioural sandbox
 `docker run --network none` with `seccomp=unconfined` + `SYS_PTRACE` so
 strace can see the syscalls, a 1 GB memory cap and a PID limit. The sample is
 staged as `/det/target.exe` read-only; the report is built from `exit.log`,

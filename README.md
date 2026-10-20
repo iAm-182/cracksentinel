@@ -72,6 +72,27 @@ Worker + D1. The scanner looks up each file hash (`shared_rep` finding when 2+
 reporters agree) and contributes its own verdicts afterwards. Only hashes +
 verdicts + scores leave the machine — no filenames, no paths.
 
+**Semantic adjudication** (optional): the hard problem in this domain is
+telling a *legitimate* crack from its *trojanized twin*. Both are unsigned,
+both hook processes. With `-jev` the scanner asks [Jev](https://docs.typesafe.ai)
+(TypeSafe's System One model) to weigh the evidence, splitting it into what a
+crack legitimately does (hooking the game's API, emulator exports) and what a
+crack never does (C2 channels, credential theft, persistence). The answer is
+recorded next to the deterministic verdict and shown in the console, the JSON
+and the HTML report.
+
+The adjudication is **advisory**: it never replaces the deterministic score
+unless you pass `-jev-override`, and even then only a confident verdict can
+act. A model is not evidence.
+
+```
+scanner.exe "D:\Games\SomeGame" -jev
+```
+
+Needs `TYPESAFE_API_KEY` in the environment. `-jev-min` / `-jev-max` bound the
+score band that is adjudicated (default 30–100, the ambiguous middle),
+`-jev-max-files` caps the number of calls per scan.
+
 ## Usage
 
 ```
@@ -97,6 +118,8 @@ Flags: `-workers`, `-max-size` (MB), `-skip-assets=false`, `-exclude .bin,.dat`,
 `-online`, `-vt-key` / `VT_API_KEY`, `-mb-key` / `MB_API_KEY`, `-vt-interval`,
 `-yara-rules <dir>`, `-no-yara`, `-no-cache`, `-cache <path>`, `-quiet`, `-top N`,
 `-json`, `-md`, `-html`, `-extract-depth`, `-extract-mb`, `-tmp-dir`,
+`-jev`, `-jev-min`, `-jev-max`, `-jev-override`, `-jev-confidence`,
+`-jev-max-files`, `-jev-concurrency`, `-jev-model`, `-jev-url`,
 `-deep-threshold` / `-deep-max` / `-deep-budget` (REA auto-escalation, 0 = off),
 `-detonate` / `-detonate-min` / `-detonator-dir` (Docker+wine behavioural sandbox),
 `-no-unpack` (disable UPX auto-unpack).
@@ -130,6 +153,7 @@ container with no network access.
 cmd/scanner/       CLI (scan + deep + watch subcommands)
 internal/scan/     walker, worker pool, scoring pipeline, container expansion
 internal/rules/    detection engine: import IOC table, string IOCs, kind rules
+internal/jev/      semantic adjudication client (TypeSafe System One)
 internal/pe/       PE parsing: sections/entropy, imports, imphash, packer, signature
 internal/online/   VirusTotal / MalwareBazaar client + scoring
 internal/telemetry/ shared-reputation client (lookup + batch report)

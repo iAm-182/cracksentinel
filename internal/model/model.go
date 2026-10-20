@@ -46,8 +46,8 @@ type DeepReport struct {
 	StringHits  []DeepStringHit `json:"string_hits,omitempty"`
 	FuncHits    []DeepFuncHit   `json:"func_hits,omitempty"`
 	OpenOut     string          `json:"open_output,omitempty"`
-	Go          *GoInfo        `json:"go,omitempty"`
-	Dotnet      *DotnetInfo    `json:"dotnet,omitempty"`
+	Go          *GoInfo         `json:"go,omitempty"`
+	Dotnet      *DotnetInfo     `json:"dotnet,omitempty"`
 	Errors      []string        `json:"errors,omitempty"`
 	ElapsedMs   int64           `json:"elapsed_ms"`
 	Available   bool            `json:"rea_available"`
@@ -81,30 +81,50 @@ type DotnetInfo struct {
 }
 
 type FileResult struct {
-	Path     string       `json:"path"`
-	Size     int64        `json:"size"`
-	SHA256   string       `json:"sha256,omitempty"`
-	Type     string       `json:"type"`
-	Score    int          `json:"score"`
-	Verdict  Verdict      `json:"verdict"`
-	Cached   bool         `json:"cached"`
-	Skipped  bool         `json:"skipped,omitempty"`
-	Findings []Finding    `json:"findings,omitempty"`
-	Deep     *DeepReport  `json:"deep,omitempty"`
-	Imphash  string       `json:"imphash,omitempty"`
-	Sections []string     `json:"sections,omitempty"`
-	Signed   bool         `json:"signed,omitempty"`
-	Packer   string       `json:"packer,omitempty"`
-	ScanMs   int64        `json:"scan_ms"`
+	Path     string      `json:"path"`
+	Size     int64       `json:"size"`
+	SHA256   string      `json:"sha256,omitempty"`
+	Type     string      `json:"type"`
+	Score    int         `json:"score"`
+	Verdict  Verdict     `json:"verdict"`
+	Cached   bool        `json:"cached"`
+	Skipped  bool        `json:"skipped,omitempty"`
+	Findings []Finding   `json:"findings,omitempty"`
+	Deep     *DeepReport `json:"deep,omitempty"`
+	Imphash  string      `json:"imphash,omitempty"`
+	Sections []string    `json:"sections,omitempty"`
+	Signed   bool        `json:"signed,omitempty"`
+	Packer   string      `json:"packer,omitempty"`
+	ScanMs   int64       `json:"scan_ms"`
+	// Judge is the independent semantic assessment, when the adjudication
+	// layer ran. It is advisory: the deterministic Score and Verdict stay
+	// authoritative unless the user opted into an override.
+	Judge *JudgeResult `json:"judge,omitempty"`
+}
+
+// JudgeResult is the outcome of the semantic adjudication layer.
+type JudgeResult struct {
+	Classification string             `json:"classification"`
+	IsTrojanized   float64            `json:"is_trojanized"`
+	IsMalicious    float64            `json:"is_malicious"`
+	Probabilities  map[string]float64 `json:"probabilities,omitempty"`
+	Confidence     float64            `json:"confidence"`
+	Risk           float64            `json:"risk"`
+	Action         string             `json:"action,omitempty"`
+	Family         string             `json:"family,omitempty"`
+	Model          string             `json:"model,omitempty"`
+	InputTokens    int                `json:"input_tokens,omitempty"`
+	OutputTokens   int                `json:"output_tokens,omitempty"`
+	Summary        string             `json:"summary,omitempty"`
 }
 
 type Summary struct {
-	FilesScanned int         `json:"files_scanned"`
-	FilesSkipped int         `json:"files_skipped"`
-	BytesScanned int64       `json:"bytes_scanned"`
-	Clean        int         `json:"clean"`
-	Suspicious   int         `json:"suspicious"`
-	Malicious    int         `json:"malicious"`
-	DurationMs   int64       `json:"duration_ms"`
+	FilesScanned int          `json:"files_scanned"`
+	FilesSkipped int          `json:"files_skipped"`
+	BytesScanned int64        `json:"bytes_scanned"`
+	Clean        int          `json:"clean"`
+	Suspicious   int          `json:"suspicious"`
+	Malicious    int          `json:"malicious"`
+	DurationMs   int64        `json:"duration_ms"`
 	Results      []FileResult `json:"results"`
 }

@@ -111,9 +111,9 @@ func TestDoubleExtensionAnyKind(t *testing.T) {
 // TestYaraCategoryMapping checks the cross-engine de-duplication map.
 func TestYaraCategoryMapping(t *testing.T) {
 	cases := map[string]string{
-		"gc_discord_webhook":  "c2",
+		"gc_discord_webhook":    "c2",
 		"gc_telegram_bot_token": "c2",
-		"gc_hardcoded_c2":      "c2",
+		"gc_hardcoded_c2":       "c2",
 		"gc_powershell_encoded": "evasion",
 		"gc_keylogger_strings":  "keylogger",
 		"gc_stealer_strings":    "stealer",

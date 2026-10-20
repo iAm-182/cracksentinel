@@ -45,6 +45,9 @@ func PrintSummary(sum *model.Summary, topN int) {
 		if r.Imphash != "" {
 			fmt.Printf("    imphash=%s signed=%v packer=%s\n", r.Imphash, r.Signed, r.Packer)
 		}
+		if r.Judge != nil {
+			fmt.Printf("    %s\n", r.Judge.Summary)
+		}
 		for _, f := range r.Findings {
 			if f.Severity <= 0 {
 				continue
@@ -81,8 +84,8 @@ func WriteMarkdown(path string, sum *model.Summary, target string) error {
 		}
 	}
 	sort.Slice(flagged, func(i, j int) bool { return flagged[i].Score > flagged[j].Score })
-	sb.WriteString("| Verdict | Score | File | Type | Top rule | Detail |\n")
-	sb.WriteString("|---|---|---|---|---|---|\n")
+	sb.WriteString("| Verdict | Score | File | Type | Judge | Top rule | Detail |\n")
+	sb.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, r := range flagged {
 		top, det := "-", "-"
 		for _, f := range r.Findings {
@@ -92,7 +95,12 @@ func WriteMarkdown(path string, sum *model.Summary, target string) error {
 				break
 			}
 		}
-		fmt.Fprintf(&sb, "| %s | %d | `%s` | %s | %s | %s |\n", r.Verdict, r.Score, r.Path, r.Type, top, strings.ReplaceAll(det, "|", "\\|"))
+		judge := "-"
+		if r.Judge != nil {
+			judge = fmt.Sprintf("%s (troj %.0f%%, mal %.0f%%, conf %.0f%%)",
+				r.Judge.Classification, r.Judge.IsTrojanized*100, r.Judge.IsMalicious*100, r.Judge.Confidence*100)
+		}
+		fmt.Fprintf(&sb, "| %s | %d | `%s` | %s | %s | %s | %s |\n", r.Verdict, r.Score, r.Path, r.Type, judge, top, strings.ReplaceAll(det, "|", "\\|"))
 	}
 	return os.WriteFile(path, []byte(sb.String()), 0o644)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gamecrack-scanner/internal/deep"
+	"gamecrack-scanner/internal/jev"
 	"gamecrack-scanner/internal/model"
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/report"
@@ -127,6 +128,17 @@ scan flags:
   -html PATH        write standalone HTML report
   -top N            max flagged files shown in the console summary (default 50)
   -quiet            only print the summary
+
+semantic adjudication (advisory, needs TYPESAFE_API_KEY):
+  -jev              ask the model to tell a legit crack from a trojanized one
+  -jev-min N        only adjudicate files scoring at least N (default 30)
+  -jev-max N        only adjudicate files scoring at most N (default 100)
+  -jev-override     let a confident adjudication change the final verdict
+  -jev-confidence F minimum confidence for an override (default 0.7)
+  -jev-max-files N  max files adjudicated per scan (default 8)
+  -jev-concurrency N max concurrent adjudication calls (default 4)
+  -jev-model NAME   model id (default jev-latest)
+  -jev-url URL      System One endpoint
 `)
 }
 
@@ -134,29 +146,38 @@ func runWatch(args []string) {
 	args = reorderArgs(args)
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
 	var (
-		interval    int
-		once        bool
-		quarantine  bool
-		notifyURL   string
-		threat      int
-		notifyAt    int
-		workers     int
-		maxSizeMB   int64
-		skipAssets  bool
-		excludes    string
-		noCache     bool
-		cachePath   string
-		onlineFlag  bool
-		vtKey       string
-		mbKey       string
-		vtIntervalS int
-		noYara      bool
-		yaraRules   string
-		extractDep  int
-		extractMB   int64
-		quiet       bool
-		telemetryURL string
-		telemetryKey string
+		interval      int
+		once          bool
+		quarantine    bool
+		notifyURL     string
+		threat        int
+		notifyAt      int
+		workers       int
+		maxSizeMB     int64
+		skipAssets    bool
+		excludes      string
+		noCache       bool
+		cachePath     string
+		onlineFlag    bool
+		vtKey         string
+		mbKey         string
+		vtIntervalS   int
+		noYara        bool
+		yaraRules     string
+		extractDep    int
+		extractMB     int64
+		quiet         bool
+		telemetryURL  string
+		telemetryKey  string
+		jevOn         bool
+		jevMin        int
+		jevMax        int
+		jevOverride   bool
+		jevConfidence float64
+		jevMaxFiles   int
+		jevConc       int
+		jevModel      string
+		jevURL        string
 	)
 	fs.IntVar(&interval, "interval", 60, "seconds between watch passes")
 	fs.BoolVar(&once, "once", false, "single pass then exit")
@@ -181,6 +202,15 @@ func runWatch(args []string) {
 	fs.BoolVar(&quiet, "quiet", false, "minimal output")
 	fs.StringVar(&telemetryURL, "telemetry-url", "", "shared-reputation worker base URL (opt-in)")
 	fs.StringVar(&telemetryKey, "telemetry-key", "", "shared-reputation ingest key")
+	fs.BoolVar(&jevOn, "jev", false, "enable the semantic adjudication layer (needs "+jev.EnvKey+")")
+	fs.IntVar(&jevMin, "jev-min", 30, "only adjudicate files scoring at least this much")
+	fs.IntVar(&jevMax, "jev-max", 100, "only adjudicate files scoring at most this much")
+	fs.BoolVar(&jevOverride, "jev-override", false, "let a confident adjudication change the final verdict")
+	fs.Float64Var(&jevConfidence, "jev-confidence", 0.7, "minimum confidence for an override to apply")
+	fs.IntVar(&jevMaxFiles, "jev-max-files", 8, "max files adjudicated per pass")
+	fs.IntVar(&jevConc, "jev-concurrency", 4, "max concurrent adjudication calls")
+	fs.StringVar(&jevModel, "jev-model", jev.DefaultModel, "model used for adjudication")
+	fs.StringVar(&jevURL, "jev-url", jev.DefaultBaseURL, "TypeSafe System One endpoint")
 	fs.Parse(args)
 
 	root := fs.Arg(0)
@@ -221,6 +251,14 @@ func runWatch(args []string) {
 			fmt.Fprintln(os.Stderr, "warning: yara:", err)
 		}
 	}
+	var judge *jev.Client
+	if jevOn {
+		judge = jev.New("", jevURL, jevModel)
+		if !judge.Enabled() {
+			judge = nil
+			fmt.Fprintf(os.Stderr, "warning: -jev requested but no API key (set %s); adjudication disabled\n", jev.EnvKey)
+		}
+	}
 	cfg := watch.Config{
 		Root:        root,
 		IntervalSec: interval,
@@ -231,20 +269,27 @@ func runWatch(args []string) {
 		NotifyScore: notifyAt,
 		Quiet:       quiet,
 		Scan: scan.Config{
-			Root:         root,
-			Workers:      workers,
-			MaxSizeMB:    maxSizeMB,
-			SkipAssets:   skipAssets,
-			Excludes:     ex,
-			UseCache:     !noCache,
-			CachePath:    cachePath,
-			Quiet:        quiet,
-			FullReadMB:   32,
-			Online:       oc,
-			Yara:         yr,
-			ExtractDepth: extractDep,
-			ExtractMaxMB: extractMB,
-			Telemetry:    telemetry.New(telemetryURL, telemetryKey),
+			Root:               root,
+			Workers:            workers,
+			MaxSizeMB:          maxSizeMB,
+			SkipAssets:         skipAssets,
+			Excludes:           ex,
+			UseCache:           !noCache,
+			CachePath:          cachePath,
+			Quiet:              quiet,
+			FullReadMB:         32,
+			Online:             oc,
+			Yara:               yr,
+			ExtractDepth:       extractDep,
+			ExtractMaxMB:       extractMB,
+			Telemetry:          telemetry.New(telemetryURL, telemetryKey),
+			Judge:              judge,
+			JudgeMin:           jevMin,
+			JudgeMax:           jevMax,
+			JudgeOverride:      jevOverride,
+			JudgeMinConfidence: jevConfidence,
+			JudgeMaxFiles:      jevMaxFiles,
+			JudgeConcurrency:   jevConc,
 		},
 	}
 	if err := watch.Run(cfg); err != nil {
@@ -285,6 +330,15 @@ func runScan(args []string) {
 		telemetryURL  string
 		telemetryKey  string
 		tmpDir        string
+		jevOn         bool
+		jevMin        int
+		jevMax        int
+		jevOverride   bool
+		jevConfidence float64
+		jevMaxFiles   int
+		jevConc       int
+		jevModel      string
+		jevURL        string
 	)
 	flag.IntVar(&workers, "workers", 3, "parallel workers (default 3 for low-end CPU)")
 	flag.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
@@ -315,6 +369,15 @@ func runScan(args []string) {
 	flag.BoolVar(&noUnpack, "no-unpack", false, "disable UPX auto-unpack (requires upx binary in PATH)")
 	flag.StringVar(&telemetryURL, "telemetry-url", "", "shared-reputation worker base URL (default from TELEMETRY_URL env; opt-in)")
 	flag.StringVar(&telemetryKey, "telemetry-key", "", "shared-reputation ingest key (default from TELEMETRY_KEY env)")
+	flag.BoolVar(&jevOn, "jev", false, "enable the semantic adjudication layer (needs "+jev.EnvKey+"; advisory, it does not replace the deterministic verdict)")
+	flag.IntVar(&jevMin, "jev-min", 30, "only adjudicate files scoring at least this much")
+	flag.IntVar(&jevMax, "jev-max", 100, "only adjudicate files scoring at most this much")
+	flag.BoolVar(&jevOverride, "jev-override", false, "let a confident adjudication change the final verdict (off by default: a model is not evidence)")
+	flag.Float64Var(&jevConfidence, "jev-confidence", 0.7, "minimum confidence for an override to apply")
+	flag.IntVar(&jevMaxFiles, "jev-max-files", 8, "max files adjudicated per scan")
+	flag.IntVar(&jevConc, "jev-concurrency", 4, "max concurrent adjudication calls")
+	flag.StringVar(&jevModel, "jev-model", jev.DefaultModel, "model used for adjudication")
+	flag.StringVar(&jevURL, "jev-url", jev.DefaultBaseURL, "TypeSafe System One endpoint")
 	flag.Parse()
 
 	if vtKey == "" {
@@ -396,32 +459,51 @@ func runScan(args []string) {
 		}
 	}
 
+	var judge *jev.Client
+	if jevOn {
+		judge = jev.New("", jevURL, jevModel)
+		if !judge.Enabled() {
+			judge = nil
+			fmt.Fprintf(os.Stderr, "warning: -jev requested but no API key (set %s or TYPESAFE_API_KEY); adjudication disabled\n", jev.EnvKey)
+		}
+	}
+
 	cfg := scan.Config{
-		Root:         root,
-		Workers:      workers,
-		MaxSizeMB:    maxSizeMB,
-		SkipAssets:   skipAssets,
-		Excludes:     ex,
-		UseCache:     !noCache,
-		CachePath:    cachePath,
-		Quiet:        quiet,
-		FullReadMB:   32,
-		Online:       oc,
-		Yara:         yr,
-		ExtractDepth: extractDep,
-		ExtractMaxMB: extractMB,
-		Detonate:     detonateFlag,
-		DetonateMin:  detonateMin,
-		DetonatorDir: detonatorDir,
-		NoUnpack:     noUnpack,
-		Telemetry:    tel,
-		TempDir:      tmpDir,
+		Root:               root,
+		Workers:            workers,
+		MaxSizeMB:          maxSizeMB,
+		SkipAssets:         skipAssets,
+		Excludes:           ex,
+		UseCache:           !noCache,
+		CachePath:          cachePath,
+		Quiet:              quiet,
+		FullReadMB:         32,
+		Online:             oc,
+		Yara:               yr,
+		ExtractDepth:       extractDep,
+		ExtractMaxMB:       extractMB,
+		Detonate:           detonateFlag,
+		DetonateMin:        detonateMin,
+		DetonatorDir:       detonatorDir,
+		NoUnpack:           noUnpack,
+		Telemetry:          tel,
+		TempDir:            tmpDir,
+		Judge:              judge,
+		JudgeMin:           jevMin,
+		JudgeMax:           jevMax,
+		JudgeOverride:      jevOverride,
+		JudgeMinConfidence: jevConfidence,
+		JudgeMaxFiles:      jevMaxFiles,
+		JudgeConcurrency:   jevConc,
 	}
 
 	fmt.Printf("CrackSentinel %s  target=%s  workers=%d  max_size=%dMB  skip_assets=%v  yara=%v  online=%v  extract_depth=%d",
 		version.Short(), root, cfg.Workers, cfg.MaxSizeMB, cfg.SkipAssets, yr != nil, oc != nil && oc.Enabled(), cfg.ExtractDepth)
 	if tel.Enabled() {
 		fmt.Printf("  telemetry=on")
+	}
+	if judge != nil {
+		fmt.Printf("  jev=on")
 	}
 	fmt.Println()
 	s, err := scan.New(cfg)

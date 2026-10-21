@@ -36,6 +36,7 @@ import (
 	"encoding/asn1"
 	"fmt"
 	"os"
+	"time"
 )
 
 // Status is the outcome of the verification.
@@ -77,6 +78,10 @@ type Result struct {
 	Issuer string
 	// NotAfter is when the signing certificate expires.
 	NotAfter string
+	// Expired reports that the signing certificate has expired. A
+	// signature that was timestamped while the certificate was valid
+	// stays valid, so this is a weak signal on its own.
+	Expired bool
 	// SelfSigned reports that the certificate signs itself, which is what
 	// a lot of cracked tools do to look legitimate.
 	SelfSigned bool
@@ -131,6 +136,9 @@ func verifyBytes(data []byte) (*Result, error) {
 		res.Issuer = issuer
 		res.NotAfter = notAfter
 		res.SelfSigned = selfSigned
+		if t, err := time.Parse("2006-01-02", notAfter); err == nil {
+			res.Expired = t.Before(time.Now())
+		}
 	}
 
 	// The content matches the signature when the digest computed over the

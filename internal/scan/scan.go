@@ -775,6 +775,22 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 					Rule: "signed_by", Category: "info", Severity: 0,
 					Detail: fmt.Sprintf("signed by %q (chain intact, %d certificate(s))", vr.Signer, vr.Chain),
 				})
+				// A crack often signs itself to look legitimate. A
+				// self-signed certificate proves nothing about the
+				// publisher, and in a crack folder it is a signal that
+				// the signature is there for show.
+				if vr.SelfSigned {
+					findings = append(findings, model.Finding{
+						Rule: "self_signed_certificate", Category: "trust", Severity: 10,
+						Detail: fmt.Sprintf("the signature is self-signed (%q) - it proves nothing about the publisher, and a crack often signs itself to look legitimate", vr.Signer),
+					})
+				}
+				if vr.Expired {
+					findings = append(findings, model.Finding{
+						Rule: "expired_certificate", Category: "trust", Severity: 5,
+						Detail: fmt.Sprintf("the signing certificate expired on %s (a signature timestamped while it was valid can still be valid)", vr.NotAfter),
+					})
+				}
 			case authenticode.StatusMismatch:
 				// The signature is there but the content does not match
 				// it: the file was modified after it was signed.

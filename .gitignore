@@ -8,10 +8,10 @@ report.json
 report.md
 deep-test.json
 nextstepnya.md
+plan.md
 test_data/
 .opencode/
 
-plan.md
 containers-scan.json
 deep-escalation-test.json
 liar-scan.json

@@ -31,7 +31,6 @@ func main() {
 	dataDir := filepath.Join(appDir, "data")
 	tmpDir := filepath.Join(appDir, "tmp")
 	quarDir := filepath.Join(appDir, "quarantine")
-	profileDir := filepath.Join(appDir, ".appdata")
 	cachePath := filepath.Join(appDir, ".gamecrack-cache.jsonl")
 	corpusPath := filepath.Join(appDir, "corpus.json")
 
@@ -56,7 +55,7 @@ func main() {
 	existingURL := "http://" + defaultAddr
 	if isCrackSentinelAlive(existingURL) {
 		launchURL := buildLaunchURL(existingURL, dropArgs)
-		_, _ = launchAppWindow(launchURL, profileDir)
+		launchAppWindow(launchURL)
 		return
 	}
 
@@ -123,26 +122,17 @@ func main() {
 	}
 
 	launchURL := buildLaunchURL(baseURL, dropArgs)
-	appCmd, isAppMode := launchAppWindow(launchURL, profileDir)
+	launchAppWindow(launchURL)
 
-	winExited := make(chan struct{})
-	if appCmd != nil && isAppMode {
-		go func() {
-			_ = appCmd.Wait()
-			close(winExited)
-		}()
-	}
-
-	// Lifecycle management (SSE stream + process monitor):
+	// Lifecycle management (persistent SSE stream):
 	// - Explicit "Tutup Aplikasi" button exits immediately.
 	// - While ANY UI window SSE stream is open (ActiveClients > 0), NEVER exit
-	//   (even if minimized for hours or Edge handed off to an existing profile).
+	//   (even if minimized for hours).
 	// - While a scan job is running (ActiveJobs > 0) or Download Guard is ON
 	//   (WatchActive == true), NEVER exit.
 	// - Once a window has connected and then all windows close (ActiveClients == 0
 	//   for > 3 seconds), shut down cleanly with zero orphan processes.
 	startedAt := time.Now()
-	windowClosed := false
 	zeroSince := time.Time{}
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -151,9 +141,6 @@ func main() {
 		select {
 		case <-quitCh:
 			return
-		case <-winExited:
-			windowClosed = true
-			winExited = nil
 		case <-ticker.C:
 			if srv.WatchActive() || srv.ActiveJobs() > 0 {
 				zeroSince = time.Time{}
@@ -167,18 +154,12 @@ func main() {
 				if zeroSince.IsZero() {
 					zeroSince = time.Now()
 				}
-				// 3s grace covers page reloads (F5) while exiting promptly on window close.
 				if time.Since(zeroSince) > 3*time.Second {
 					return
 				}
 				continue
 			}
-			// Before the first client connects, allow generous startup time (60s)
-			// for cold Edge profile initialization on older CPUs.
-			if windowClosed && time.Since(startedAt) > 15*time.Second {
-				return
-			}
-			if time.Since(startedAt) > 60*time.Second {
+			if time.Since(startedAt) > 45*time.Second {
 				return
 			}
 		}
@@ -218,16 +199,16 @@ func isCrackSentinelAlive(baseURL string) bool {
 func findAppBrowser() string {
 	if runtime.GOOS == "windows" {
 		candidates := []string{
-			`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
-			`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
 			`C:\Program Files\Google\Chrome\Application\chrome.exe`,
 			`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+			`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+			`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
 			`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`,
 		}
 		if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
 			candidates = append(candidates,
-				filepath.Join(localApp, `Microsoft\Edge\Application\msedge.exe`),
 				filepath.Join(localApp, `Google\Chrome\Application\chrome.exe`),
+				filepath.Join(localApp, `Microsoft\Edge\Application\msedge.exe`),
 				filepath.Join(localApp, `BraveSoftware\Brave-Browser\Application\brave.exe`),
 			)
 		}
@@ -236,14 +217,14 @@ func findAppBrowser() string {
 				return p
 			}
 		}
-		for _, name := range []string{"msedge", "chrome", "brave"} {
+		for _, name := range []string{"chrome", "msedge", "brave"} {
 			if p, err := exec.LookPath(name); err == nil {
 				return p
 			}
 		}
 		return ""
 	}
-	for _, name := range []string{"microsoft-edge", "google-chrome", "chromium", "chromium-browser", "brave-browser"} {
+	for _, name := range []string{"google-chrome", "microsoft-edge", "chromium", "chromium-browser", "brave-browser"} {
 		if p, err := exec.LookPath(name); err == nil {
 			return p
 		}
@@ -252,26 +233,20 @@ func findAppBrowser() string {
 }
 
 // launchAppWindow opens a chromeless desktop app window (no address bar or tabs)
-// using an isolated user-data-dir so CrackSentinel behaves like standalone desktop software.
-func launchAppWindow(targetURL, profileDir string) (*exec.Cmd, bool) {
+// without a separate user-data-dir so there is never an invisible profile lock.
+func launchAppWindow(targetURL string) {
 	browser := findAppBrowser()
 	if browser != "" {
-		_ = os.MkdirAll(profileDir, 0o755)
 		args := []string{
 			"--app=" + targetURL,
-			"--user-data-dir=" + profileDir,
 			"--window-size=1360,860",
-			"--no-first-run",
-			"--no-default-browser-check",
 			"--new-window",
-			"--disable-features=msEdgeSidebarV2",
 		}
 		cmd := exec.Command(browser, args...)
 		if err := cmd.Start(); err == nil {
-			return cmd, true
+			return
 		}
 	}
-	// Fallback to system default browser if no Chromium browser is installed.
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -282,6 +257,5 @@ func launchAppWindow(targetURL, profileDir string) (*exec.Cmd, bool) {
 		cmd = exec.Command("xdg-open", targetURL)
 	}
 	_ = cmd.Start()
-	fmt.Print("") // keep fmt referenced for future diagnostics
-	return cmd, false
+	fmt.Print("")
 }

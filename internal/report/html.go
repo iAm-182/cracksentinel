@@ -106,6 +106,7 @@ footer{padding:16px 26px;color:var(--mut);font-size:11px;border-top:1px solid va
 </style></head><body>
 `)
 
+	b.WriteString("<header>\n")
 	fmt.Fprintf(&b, "<h1>CrackSentinel report</h1>\n")
 	fmt.Fprintf(&b, "<div class=\"sub\">target: %s<br>tool: %s &middot; generated: %s</div>\n",
 		html.EscapeString(target), html.EscapeString(toolVersion), time.Now().Format("2006-01-02 15:04:05"))
@@ -120,7 +121,7 @@ footer{padding:16px 26px;color:var(--mut);font-size:11px;border-top:1px solid va
 	card(sum.FilesScanned, "scanned", "acc")
 	card(sum.FilesSkipped, "skipped", "")
 	fmt.Fprintf(&b, "<div class=\"card\"><div class=\"n acc\">%d</div><div class=\"l\">ms</div></div>", sum.DurationMs)
-	b.WriteString("</div></main>")
+	b.WriteString("</div></header>")
 
 	b.WriteString(`<main>
 <div class="bar">
@@ -262,6 +263,10 @@ func writeHTMLRow(b *strings.Builder, r model.FileResult) {
 		if r.Imphash != "" {
 			fmt.Fprintf(b, "<div class=\"finding\"><div class=\"sv cln\">0</div><div><div class=\"rg\">imphash</div><div class=\"ct\">pe</div></div><div class=\"dt\">%s (signed=%v, packer=%s)</div></div>",
 				html.EscapeString(r.Imphash), r.Signed, html.EscapeString(r.Packer))
+		}
+		if r.DownloadSource != nil && (r.DownloadSource.HostURL != "" || r.DownloadSource.ReferrerURL != "") {
+			fmt.Fprintf(b, "<div class=\"finding\"><div class=\"sv cln\">0</div><div><div class=\"rg\">download_origin</div><div class=\"ct\">motw</div></div><div class=\"dt\">zone=%s host=%s referrer=%s</div></div>",
+				html.EscapeString(r.DownloadSource.ZoneName), html.EscapeString(r.DownloadSource.HostURL), html.EscapeString(r.DownloadSource.ReferrerURL))
 		}
 		b.WriteString("</details>")
 	}

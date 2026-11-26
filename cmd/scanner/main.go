@@ -16,15 +16,25 @@ import (
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
 	"gamecrack-scanner/internal/telemetry"
+	"gamecrack-scanner/internal/ui"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
 	"gamecrack-scanner/internal/yara"
 )
 
+func isKnownRuntimeDLL(r model.FileResult) bool {
+	for _, f := range r.Findings {
+		if f.Rule == "known_runtime_dll" {
+			return true
+		}
+	}
+	return false
+}
+
 func escalate(sum *model.Summary, threshold, maxN, budgetSec int) {
 	var flagged []int
 	for i, r := range sum.Results {
-		if r.Skipped || r.Deep != nil || r.Score < threshold || r.Type != "pe" {
+		if r.Skipped || r.Deep != nil || r.Score < threshold || r.Type != "pe" || isKnownRuntimeDLL(r) {
 			continue
 		}
 		flagged = append(flagged, i)
@@ -86,6 +96,10 @@ func main() {
 		runWatch(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "ui" {
+		runUI(os.Args[2:])
+		return
+	}
 	runScan(os.Args[1:])
 }
 
@@ -93,9 +107,10 @@ func usage() {
 	fmt.Printf(`CrackSentinel — defensive malware scanner for cracked-game folders
 
 usage:
-  scanner.exe <folder|file> [flags]      scan a folder (or a single file)
+  scanner.exe ui [flags]                 launch Drag & Drop Web UI + extension bridge
+  scanner.exe <path...> [flags]          scan one or more folders/files (single or mass)
   scanner.exe deep <file> [flags]        REA/Ghidra static deep-dive
-  scanner.exe watch <folder> [flags]      continuous scan + quarantine
+  scanner.exe watch <folder> [flags]     real-time download guard + quarantine + toast
   scanner.exe -version                   print build identity
 
 scan flags:
@@ -146,8 +161,10 @@ func runWatch(args []string) {
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
 	var (
 		interval          int
+		settle            int
 		once              bool
 		quarantine        bool
+		toast             bool
 		notifyURL         string
 		threat            int
 		notifyAt          int
@@ -157,6 +174,9 @@ func runWatch(args []string) {
 		excludes          string
 		noCache           bool
 		cachePath         string
+		tmpDir            string
+		carve             bool
+		noUnpack          bool
 		onlineFlag        bool
 		vtKey             string
 		mbKey             string
@@ -181,9 +201,11 @@ func runWatch(args []string) {
 		jevClaimThreshold float64
 		jevThreshold      float64
 	)
-	fs.IntVar(&interval, "interval", 60, "seconds between watch passes")
+	fs.IntVar(&interval, "interval", 5, "seconds between watch passes")
+	fs.IntVar(&settle, "settle", 2, "seconds a newly downloaded file must remain unchanged before scanning")
 	fs.BoolVar(&once, "once", false, "single pass then exit")
 	fs.BoolVar(&quarantine, "quarantine", false, "move files scoring >= threat into <root>/.quarantine")
+	fs.BoolVar(&toast, "toast", true, "show Windows desktop toast alert on suspicious/malicious downloads")
 	fs.StringVar(&notifyURL, "notify-url", "", "webhook URL (any JSON endpoint: Discord/CF worker/custom) for alerts")
 	fs.IntVar(&threat, "threat", 70, "score that triggers quarantine")
 	fs.IntVar(&notifyAt, "notify-at", 30, "score that triggers a notification")
@@ -193,6 +215,9 @@ func runWatch(args []string) {
 	fs.StringVar(&excludes, "exclude", "", "comma-separated extra extensions to skip")
 	fs.BoolVar(&noCache, "no-cache", false, "disable hash cache")
 	fs.StringVar(&cachePath, "cache", ".gamecrack-cache.jsonl", "hash cache file path")
+	fs.StringVar(&tmpDir, "tmp-dir", "", "base directory for container extraction (recommended: drive with free space)")
+	fs.BoolVar(&carve, "carve", true, "carve large files for embedded executables")
+	fs.BoolVar(&noUnpack, "no-unpack", false, "disable UPX auto-unpack")
 	fs.BoolVar(&onlineFlag, "online", false, "enable online hash reputation")
 	fs.StringVar(&vtKey, "vt-key", "", "VirusTotal API key (default from VT_API_KEY env)")
 	fs.StringVar(&mbKey, "mb-key", "", "MalwareBazaar Auth-Key (default from MB_API_KEY env)")
@@ -268,8 +293,10 @@ func runWatch(args []string) {
 	cfg := watch.Config{
 		Root:        root,
 		IntervalSec: interval,
+		SettleSec:   settle,
 		Once:        once,
 		Quarantine:  quarantine,
+		Toast:       toast,
 		NotifyURL:   notifyURL,
 		ThreatScore: threat,
 		NotifyScore: notifyAt,
@@ -282,6 +309,10 @@ func runWatch(args []string) {
 			Excludes:            ex,
 			UseCache:            !noCache,
 			CachePath:           cachePath,
+			TempDir:             tmpDir,
+			Carve:               carve,
+			CarveMaxMB:          16384,
+			NoUnpack:            noUnpack,
 			Quiet:               quiet,
 			FullReadMB:          32,
 			Online:              oc,
@@ -416,23 +447,29 @@ func runScan(args []string) {
 		telemetryKey = os.Getenv("TELEMETRY_KEY")
 	}
 
-	root := flag.Arg(0)
-	if root == "" {
-		root = "."
+	targets := flag.Args()
+	if len(targets) == 0 {
+		targets = []string{"."}
 	}
-	info, err := os.Stat(root)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "path error:", err)
-		os.Exit(1)
-	}
-	// Single-file mode: scanning one file scans THAT file, not its parent
-	// directory. The old behaviour silently widened the scope to the whole
-	// folder, which is both surprising and slow.
-	singleFile := !info.IsDir()
-	if singleFile {
-		if !info.Mode().IsRegular() {
+	root := targets[0]
+	var singleFile bool
+	if len(targets) == 1 {
+		info, err := os.Stat(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "path error:", err)
+			os.Exit(1)
+		}
+		singleFile = !info.IsDir()
+		if singleFile && !info.Mode().IsRegular() {
 			fmt.Fprintln(os.Stderr, "path error: not a regular file:", root)
 			os.Exit(1)
+		}
+	} else {
+		for _, t := range targets {
+			if _, err := os.Stat(t); err != nil {
+				fmt.Fprintln(os.Stderr, "path error:", err)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -556,7 +593,9 @@ func runScan(args []string) {
 	}
 
 	var sum *model.Summary
-	if singleFile {
+	if len(targets) > 1 {
+		sum, err = s.ScanPaths(targets)
+	} else if singleFile {
 		sum, err = s.ScanFiles([]string{root})
 	} else {
 		sum, err = s.Run()
@@ -594,6 +633,105 @@ func runScan(args []string) {
 		} else {
 			fmt.Println("HTML report:", htmlOut)
 		}
+	}
+}
+
+func runUI(args []string) {
+	fs := flag.NewFlagSet("ui", flag.ExitOnError)
+	var (
+		addr           string
+		workers        int
+		maxSizeMB      int64
+		extractDepth   int
+		extractMB      int64
+		tmpDir         string
+		cachePath      string
+		corpusPath     string
+		noOpen         bool
+		watchDir       string
+		publicMode     bool
+		allowedOrigins string
+		accessKey      string
+		maxUploadMB    int64
+		maxConcurrent  int
+		noYara         bool
+		yaraRules      string
+		onlineFlag     bool
+		vtKey          string
+		mbKey          string
+		vtIntervalS    int
+	)
+	fs.StringVar(&addr, "addr", "127.0.0.1:8787", "loopback listen address")
+	fs.IntVar(&workers, "workers", 3, "parallel workers")
+	fs.Int64Var(&maxSizeMB, "max-size", 512, "skip files larger than N MB")
+	fs.IntVar(&extractDepth, "extract-depth", 2, "archive expansion depth")
+	fs.Int64Var(&extractMB, "extract-mb", 500, "max MB per archive extraction")
+	fs.StringVar(&tmpDir, "tmp-dir", "", "temp directory for drag-drop uploads & archive extraction")
+	fs.StringVar(&cachePath, "cache", ".gamecrack-cache.jsonl", "hash cache file path")
+	fs.StringVar(&corpusPath, "corpus", "corpus.json", "corpus manifest path for UI labeling")
+	fs.BoolVar(&noOpen, "no-open", false, "do not auto-open browser window")
+	fs.StringVar(&watchDir, "watch", "", "optional folder to monitor automatically with Download Guard")
+	fs.BoolVar(&publicMode, "public", false, "public/hosted web mode (disables local filesystem path scanning, picker, quarantine & watch)")
+	fs.StringVar(&allowedOrigins, "allowed-origin", "", "comma-separated additional allowed CORS origins (e.g. https://sentinel.breakthematrix.id)")
+	fs.StringVar(&accessKey, "access-key", "", "optional access key for private hosted deployments (or SENTINEL_ACCESS_KEY env)")
+	fs.Int64Var(&maxUploadMB, "max-upload-mb", 0, "max multipart upload size in MB (default 100 in -public mode, 0 = unlimited local)")
+	fs.IntVar(&maxConcurrent, "max-concurrent", 0, "max concurrent web scans (default 2 in -public mode)")
+	fs.BoolVar(&noYara, "no-yara", false, "disable YARA layer")
+	fs.StringVar(&yaraRules, "yara-rules", "", "directory of external .yar rules")
+	fs.BoolVar(&onlineFlag, "online", false, "enable online hash reputation")
+	fs.StringVar(&vtKey, "vt-key", "", "VirusTotal API key")
+	fs.StringVar(&mbKey, "mb-key", "", "MalwareBazaar API key")
+	fs.IntVar(&vtIntervalS, "vt-interval", 16, "min seconds between online lookups")
+	fs.Parse(args)
+
+	if vtKey == "" {
+		vtKey = os.Getenv("VT_API_KEY")
+	}
+	if mbKey == "" {
+		mbKey = os.Getenv("MB_API_KEY")
+	}
+	if accessKey == "" {
+		accessKey = os.Getenv("SENTINEL_ACCESS_KEY")
+	}
+	var origins []string
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins = append(origins, o)
+		}
+	}
+	var oc *online.Client
+	if onlineFlag || vtKey != "" || mbKey != "" {
+		oc = online.New(vtKey, mbKey, secondsToDuration(vtIntervalS))
+	}
+	var yr *yara.Runner
+	if !noYara {
+		if r, err := yara.New(yaraRules, true); err == nil {
+			yr = r
+		}
+	}
+	srv := ui.New(ui.Options{
+		Addr:           addr,
+		Workers:        workers,
+		MaxSizeMB:      maxSizeMB,
+		ExtractDepth:   extractDepth,
+		ExtractMaxMB:   extractMB,
+		TempDir:        tmpDir,
+		CachePath:      cachePath,
+		CorpusPath:     corpusPath,
+		Online:         oc,
+		Yara:           yr,
+		OpenBrowser:    !noOpen && !publicMode,
+		WatchDir:       watchDir,
+		PublicMode:     publicMode,
+		AllowedOrigins: origins,
+		AccessKey:      accessKey,
+		MaxUploadMB:    maxUploadMB,
+		MaxConcurrent:  maxConcurrent,
+	})
+	if err := srv.ListenAndServe(); err != nil {
+		fmt.Fprintln(os.Stderr, "ui server error:", err)
+		os.Exit(1)
 	}
 }
 

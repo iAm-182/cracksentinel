@@ -33,3 +33,23 @@ coverage.out
 
 __pycache__/
 *.pyc
+
+# local runtime, campaign & scratch files
+--probe/
+campaign/
+tmp/
+reports/
+batch-reports/
+.env
+.bridge.env
+.tunnel.env
+.tunnel-url
+edge-worker/.wrangler/
+edge-worker/node_modules/
+edge-worker/.dev.vars
+scripts/ova_*.py
+scripts/ova_*.js
+scripts/direct_download.js
+scripts/fetch_torrent.js
+scripts/resolve_file_url.js
+

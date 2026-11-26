@@ -135,4 +135,22 @@ func TestVMRegexNoWinerrorFP(t *testing.T) {
 	if !found {
 		t.Fatalf("wine_get_version should match sandbox_check: %+v", fs)
 	}
+	// UI layout word "vbox" (hbox/vbox in Ren'Py/Qt/GTK) must not trigger sandbox_check.
+	fs = matchStrings([]string{"# Should hbox and vbox skip this displayable?"})
+	for _, f := range fs {
+		if f.Rule == "sandbox_check" {
+			t.Fatalf("UI 'vbox' must not match sandbox_check: %+v", fs)
+		}
+	}
+	// Real VirtualBox artifact still fires.
+	fs = matchStrings([]string{"VBoxService.exe"})
+	found = false
+	for _, f := range fs {
+		if f.Rule == "sandbox_check" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("VBoxService.exe should match sandbox_check: %+v", fs)
+	}
 }

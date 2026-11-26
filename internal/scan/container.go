@@ -4,22 +4,16 @@ package scan
 //
 // A repack payload rarely sits loose in the game folder — it is packed inside
 // an archive that is often several GB and almost always has a nested
-// directory layout ("setup/bin/payload.exe"). Two defects are fixed here:
+// directory layout ("setup/bin/payload.exe").
 //
-//  1. Only TOP-LEVEL files of an extracted archive were scanned, so anything
-//     inside a subdirectory of the archive was invisible. The old code used
-//     os.ReadDir(dest) and skipped every entry that was not a regular file,
-//     which also aborted the whole expansion (n == 0 -> return) before the
-//     "container_expanded" finding was ever emitted.
-//
-//  2. The extraction budget was applied AFTER 7-Zip had already written
-//     everything to the temp volume, so a 30 GB repack could fill the disk
-//     before any budget check ran. The archive is now listed first and the
-//     projected on-disk size is checked before anything is written.
-//
-// The walk is recursive and every inner finding is reported with its path
-// relative to the archive root, so the user sees exactly where inside the
-// container the payload was.
+// Capabilities:
+//   - Recursive walk reporting inner findings with paths relative to the archive
+//   - Pre-extract listing and disk-budget enforcement before writing anything
+//   - Encrypted/password-protected archive detection (common web-dropper trick)
+//   - Decoy web-game archive heuristics (e.g., Ren'Py SDK without game/ + encrypted blob)
+//   - Multi-volume archive awareness (.part2.rar, .r00, .z01, .002)
+//   - Optional FreeArc (fg-*.bin) shim when Arc.exe / unarc is installed
+//   - Magic-byte container support even if renamed to a non-archive extension
 
 import (
 	"archive/zip"
@@ -42,109 +36,135 @@ import (
 const (
 	archiveListTimeout    = 180 * time.Second
 	archiveExtractTimeout = 900 * time.Second
-	// hardCapFactor bounds the on-disk growth of a single container. A
-	// container projected above ExtractMaxMB*hardCapFactor is not expanded
-	// at all — the user gets an actionable finding instead of a full disk.
-	hardCapFactor = 4
-	// maxInnerFiles caps how many inner files are scanned per container.
-	maxInnerFiles = 3000
-	// maxInnerFileMB caps a single inner file.
-	maxInnerFileMB = 512
+	hardCapFactor         = 4
+	maxInnerFiles         = 3000
+	maxInnerFileMB        = 512
 )
 
 // archiveEntry is one extractable file inside a container.
 type archiveEntry struct {
-	rel  string
-	size int64
+	rel       string
+	size      int64
+	encrypted bool
+}
+
+// archivePlan summarizes the archive structure learned before extraction.
+type archivePlan struct {
+	entries    []archiveEntry // filtered extractable entries
+	allEntries []archiveEntry // all file entries (for decoy/structural checks)
+	total      int64
+	encrypted  bool
+	ok         bool
 }
 
 // containerOutcome is what the expansion learned about a container.
 type containerOutcome struct {
-	Expanded   bool
-	Method     string
-	FileCount  int
-	TotalBytes int64
-	MaxScore   int
-	MaxVerdict model.Verdict
-	TopPath    string
-	Truncated  bool
-	Reason     string
-	Nested     []model.Finding
+	Expanded     bool
+	Method       string
+	FileCount    int
+	TotalBytes   int64
+	MaxScore     int
+	MaxVerdict   model.Verdict
+	TopPath      string
+	Truncated    bool
+	Reason       string
+	MultiVolSkip bool
+	Extra        []model.Finding
+	Nested       []model.Finding
 }
 
 // planArchive lists the container's extractable entries and returns the
-// projected on-disk size. ok=false means the container could not be listed
-// (encrypted, split volume, unsupported format).
+// projected on-disk size. ok=false means the container could not be listed.
 func (s *Scanner) planArchive(path string) (entries []archiveEntry, total int64, ok bool) {
+	p := s.planArchiveFull(path)
+	return p.entries, p.total, p.ok
+}
+
+func (s *Scanner) planArchiveFull(path string) archivePlan {
 	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".zip" {
-		return s.planZip(path)
+	fmtMagic := filetype.ArchiveFormat(path)
+	if ext == ".zip" || fmtMagic == "zip" {
+		if p := s.planZip(path); p.ok {
+			return p
+		}
+	}
+	if fmtMagic == "freearc" || filetype.IsFreeArc(path) {
+		return s.planFreeArc(path)
 	}
 	return s.plan7z(path)
 }
 
-func (s *Scanner) planZip(path string) ([]archiveEntry, int64, bool) {
+func (s *Scanner) planZip(path string) archivePlan {
 	zr, err := zip.OpenReader(path)
 	if err != nil {
-		return nil, 0, false
+		return archivePlan{}
 	}
 	defer zr.Close()
-	var entries []archiveEntry
-	var total int64
+	var p archivePlan
+	p.ok = true
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		if f.FileInfo().Size() > maxInnerFileMB*1024*1024 {
+		enc := (f.Flags & 0x1) != 0
+		if enc {
+			p.encrypted = true
+		}
+		sz := int64(f.FileInfo().Size())
+		ae := archiveEntry{rel: filepath.ToSlash(f.Name), size: sz, encrypted: enc}
+		p.allEntries = append(p.allEntries, ae)
+		if sz > maxInnerFileMB*1024*1024 {
 			continue
 		}
 		if !wantExt(f.Name) {
 			continue
 		}
-		entries = append(entries, archiveEntry{rel: f.Name, size: int64(f.FileInfo().Size())})
-		total += int64(f.FileInfo().Size())
+		p.entries = append(p.entries, ae)
+		p.total += sz
 	}
-	sort.Slice(entries, func(a, b int) bool { return entries[a].rel < entries[b].rel })
-	return entries, total, true
+	sort.Slice(p.entries, func(a, b int) bool { return p.entries[a].rel < p.entries[b].rel })
+	return p
 }
 
 // plan7z uses "7z l -slt" to enumerate the archive without extracting it.
-//
-// NOTE: the -i! include filters are deliberately NOT passed to "l". 7-Zip's
-// list and extract commands treat -i! differently: on "x" repeated -i! acts
-// as an include-list (only the named extensions are pulled out), but on "l"
-// the same switches filter the listing down to nothing. Listing is therefore
-// done unfiltered and the extension filter is applied here in Go, which is
-// also the only way to get a reliable projected size.
-func (s *Scanner) plan7z(path string) ([]archiveEntry, int64, bool) {
+func (s *Scanner) plan7z(path string) archivePlan {
 	bin := find7z()
 	if bin == "" {
-		return nil, 0, false
+		return archivePlan{}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), archiveListTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "l", "-slt", "-y", path).Output()
+	cmd := exec.CommandContext(ctx, bin, "l", "-slt", "-y", "-p", path)
+	out, err := cmd.CombinedOutput()
+	lowOut := strings.ToLower(string(out))
+	var p archivePlan
+	if strings.Contains(lowOut, "wrong password") || strings.Contains(lowOut, "can not open encrypted archive") || strings.Contains(lowOut, "enter password") {
+		p.encrypted = true
+	}
 	if err != nil && len(out) == 0 {
-		return nil, 0, false
+		return p
 	}
 	abs, _ := filepath.Abs(path)
-	var entries []archiveEntry
-	var total int64
 	var curName string
 	var curSize int64
 	var curIsDir bool
+	var curEnc bool
 	flush := func() {
 		if curName == "" {
 			return
 		}
-		// Skip the archive header block (its "Path" is the archive itself).
 		if !curIsDir && !strings.EqualFold(curName, abs) && !strings.EqualFold(curName, path) {
+			ae := archiveEntry{rel: filepath.ToSlash(curName), size: curSize, encrypted: curEnc}
+			p.allEntries = append(p.allEntries, ae)
+			if curEnc {
+				p.encrypted = true
+			}
 			if wantExt(curName) && curSize <= maxInnerFileMB*1024*1024 {
-				entries = append(entries, archiveEntry{rel: curName, size: curSize})
-				total += curSize
+				p.entries = append(p.entries, ae)
+				p.total += curSize
 			}
 		}
-		curName, curSize, curIsDir = "", 0, false
+		curName, curSize, curIsDir, curEnc = "", 0, false, false
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimRight(line, "\r")
@@ -156,30 +176,53 @@ func (s *Scanner) plan7z(path string) ([]archiveEntry, int64, bool) {
 			curSize, _ = strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "Size = ")), 10, 64)
 		case strings.HasPrefix(line, "Folder = "):
 			curIsDir = strings.Contains(line, "+")
+		case strings.HasPrefix(line, "Encrypted = "):
+			if strings.Contains(line, "+") {
+				curEnc = true
+				p.encrypted = true
+			}
 		case strings.HasPrefix(line, "Attributes = "):
-			// 7-Zip 26 marks directories with "Attributes = D".
 			if strings.Contains(line, " D") {
 				curIsDir = true
 			}
 		}
 	}
 	flush()
-	sort.Slice(entries, func(a, b int) bool { return entries[a].rel < entries[b].rel })
-	return entries, total, true
+	if len(p.allEntries) > 0 || err == nil {
+		p.ok = true
+	}
+	sort.Slice(p.entries, func(a, b int) bool { return p.entries[a].rel < p.entries[b].rel })
+	return p
 }
 
-// includeFilters returns the 7-Zip include filters for the extractable set.
-//
-// Two 7-Zip subtleties are encoded here:
-//
-//  1. The "r" flag is REQUIRED. "-i!*.exe" without it disables recursion, so
-//     only the archive's top level is processed and a payload at
-//     "setup/bin/payload.exe" is never extracted ("No files to process").
-//     "-ir!*.exe" recurses.
-//
-//  2. On the extract command, repeated -i! switches act as an include-list:
-//     only the named extensions are pulled out of the archive. (The list
-//     command behaves differently — see plan7z.)
+// planFreeArc lists a FreeArc (.bin / fg-*.bin) container when Arc/unarc CLI is installed.
+func (s *Scanner) planFreeArc(path string) archivePlan {
+	bin := findFreeArc()
+	if bin == "" {
+		return archivePlan{}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), archiveListTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "lb", path).CombinedOutput()
+	if err != nil && len(out) == 0 {
+		return archivePlan{}
+	}
+	var p archivePlan
+	p.ok = true
+	for _, raw := range strings.Split(string(out), "\n") {
+		name := strings.TrimSpace(raw)
+		if name == "" || strings.HasPrefix(name, "FreeArc") || strings.HasPrefix(name, "Listing") || strings.HasPrefix(name, "-") {
+			continue
+		}
+		ae := archiveEntry{rel: filepath.ToSlash(name)}
+		p.allEntries = append(p.allEntries, ae)
+		if wantExt(name) {
+			p.entries = append(p.entries, ae)
+		}
+	}
+	return p
+}
+
 func includeFilters() []string {
 	out := make([]string, 0, len(extractableExts))
 	for _, e := range extractableExts {
@@ -188,9 +231,87 @@ func includeFilters() []string {
 	return out
 }
 
+// detectDecoyArchiveEntries checks archive structure for known fake web-game
+// dropper templates (notably the ovaGames fake Ren'Py SDK bundle: renpy/ +
+// setup.py/librenpython.dll with NO game/ dir + a >500KB random-named blob in data/).
+func detectDecoyArchiveEntries(entries []archiveEntry) []model.Finding {
+	if len(entries) == 0 {
+		return nil
+	}
+	var (
+		hasRenpyDir    bool
+		hasRenpyLib    bool
+		hasGameDir     bool
+		hasSetupPy     bool
+		suspiciousBlob string
+		blobSize       int64
+		hasHiddenKey   bool
+	)
+	for _, e := range entries {
+		low := strings.ToLower(strings.TrimPrefix(e.rel, "./"))
+		parts := strings.Split(low, "/")
+		// Strip optional single top-level wrapper folder.
+		rel := low
+		if len(parts) >= 2 && (parts[1] == "renpy" || parts[1] == "game" || parts[1] == "data" || parts[1] == "lib" || parts[1] == "setup.py") {
+			rel = strings.Join(parts[1:], "/")
+		}
+		switch {
+		case strings.HasPrefix(rel, "renpy/"):
+			hasRenpyDir = true
+		case strings.Contains(rel, "librenpython.dll"):
+			hasRenpyLib = true
+		case strings.HasPrefix(rel, "game/"):
+			hasGameDir = true
+		case rel == "setup.py":
+			hasSetupPy = true
+		case strings.HasPrefix(rel, "data/"):
+			base := filepath.Base(rel)
+			if strings.HasPrefix(base, ".") && e.size > 0 && e.size <= 1024 {
+				hasHiddenKey = true
+			}
+			ext := strings.ToLower(filepath.Ext(base))
+			if e.size >= 500*1024 && !normalDataExt[ext] {
+				suspiciousBlob = e.rel
+				blobSize = e.size
+			}
+		}
+	}
+	if (hasRenpyDir || hasRenpyLib) && !hasGameDir && (suspiciousBlob != "" || (hasSetupPy && hasHiddenKey)) {
+		detail := fmt.Sprintf("decoy Ren'Py SDK game archive: no game/ directory, carries suspicious encrypted blob %q (%s)",
+			suspiciousBlob, humanMB(blobSize))
+		if hasHiddenKey {
+			detail += " + hidden key file in data/"
+		}
+		return []model.Finding{{
+			Rule:     "decoy_renpy_dropper",
+			Category: "dropper",
+			Severity: 75,
+			Detail:   detail,
+		}}
+	}
+	return nil
+}
+
+var normalDataExt = map[string]bool{
+	".pak": true, ".rpa": true, ".rpy": true, ".rpyc": true, ".png": true,
+	".jpg": true, ".jpeg": true, ".ogg": true, ".wav": true, ".mp3": true,
+	".mp4": true, ".webm": true, ".ttf": true, ".otf": true, ".json": true,
+	".txt": true, ".xml": true, ".bin": true, ".dat": true, ".zip": true,
+}
+
 // expandContainer expands one container and merges the result into res.
 func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult) {
 	out := s.expandContainerInner(path, depth)
+
+	if out.MultiVolSkip {
+		res.Findings = append(res.Findings, model.Finding{
+			Rule:     "container_multivolume_part",
+			Category: "container",
+			Severity: 0,
+			Detail:   out.Reason,
+		})
+		return
+	}
 
 	if out.Expanded {
 		det := fmt.Sprintf("%s container: scanned %d inner file(s) (%s)", out.Method, out.FileCount, humanMB(out.TotalBytes))
@@ -204,6 +325,27 @@ func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult)
 		res.Findings = append(res.Findings, model.Finding{
 			Rule: "container_not_expanded", Category: "container", Severity: 2, Detail: out.Reason,
 		})
+	}
+
+	// Structural archive findings (encrypted archive, decoy Ren'Py dropper, etc.).
+	if len(out.Extra) > 0 {
+		res.Findings = append(res.Findings, out.Extra...)
+		extraScore := 0
+		for _, f := range out.Extra {
+			extraScore += f.Severity
+		}
+		newScore := res.Score + extraScore
+		if newScore > 100 {
+			newScore = 100
+		}
+		if newScore > res.Score {
+			res.Score = newScore
+			if res.Score >= 70 {
+				res.Verdict = model.VerdictMalicious
+			} else if res.Score >= 30 && res.Verdict == model.VerdictClean {
+				res.Verdict = model.VerdictSuspicious
+			}
+		}
 	}
 
 	// Every inner finding is reported with its path inside the container.
@@ -230,37 +372,58 @@ func (s *Scanner) expandContainer(path string, depth int, res *model.FileResult)
 
 func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome {
 	var out containerOutcome
+	if filetype.IsSecondaryMultiVolume(path) {
+		out.MultiVolSkip = true
+		out.Reason = "secondary multi-volume archive part — scanned together with volume 1"
+		return out
+	}
 	if s.tmp == "" {
 		out.Reason = "container expansion disabled (no temp dir)"
 		return out
 	}
-	if filetype.IsFreeArc(path) {
-		out.Reason = "FreeArc container (repack installer data) — needs the FreeArc CLI or the repack's own setup.exe -extract; the sibling installer is scanned separately"
+	isFreeArc := filetype.IsFreeArc(path)
+	if isFreeArc && findFreeArc() == "" {
+		out.Reason = "FreeArc container (repack installer data) — install FreeArc CLI (Arc.exe) to inspect inside, or scan the sibling setup.exe separately"
 		return out
 	}
-	if !filetype.IsContainerExt(path) {
+	if !filetype.IsExpandableContainer(path) {
 		out.Reason = "not a recognised container format"
 		return out
 	}
 
-	entries, projected, ok := s.planArchive(path)
-	if !ok {
-		out.Reason = "container could not be listed (encrypted, split volume, or unsupported format)"
+	plan := s.planArchiveFull(path)
+	if plan.encrypted {
+		out.Extra = append(out.Extra, model.Finding{
+			Rule:     "archive_encrypted",
+			Category: "evasion",
+			Severity: 25,
+			Detail:   "password-protected archive — web malware droppers commonly encrypt archives (e.g. pass '1234') to bypass antivirus inspection",
+		})
+	}
+	if len(plan.allEntries) > 0 {
+		out.Extra = append(out.Extra, detectDecoyArchiveEntries(plan.allEntries)...)
+	}
+	if !plan.ok {
+		if plan.encrypted {
+			out.Reason = "container header is encrypted (password-protected)"
+		} else {
+			out.Reason = "container could not be listed (encrypted, split volume, or unsupported format)"
+		}
 		return out
 	}
-	if len(entries) == 0 {
+	if len(plan.entries) == 0 {
 		out.Reason = "container holds no extractable files (exe/dll/script/config set)"
 		return out
 	}
 
 	limit := s.cfg.ExtractMaxMB * 1024 * 1024
 	hardCap := limit * hardCapFactor
-	if projected > hardCap {
+	if plan.total > hardCap {
 		out.Reason = fmt.Sprintf("container projects to %s of inner files — above the %s budget, not expanded. Raise -extract-mb or point -tmp-dir at a volume with free space",
-			humanMB(projected), humanMB(s.cfg.ExtractMaxMB))
+			humanMB(plan.total), humanMB(limit))
 		return out
 	}
-	if projected > limit {
+	if plan.total > limit {
 		out.Truncated = true
 	}
 
@@ -277,17 +440,13 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 	out.Expanded = true
 	out.Method = method
 
-	// Recursive walk: this is the fix for nested archive layouts.
 	var budget int64
 	count := 0
 	walkErr := filepath.WalkDir(dest, func(p string, d os.DirEntry, werr error) error {
 		if werr != nil {
 			return nil
 		}
-		if d.IsDir() {
-			return nil
-		}
-		if !d.Type().IsRegular() {
+		if d.IsDir() || !d.Type().IsRegular() {
 			return nil
 		}
 		info, ierr := d.Info()
@@ -335,28 +494,94 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 // extractTo extracts the container into dest and returns the method used.
 func (s *Scanner) extractTo(path, dest string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".zip" {
-		if err := extractZip(path, dest); err != nil {
-			return "zip", err
+	fmtMagic := filetype.ArchiveFormat(path)
+	if ext == ".zip" || fmtMagic == "zip" {
+		if err := extractZip(path, dest); err == nil {
+			return "zip", nil
 		}
-		return "zip", nil
+		// Fall through to 7z if zip uses unsupported compression method (e.g. Deflate64/LZMA).
 	}
-	bin := find7z()
-	if bin == "" {
-		return "7z", fmt.Errorf("7-Zip binary not found (needed for %s containers)", ext)
+	if fmtMagic == "freearc" || filetype.IsFreeArc(path) {
+		bin := findFreeArc()
+		if bin == "" {
+			return "freearc", fmt.Errorf("FreeArc CLI not found")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, "x", "-y", "-o+", "-dp"+dest, path)
+		if err := cmd.Run(); err != nil {
+			return "freearc", err
+		}
+		return "freearc", nil
 	}
-	args := []string{"x", "-y", "-aoa", "-o" + dest}
-	args = append(args, includeFilters()...)
-	args = append(args, path)
-	ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return "7z", err
+	if bin := find7z(); bin != "" {
+		args := []string{"x", "-y", "-aoa", "-p", "-o" + dest}
+		args = append(args, includeFilters()...)
+		args = append(args, path)
+		ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, args...)
+		if err := cmd.Run(); err == nil {
+			return "7z", nil
+		}
+		// Fallback to UnRAR for newer RAR5 archives if 7z struggled.
+		if ext == ".rar" || fmtMagic == "rar" {
+			if unrar := findUnRAR(); unrar != "" {
+				ctx2, cancel2 := context.WithTimeout(context.Background(), archiveExtractTimeout)
+				defer cancel2()
+				if err2 := exec.CommandContext(ctx2, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator)).Run(); err2 == nil {
+					return "unrar", nil
+				}
+			}
+		}
+		return "7z", fmt.Errorf("7z extraction failed (encrypted or corrupted)")
 	}
-	return "7z", nil
+	if ext == ".rar" || fmtMagic == "rar" {
+		if unrar := findUnRAR(); unrar != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
+			defer cancel()
+			if err := exec.CommandContext(ctx, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator)).Run(); err != nil {
+				return "unrar", err
+			}
+			return "unrar", nil
+		}
+	}
+	return "7z", fmt.Errorf("7-Zip binary not found (needed for %s containers)", ext)
+}
+
+func findFreeArc() string {
+	for _, name := range []string{"Arc", "arc", "unarc", "freearc"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	for _, p := range []string{
+		`E:\tools\freearc\Arc.exe`,
+		`E:\tools\freearc\unarc.exe`,
+		`C:\Program Files (x86)\FreeArc\bin\Arc.exe`,
+		`C:\Program Files\FreeArc\bin\Arc.exe`,
+	} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func findUnRAR() string {
+	if p, err := exec.LookPath("unrar"); err == nil {
+		return p
+	}
+	for _, p := range []string{
+		`C:\Program Files\WinRAR\UnRAR.exe`,
+		`C:\Program Files (x86)\WinRAR\UnRAR.exe`,
+		`/usr/bin/unrar`,
+	} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // extractZip expands a zip with the stdlib reader (no external binary).
@@ -368,6 +593,9 @@ func extractZip(path, dest string) error {
 	defer zr.Close()
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() || f.FileInfo().Size() > maxInnerFileMB*1024*1024 {
+			continue
+		}
+		if (f.Flags & 0x1) != 0 {
 			continue
 		}
 		if !wantExt(f.Name) {

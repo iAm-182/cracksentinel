@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>CrackSentinel Guard</title>
+<style>
+body{margin:0;width:360px;background:#0b0f14;color:#e6edf3;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:14px}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.title{font-weight:700;font-size:15px}
+.status{font-size:11px;padding:3px 8px;border-radius:999px;background:#1a2230;color:#8b9bb0}
+.status.on{background:rgba(34,197,94,.16);color:#22c55e}
+.status.off{background:rgba(248,81,73,.16);color:#f85149}
+.box{background:#131922;border:1px solid #263244;border-radius:10px;padding:10px;margin-bottom:10px}
+label{display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;font-size:12.5px}
+input[type=text]{width:100%;box-sizing:border-box;background:#0b0f14;color:#e6edf3;border:1px solid #263244;border-radius:6px;padding:7px 9px;font-size:12px;margin-bottom:6px}
+button{background:#2563eb;color:#fff;border:none;border-radius:7px;padding:7px 11px;font-weight:600;font-size:12px;cursor:pointer}
+button.sec{background:#1a2230;border:1px solid #263244;color:#e6edf3}
+.row{display:flex;gap:6px}
+.item{padding:6px 0;border-bottom:1px solid #1e2836;font-size:12px}
+.item:last-child{border-bottom:none}
+.b{display:inline-block;padding:1px 6px;border-radius:4px;font-weight:700;font-size:10.5px;margin-right:5px}
+.b.MALICIOUS{background:rgba(248,81,73,.2);color:#f85149}
+.b.SUSPICIOUS{background:rgba(245,158,11,.2);color:#f59e0b}
+.b.CLEAN{background:rgba(34,197,94,.18);color:#22c55e}
+.mut{color:#8b9bb0;font-size:11px}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="title">CrackSentinel Guard</div>
+    <span class="status" id="st">Cek server...</span>
+  </div>
+
+  <div class="box">
+    <label><input type="checkbox" id="optScan"> Auto-scan file/archive saat download selesai</label>
+    <label><input type="checkbox" id="optPause"> Auto-pause jika link download MALICIOUS</label>
+  </div>
+
+  <div class="box">
+    <div style="font-weight:600;margin-bottom:6px">Cek Cepat Link Download</div>
+    <input type="text" id="uIn" placeholder="Paste link download game di sini...">
+    <div class="row">
+      <button id="btnCheck">Cek Link</button>
+      <button class="sec" id="btnOpenUI">Buka Dashboard UI</button>
+    </div>
+    <div id="uOut" style="margin-top:8px"></div>
+  </div>
+
+  <div class="box">
+    <div style="font-weight:600;margin-bottom:4px">Riwayat Download Terakhir</div>
+    <div id="list"><div class="mut">Belum ada download yang dicek.</div></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

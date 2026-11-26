@@ -3,9 +3,11 @@ package scan
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +22,9 @@ import (
 	"gamecrack-scanner/internal/cache"
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/jev"
+	"gamecrack-scanner/internal/known"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/motw"
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/pe"
 	"gamecrack-scanner/internal/rules"
@@ -95,6 +99,8 @@ type Config struct {
 	Carve bool
 	// CarveMaxMB bounds the size of a file that is carved.
 	CarveMaxMB int64
+	// OnProgress is an optional callback invoked as each file completes.
+	OnProgress func(scanned int, r model.FileResult)
 }
 
 type Scanner struct {
@@ -308,16 +314,20 @@ func New(cfg Config) (*Scanner, error) {
 	}
 	if cfg.ExtractDepth > 0 {
 		base := cfg.TempDir
-		if base == "" {
+		if base != "" {
+			_ = os.MkdirAll(base, 0o755)
+		} else {
 			base = os.TempDir()
 		}
 		tmp, err := os.MkdirTemp(base, "gc-extract-")
 		if err != nil {
 			// A full or unwritable temp volume must not kill the scan:
-			// fall back to the system temp, and if that fails too, run
-			// without container expansion.
+			// fall back to the system temp with an explicit warning.
 			if tmp, err = os.MkdirTemp("", "gc-extract-"); err != nil {
 				return nil, err
+			}
+			if cfg.TempDir != "" {
+				s.warnOnce(fmt.Sprintf("warning: -tmp-dir %q unavailable, falling back to %q", cfg.TempDir, tmp))
 			}
 		}
 		s.tmp = tmp
@@ -376,7 +386,10 @@ func (s *Scanner) Run() (*model.Summary, error) {
 			if r.Skipped {
 				continue
 			}
-			atomic.AddInt64(&scanned, 1)
+			n := int(atomic.AddInt64(&scanned, 1))
+			if s.cfg.OnProgress != nil {
+				s.cfg.OnProgress(n, r)
+			}
 			if !s.cfg.Quiet && r.Verdict != model.VerdictClean {
 				fmt.Printf("[%s] %d  %s  %s\n", r.Verdict, r.Score, truncPath(r.Path, 90), topFinding(r))
 			}
@@ -413,6 +426,111 @@ func (s *Scanner) Run() (*model.Summary, error) {
 	wg.Wait()
 	close(results)
 	<-done
+	all = applyFolderHeuristics(s.cfg.Root, all)
+	sum, _ := s.summarize(all, scanned, walked)
+	sum.DurationMs = time.Since(start).Milliseconds()
+	s.flushTelemetry(sum)
+	return sum, nil
+}
+
+// ScanPaths scans an arbitrary list of files and/or folders in one combined run.
+// Ideal for drag-and-drop multi-target or mass game folder checking.
+func (s *Scanner) ScanPaths(targets []string) (*model.Summary, error) {
+	start := time.Now()
+	jobs := make(chan string, 1024)
+	results := make(chan model.FileResult, 1024)
+	var wg sync.WaitGroup
+	workers := s.cfg.Workers
+	if workers <= 0 {
+		workers = 1
+	}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range jobs {
+				results <- s.scanFile(p, 0, false)
+			}
+		}()
+	}
+
+	var scanned int64
+	var walked int64
+	done := make(chan struct{})
+	var all []model.FileResult
+	go func() {
+		defer close(done)
+		for r := range results {
+			all = append(all, r)
+			if r.Skipped {
+				continue
+			}
+			n := int(atomic.AddInt64(&scanned, 1))
+			if s.cfg.OnProgress != nil {
+				s.cfg.OnProgress(n, r)
+			}
+			if !s.cfg.Quiet && r.Verdict != model.VerdictClean {
+				fmt.Printf("[%s] %d  %s  %s\n", r.Verdict, r.Score, truncPath(r.Path, 90), topFinding(r))
+			}
+		}
+	}()
+
+	seen := map[string]bool{}
+	var scannedDirs []string
+	for _, t := range targets {
+		if t == "" {
+			continue
+		}
+		abs, err := filepath.Abs(t)
+		if err != nil {
+			abs = t
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			scannedDirs = append(scannedDirs, abs)
+			filepath.WalkDir(abs, func(path string, d os.DirEntry, werr error) error {
+				if werr != nil {
+					return nil
+				}
+				if d.IsDir() {
+					if path != abs && (strings.HasPrefix(d.Name(), ".") || strings.EqualFold(d.Name(), "$RECYCLE.BIN") || strings.EqualFold(d.Name(), "System Volume Information") || strings.EqualFold(d.Name(), quarantineDirName)) {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+				if !d.Type().IsRegular() || seen[path] {
+					return nil
+				}
+				seen[path] = true
+				atomic.AddInt64(&walked, 1)
+				if s.skipFile(path) {
+					fi, _ := d.Info()
+					var sz int64
+					if fi != nil {
+						sz = fi.Size()
+					}
+					results <- s.carveSkipped(path, sz)
+					return nil
+				}
+				jobs <- path
+				return nil
+			})
+		} else if info.Mode().IsRegular() && !seen[abs] {
+			seen[abs] = true
+			atomic.AddInt64(&walked, 1)
+			jobs <- abs
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+	<-done
+	for _, dir := range scannedDirs {
+		all = applyFolderHeuristics(dir, all)
+	}
 	sum, _ := s.summarize(all, scanned, walked)
 	sum.DurationMs = time.Since(start).Milliseconds()
 	s.flushTelemetry(sum)
@@ -505,8 +623,46 @@ func (s *Scanner) summarize(all []model.FileResult, scanned, walked int64) (*mod
 // embedded executables.
 func (s *Scanner) carveSkipped(path string, size int64) model.FileResult {
 	res := model.FileResult{Path: path, Size: size, Verdict: model.VerdictClean, Skipped: true}
+	cacheKey := ""
+	if s.cache != nil && s.cfg.Carve && size > 32*1024*1024 {
+		cacheKey = fastCarveKey(path, size)
+		if cacheKey != "" {
+			if e, ok := s.cache.Get(cacheKey); ok && e.Version == cache.CurrentVersion {
+				if e.Score == 0 && len(e.Findings) == 0 {
+					res.Cached = true
+					return res
+				}
+				res.Findings = e.Findings
+				res.Skipped = false
+				res.Type = "data"
+				res.Score = e.Score
+				res.Verdict = parseVerdict(e.Verdict)
+				res.Cached = true
+				return res
+			}
+		}
+	}
 	findings := s.carveInto(nil, path, size, 0)
 	if len(findings) == 0 {
+		if s.cache != nil && cacheKey != "" {
+			s.cache.PutFull(cacheKey, model.FileResult{Verdict: model.VerdictClean, Type: "data"}, "")
+		}
+		return res
+	}
+	// If carving only returned an informational "found none" note, treat as
+	// skipped-clean and cache it so multi-GB data.dat blobs are not re-carved
+	// on every subsequent scan.
+	hasActionable := false
+	for _, f := range findings {
+		if f.Severity > 0 || f.Rule == "embedded_pe" {
+			hasActionable = true
+			break
+		}
+	}
+	if !hasActionable {
+		if s.cache != nil && cacheKey != "" {
+			s.cache.PutFull(cacheKey, model.FileResult{Verdict: model.VerdictClean, Type: "data"}, "")
+		}
 		return res
 	}
 	res.Findings = findings
@@ -516,7 +672,39 @@ func (s *Scanner) carveSkipped(path string, size int64) model.FileResult {
 	res.Findings = append(res.Findings, extra...)
 	res.Score = score
 	res.Verdict = verdict
+	if s.cache != nil && cacheKey != "" {
+		s.cache.PutFull(cacheKey, res, "")
+	}
 	return res
+}
+
+// fastCarveKey hashes size + mtime + first/last 64KB of a multi-GB asset so
+// unchanged game blobs skip redundant 9-second carving sweeps.
+func fastCarveKey(path string, size int64) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	h := sha256.New()
+	var meta [16]byte
+	binary.LittleEndian.PutUint64(meta[0:8], uint64(size))
+	binary.LittleEndian.PutUint64(meta[8:16], uint64(st.ModTime().UnixNano()))
+	h.Write(meta[:])
+	buf := make([]byte, 64*1024)
+	if n, _ := f.ReadAt(buf, 0); n > 0 {
+		h.Write(buf[:n])
+	}
+	if size > int64(len(buf)) {
+		if n, _ := f.ReadAt(buf, size-int64(len(buf))); n > 0 {
+			h.Write(buf[:n])
+		}
+	}
+	return fmt.Sprintf("carve:%x", h.Sum(nil))
 }
 
 // carveInto searches a file for embedded executables and returns the
@@ -620,7 +808,7 @@ func (s *Scanner) skipFile(path string) bool {
 		return true
 	}
 	if info.Size() > s.cfg.MaxSizeMB*1024*1024 {
-		isContainer := s.cfg.ExtractDepth > 0 && (filetype.IsContainerExt(path) || filetype.IsFreeArc(path))
+		isContainer := s.cfg.ExtractDepth > 0 && filetype.IsExpandableContainer(path)
 		if !isContainer || info.Size() > 8*1024*1024*1024 {
 			return true
 		}
@@ -659,10 +847,20 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	res.Type = kindName(kind)
 
 	onlineOn := s.cfg.Online != nil && s.cfg.Online.Enabled()
-	if s.cache != nil && sha != "" && !onlineOn {
-		if e, ok := s.cache.Get(sha); ok && e.Verdict != model.VerdictClean.String() {
+	if s.cache != nil && sha != "" && !onlineOn && !sub {
+		if e, ok := s.cache.Get(sha); ok && e.Version == cache.CurrentVersion {
 			res.Verdict = parseVerdict(e.Verdict)
 			res.Score = e.Score
+			if e.Type != "" {
+				res.Type = e.Type
+			}
+			res.Imphash = e.Imphash
+			res.Packer = e.Packer
+			res.Signed = e.Signed
+			res.Signer = e.Signer
+			res.SignatureStatus = e.SignatureStatus
+			res.Findings = e.Findings
+			res.DownloadSource = motw.Read(path)
 			res.Cached = true
 			res.ScanMs = time.Since(t0).Milliseconds()
 			return res, jev.Evidence{}
@@ -675,13 +873,57 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		if pi, err := pe.Analyze(path); err == nil {
 			peInfo = pi
 			res.Imphash = pi.Imphash
-			res.Signed = pi.Signed
 			res.Packer = pi.Packer
 			for _, sec := range pi.Sections {
 				res.Sections = append(res.Sections, sec.Name+":"+strconv.FormatFloat(sec.Entropy, 'f', 2, 64))
 			}
 		} else {
 			peErr = err.Error()
+		}
+	}
+
+	// Verify Authenticode BEFORE rules.Match so tampered ("mismatch") or
+	// self-signed certificates never receive the verified-publisher discount.
+	var authFindings []model.Finding
+	if kind == filetype.KindPE {
+		if vr, err := authenticode.Verify(path); err == nil && vr.Signed() {
+			res.SignatureStatus = vr.Status.String()
+			res.Signer = vr.Signer
+			switch vr.Status {
+			case authenticode.StatusIntact:
+				// Only a non-self-signed intact signature lowers capability severity.
+				res.Signed = !vr.SelfSigned
+				authFindings = append(authFindings, model.Finding{
+					Rule: "signed_by", Category: "info", Severity: 0,
+					Detail: fmt.Sprintf("signed by %q (chain intact, %d certificate(s))", vr.Signer, vr.Chain),
+				})
+				if vr.SelfSigned {
+					authFindings = append(authFindings, model.Finding{
+						Rule: "self_signed_certificate", Category: "trust", Severity: 10,
+						Detail: fmt.Sprintf("the signature is self-signed (%q) - it proves nothing about the publisher, and a crack often signs itself to look legitimate", vr.Signer),
+					})
+				}
+				if vr.Expired {
+					authFindings = append(authFindings, model.Finding{
+						Rule: "expired_certificate", Category: "trust", Severity: 5,
+						Detail: fmt.Sprintf("the signing certificate expired on %s (a signature timestamped while it was valid can still be valid)", vr.NotAfter),
+					})
+				}
+			case authenticode.StatusMismatch:
+				res.Signed = false
+				authFindings = append(authFindings, model.Finding{
+					Rule: "signature_mismatch", Category: "tampering", Severity: 40,
+					Detail: fmt.Sprintf("the file claims a signature from %q but the content no longer matches it - it was modified after signing", vr.Signer),
+				})
+			default:
+				res.Signed = false
+				authFindings = append(authFindings, model.Finding{
+					Rule: "signed_unreadable", Category: "info", Severity: 0,
+					Detail: "the file carries a certificate table but the signature could not be parsed",
+				})
+			}
+		} else if err == nil {
+			res.SignatureStatus = "none"
 		}
 	}
 
@@ -702,12 +944,48 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		Path:   path,
 		Signed: res.Signed,
 	})
+	findings = append(findings, authFindings...)
 	if len(readBytes) == 0 && head != nil {
 		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path, Signed: res.Signed})
 		findings = append(findings, f2...)
 	}
 	if peErr != "" {
 		findings = append(findings, model.Finding{Rule: "pe_parse", Category: "info", Severity: 1, Detail: "PE parse failed: " + peErr})
+	}
+	if kind == filetype.KindPE && filetype.IsDisguisedPE(path) {
+		findings = append(findings, model.Finding{
+			Rule:     "masquerading_pe",
+			Category: "evasion",
+			Severity: 35,
+			Detail:   fmt.Sprintf("genuine PE executable disguised under non-executable extension %q", filepath.Ext(path)),
+		})
+	}
+	// Windows Mark-of-the-Web (Zone.Identifier ADS): track which website
+	// delivered this file and flag known decoy/redirect-chain origins.
+	if !sub {
+		if src := motw.Read(path); src != nil {
+			res.DownloadSource = src
+			if src.HostURL != "" || src.ReferrerURL != "" {
+				originDet := fmt.Sprintf("zone=%s", src.ZoneName)
+				if src.HostURL != "" {
+					originDet += " host=" + truncStr(src.HostURL, 100)
+				}
+				if src.ReferrerURL != "" {
+					originDet += " ref=" + truncStr(src.ReferrerURL, 80)
+				}
+				findings = append(findings, model.Finding{
+					Rule: "download_origin", Category: "info", Severity: 0, Detail: originDet,
+				})
+				if src.ZoneID >= 3 {
+					ua := motw.AnalyzeURL(src.HostURL, src.ReferrerURL, filepath.Base(path), info.Size())
+					for _, uf := range ua.Findings {
+						if uf.Severity > 0 {
+							findings = append(findings, uf)
+						}
+					}
+				}
+			}
+		}
 	}
 	// Packed or encrypted payloads.
 	//
@@ -752,64 +1030,6 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	// executable hidden past that point is missed. In a repack the game
 	// data is one huge blob and a trojanized one hides the payload there.
 	findings = s.carveInto(findings, path, info.Size(), depth)
-	// The Authenticode signature.
-	//
-	// "The file carries a certificate table" is not evidence of anything:
-	// a trojanized repack ships a real signature next to an injected
-	// payload, and the certificate table is still there. The signature is
-	// only evidence when the content still matches it, so the file is
-	// checked against its own signature here.
-	//
-	// A mismatch - the content no longer matches the signature - means
-	// the file was modified after signing. Nothing else in the scanner can
-	// see that, and it is a strong malicious signal.
-	if kind == filetype.KindPE {
-		if vr, err := authenticode.Verify(path); err == nil && vr.Signed() {
-			res.SignatureStatus = vr.Status.String()
-			res.Signer = vr.Signer
-			switch vr.Status {
-			case authenticode.StatusIntact:
-				// Only an intact signature may lower a score.
-				res.Signed = true
-				findings = append(findings, model.Finding{
-					Rule: "signed_by", Category: "info", Severity: 0,
-					Detail: fmt.Sprintf("signed by %q (chain intact, %d certificate(s))", vr.Signer, vr.Chain),
-				})
-				// A crack often signs itself to look legitimate. A
-				// self-signed certificate proves nothing about the
-				// publisher, and in a crack folder it is a signal that
-				// the signature is there for show.
-				if vr.SelfSigned {
-					findings = append(findings, model.Finding{
-						Rule: "self_signed_certificate", Category: "trust", Severity: 10,
-						Detail: fmt.Sprintf("the signature is self-signed (%q) - it proves nothing about the publisher, and a crack often signs itself to look legitimate", vr.Signer),
-					})
-				}
-				if vr.Expired {
-					findings = append(findings, model.Finding{
-						Rule: "expired_certificate", Category: "trust", Severity: 5,
-						Detail: fmt.Sprintf("the signing certificate expired on %s (a signature timestamped while it was valid can still be valid)", vr.NotAfter),
-					})
-				}
-			case authenticode.StatusMismatch:
-				// The signature is there but the content does not match
-				// it: the file was modified after it was signed.
-				res.Signed = false
-				findings = append(findings, model.Finding{
-					Rule: "signature_mismatch", Category: "tampering", Severity: 40,
-					Detail: fmt.Sprintf("the file claims a signature from %q but the content no longer matches it - it was modified after signing", vr.Signer),
-				})
-			default:
-				res.Signed = false
-				findings = append(findings, model.Finding{
-					Rule: "signed_unreadable", Category: "info", Severity: 0,
-					Detail: "the file carries a certificate table but the signature could not be parsed",
-				})
-			}
-		} else if err == nil {
-			res.SignatureStatus = "none"
-		}
-	}
 	res.Findings = findings
 
 	// Packer signal when debug/pe itself choked (UPX mangles the symbol
@@ -979,6 +1199,24 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		}
 	}
 
+	// Known benign runtime DLL allowlist (strictly vetoed by any intent/payload
+	// finding, signature mismatch, or crypter structure).
+	if kind == filetype.KindPE {
+		if label := known.RuntimeLabel(path); label != "" &&
+			res.SignatureStatus != "mismatch" &&
+			(peInfo == nil || peInfo.NoRawSections < 2) &&
+			!hasIntentFindings(findings) {
+			whitelist = append(whitelist, "RUNTIME_DLL")
+			findings = append(findings, model.Finding{
+				Rule:     "known_runtime_dll",
+				Category: "info",
+				Severity: 0,
+				Detail:   fmt.Sprintf("known runtime library (%s) — capability findings capped; no payload indicators found", label),
+			})
+			res.Findings = findings
+		}
+	}
+
 	score, verdict, extra := computeScore(findings, whitelist, res.Signed)
 	if len(extra) > 0 {
 		findings = append(findings, extra...)
@@ -989,7 +1227,7 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	if onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40 {
 		res.Verdict = model.VerdictMalicious
 	}
-	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsContainerExt(path)) {
+	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsExpandableContainer(path)) {
 		s.expandContainer(path, depth, &res)
 	}
 	// The semantic adjudication runs last, so it sees every finding the
@@ -997,8 +1235,8 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	ev := buildEvidence(&res, strs)
 	forceMalicious := onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40
 	s.judgeFile(&res, strs, whitelist, forceMalicious)
-	if s.cache != nil && sha != "" && (res.Score > 0 || onlineJSON != "") {
-		s.cache.PutOnline(sha, res.Score, res.Verdict.String(), onlineJSON)
+	if s.cache != nil && sha != "" && !sub {
+		s.cache.PutFull(sha, res, onlineJSON)
 	}
 	res.ScanMs = time.Since(t0).Milliseconds()
 	return res, ev
@@ -1048,10 +1286,35 @@ func ScanOne(cfg Config, path string) (model.FileResult, jev.Evidence, error) {
 //
 // extra carries findings the policy itself wants to record (the emu cap
 // note) so the caller can merge them into the result.
+func isImportOnlyCombo(rule string) bool {
+	return rule == "combo_keylog_exfil" || rule == "combo_stealer_stack"
+}
+
+func hasIntentFindings(findings []model.Finding) bool {
+	for _, f := range findings {
+		if f.Severity <= 0 {
+			continue
+		}
+		if !rules.IsCapability(f.Rule) && !isImportOnlyCombo(f.Rule) {
+			return true
+		}
+	}
+	return false
+}
+
 func computeScore(findings []model.Finding, whitelist []string, signed bool) (int, model.Verdict, []model.Finding) {
+	isRuntimeDLL := false
+	nonRuntimeWL := 0
+	for _, w := range whitelist {
+		if w == "RUNTIME_DLL" {
+			isRuntimeDLL = true
+		} else {
+			nonRuntimeWL++
+		}
+	}
 	capScore, intentScore := 0, 0
 	for _, f := range findings {
-		if rules.IsCapability(f.Rule) {
+		if rules.IsCapability(f.Rule) || (isRuntimeDLL && isImportOnlyCombo(f.Rule)) {
 			capScore += f.Severity
 		} else {
 			intentScore += f.Severity
@@ -1061,6 +1324,9 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 	if signed {
 		cap = signedCapabilityCap
 	}
+	if isRuntimeDLL && intentScore == 0 && cap > runtimeCapabilityCap {
+		cap = runtimeCapabilityCap
+	}
 	if capScore > cap {
 		capScore = cap
 	}
@@ -1068,7 +1334,7 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 	if score > 100 {
 		score = 100
 	}
-	if len(whitelist) > 0 && score < 60 {
+	if nonRuntimeWL > 0 && score < 60 {
 		score -= 15
 		if score < 0 {
 			score = 0
@@ -1102,13 +1368,145 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 // auto-clicker does five suspicious-looking things at once. Both added up
 // to 100 and were called MALICIOUS.
 const (
-	capabilityCap       = 35
-	signedCapabilityCap = 15
+	capabilityCap        = 35
+	signedCapabilityCap  = 15
+	runtimeCapabilityCap = 15
 )
 
 var containerSeq int64
 
-var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com"}
+var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg"}
+
+// applyFolderHeuristics detects folder-wide decoy malware templates (such as
+// fake Ren'Py game folders from decoy download sites: renpy/ + setup.py with
+// no game/ directory + high-entropy random-named blob in data/).
+func applyFolderHeuristics(root string, all []model.FileResult) []model.FileResult {
+	if root == "" {
+		return all
+	}
+	stRenpy, errRenpy := os.Stat(filepath.Join(root, "renpy"))
+	if errRenpy != nil || !stRenpy.IsDir() {
+		return all
+	}
+	if stGame, errGame := os.Stat(filepath.Join(root, "game")); errGame == nil && stGame.IsDir() {
+		return all
+	}
+	dataDir := filepath.Join(root, "data")
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return all
+	}
+	var blobPath string
+	var blobSize int64
+	var blobEnt float64
+	var hasHiddenKey bool
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, ".") && info.Size() > 0 && info.Size() <= 1024 {
+			hasHiddenKey = true
+		}
+		ext := strings.ToLower(filepath.Ext(name))
+		if info.Size() >= 500*1024 && !normalDataExt[ext] {
+			p := filepath.Join(dataDir, name)
+			ent := sampleFileEntropy(p)
+			if ent >= 7.5 {
+				blobPath = p
+				blobSize = info.Size()
+				blobEnt = ent
+			}
+		}
+	}
+	if blobPath == "" {
+		return all
+	}
+	det := fmt.Sprintf("decoy Ren'Py SDK game folder: no game/ directory, carries high-entropy encrypted blob %q (%s, entropy %.2f)",
+		filepath.Base(blobPath), humanMB(blobSize), blobEnt)
+	if hasHiddenKey {
+		det += " + hidden key file in data/"
+	}
+	f := model.Finding{
+		Rule:     "decoy_renpy_dropper",
+		Category: "dropper",
+		Severity: 75,
+		Detail:   det,
+	}
+	for i := range all {
+		if strings.EqualFold(all[i].Path, blobPath) {
+			all[i].Skipped = false
+			all[i].Findings = append(all[i].Findings, f)
+			if all[i].Score < 75 {
+				all[i].Score = 75
+			}
+			all[i].Verdict = model.VerdictMalicious
+			return all
+		}
+	}
+	all = append(all, model.FileResult{
+		Path:     blobPath,
+		Size:     blobSize,
+		Type:     "data",
+		Score:    75,
+		Verdict:  model.VerdictMalicious,
+		Findings: []model.Finding{f},
+	})
+	return all
+}
+
+func sampleFileEntropy(path string) float64 {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return 0
+	}
+	const chunk = 256 * 1024
+	buf := make([]byte, chunk)
+	best := 0.0
+	if n, _ := f.ReadAt(buf, 0); n > 0 {
+		best = calcEntropy(buf[:n])
+	}
+	// Encrypted/obfuscated decoy blobs often have a low-entropy header before
+	// the encrypted payload body; sample the middle of the file as well.
+	if st.Size() > chunk {
+		mid := (st.Size() - chunk) / 2
+		if n, _ := f.ReadAt(buf, mid); n > 0 {
+			if e := calcEntropy(buf[:n]); e > best {
+				best = e
+			}
+		}
+	}
+	return best
+}
+
+func calcEntropy(b []byte) float64 {
+	if len(b) == 0 {
+		return 0
+	}
+	var freq [256]int
+	for _, x := range b {
+		freq[x]++
+	}
+	var ent float64
+	fn := float64(len(b))
+	for _, c := range freq {
+		if c == 0 {
+			continue
+		}
+		p := float64(c) / fn
+		ent -= p * math.Log2(p)
+	}
+	return ent
+}
 
 func wantExt(name string) bool {
 	e := strings.ToLower(filepath.Ext(name))

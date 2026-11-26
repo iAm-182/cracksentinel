@@ -278,7 +278,7 @@ func (r *Runner) compileWithRepair(path string, blocks []ruleBlock) error {
 			return err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		out, err := exec.CommandContext(ctx, r.bin, "-w", path, "NUL").CombinedOutput()
+		out, err := exec.CommandContext(ctx, r.bin, "-w", path, os.DevNull).CombinedOutput()
 		cancel()
 		if err == nil {
 			r.RulesLoaded = len(live)

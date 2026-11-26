@@ -1,0 +1,20 @@
+name = "cracksentinel-edge"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[[routes]]
+pattern = "sentinel.breakthematrix.id"
+custom_domain = true
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "100bff332a934520bbeb9f01351a616a"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+APP_NAME = "CrackSentinel"

@@ -85,7 +85,7 @@ var reBase64Blob = regexp.MustCompile(obf.S("ARt3ADt3IGp3Y3F1ByFoamp2J2chanZoJw=
 var reWallet = regexp.MustCompile(obf.S("cmUzc3ItOzY2Py4GdD47LiY3Py47NzspMSY/IjU+LykmPzY/OS4oLzcmKT8/PgF6BQcqMig7KT8mBjg3ND83NTQzOQY4JgY4FjU9MzR6HjsuOwY4Jjk1NTEzPykGdCkrNjMuPyYqOykpLTUoPikGdC4iLiY7Ly41PDM2NnM="))
 var reKeylogWord = regexp.MustCompile(obf.S("cmUzc3IGODE/IzY1PXI9PygmPTM0PSY9Pz5zZQY4JjE/IykuKDUxPyY5NjMqODU7KD56ZT0oOzgmPSg7ODg/KCYpLj87Nj8oJj8iPDM2Lig7LnM="))
 var reRunKey = regexp.MustCompile(obf.S("cmUzc3IZLygoPzQuDD8oKTM1NAYGBgYILzQmKTkyLjspMSkGKXF1OSg/Oy4/JhQ/LXcJPygsMzk/Jig/PQYpcTs+PgYpcRIRFhdz"))
-var reVM = regexp.MustCompile(obf.S("cmUzc3IsNy07KD8mLDMoLi87Njg1IiYsODUiJik7ND44NSIzPyYtMzQ/AQQ7dyAHcw=="))
+var reVM = regexp.MustCompile(obf.S("cmUzc3IsNy07KD8mLDMoLi87Njg1IiYsODUicmVgKT8oLDM5PyYuKDsjJj0vPykuJjc1Lyk/Jik8Jj4oLCYyNTUxJjk1NC4oNTYmLDM+PzVzJik7ND44NSIzPyYtMzQ/AQQ7dyAHcw=="))
 
 // scriptRules are kind-specific indicators for script payloads (.bat/.cmd/
 // .ps1/.vbs/.js/.hta). A script has no import table, so its behaviour is
@@ -161,7 +161,7 @@ var scriptRules = []keywordRule{
 		any: []string{
 			obf.S("PCg1Nzg7KT9sbikuKDM0PQ=="), obf.S("KjUtPygpMj82Nnp3Pw=="), obf.S("dz80OTU+Pz45NTc3OzQ+"),
 			obf.S("dz85eg=="), obf.S("OTI7KHI="), obf.S("Mz8icjQ/LXc1ODA/OS4="), obf.S("MzQsNTE/dz8iKig/KSkzNTQ="),
-			obf.S("KT8udz8iPzkvLjM1NCo1NjM5I3o4Iyo7KSk="), obf.S("OCMqOykp"), obf.S("MjM+Pj80enc/NDk="),
+			obf.S("KT8udz8iPzkvLjM1NCo1NjM5I3o4Iyo7KSk="), obf.S("dz8qejgjKjspKQ=="), obf.S("dz8iPzl6OCMqOykp"), obf.S("PyI/OS8uMzU0KjU2MzkjejgjKjspKQ=="), obf.S("MjM+Pj80enc/NDk="),
 		},
 	},
 	{

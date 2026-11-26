@@ -45,6 +45,9 @@ func PrintSummary(sum *model.Summary, topN int) {
 		if r.Imphash != "" {
 			fmt.Printf("    imphash=%s signed=%v packer=%s\n", r.Imphash, r.Signed, r.Packer)
 		}
+		if r.DownloadSource != nil && (r.DownloadSource.HostURL != "" || r.DownloadSource.ReferrerURL != "") {
+			fmt.Printf("    origin: zone=%s host=%s referrer=%s\n", r.DownloadSource.ZoneName, r.DownloadSource.HostURL, r.DownloadSource.ReferrerURL)
+		}
 		if r.Judge != nil {
 			fmt.Printf("    %s\n", r.Judge.Summary)
 		}

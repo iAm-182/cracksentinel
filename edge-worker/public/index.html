@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CrackSentinel — Game Malware Guard</title>
+<style>
+:root{
+  --bg:#0b0f14;--panel:#131922;--panel2:#1a2230;--line:#263244;
+  --fg:#e6edf3;--mut:#8b9bb0;--acc:#3b82f6;--acc2:#60a5fa;
+  --mal:#f85149;--sus:#f59e0b;--cln:#22c55e;--purple:#a855f7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+code,.mono{font-family:ui-monospace,SFMono-Regular,"Cascadia Code",Consolas,monospace}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px}
+.shield{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff}
+.brand h1{margin:0;font-size:17px;letter-spacing:.3px}
+.brand .sub{font-size:12px;color:var(--mut)}
+.pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--mut)}
+.pill.on{border-color:rgba(34,197,94,.45);color:var(--cln);background:rgba(34,197,94,.1)}
+nav{display:flex;gap:4px;padding:10px 24px 0;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:transparent;border:none;color:var(--mut);padding:10px 16px;cursor:pointer;font-weight:600;font-size:13px;border-bottom:2px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--fg)}
+.tab.active{color:var(--acc2);border-bottom-color:var(--acc)}
+main{max-width:1240px;margin:0 auto;padding:22px 24px 64px}
+.pane{display:none}.pane.active{display:block}
+.dropzone{border:2px dashed #365078;background:linear-gradient(180deg,rgba(59,130,246,.07),rgba(59,130,246,.02));border-radius:14px;padding:34px 20px;text-align:center;transition:.18s;cursor:pointer}
+.dropzone.over{border-color:var(--acc2);background:rgba(59,130,246,.16);transform:scale(1.005)}
+.dropzone h2{margin:0 0 6px;font-size:18px}
+.dropzone p{margin:0 0 18px;color:var(--mut);font-size:13px}
+.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+button.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+button.btn:hover{border-color:var(--acc2);color:#fff}
+button.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.btn.primary:hover{background:#2563eb}
+button.btn.danger{background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.5);color:var(--mal)}
+button.btn.sm{padding:5px 10px;font-size:11.5px;border-radius:6px}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+.opts{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:16px;font-size:12.5px;color:var(--mut)}
+.opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.card-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:18px}
+.card-box h3{margin:0 0 10px;font-size:14.5px}
+textarea,input[type=text],input[type=number]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit}
+textarea{min-height:84px;resize:vertical}
+.row-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.status-bar{margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);display:none;align-items:center;gap:12px}
+.status-bar.show{display:flex}
+.spinner{width:18px;height:18px;border:2.5px solid rgba(96,165,250,.25);border-top-color:var(--acc2);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0}
+.metric{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.metric .n{font-size:24px;font-weight:800;line-height:1.1}
+.metric .l{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin-top:3px}
+.mal{color:var(--mal)}.sus{color:var(--sus)}.cln{color:var(--cln)}.acc{color:var(--acc2)}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:700;font-size:11.5px;white-space:nowrap}
+.badge.MALICIOUS{background:rgba(248,81,73,.16);color:var(--mal);border:1px solid rgba(248,81,73,.35)}
+.badge.SUSPICIOUS{background:rgba(245,158,11,.16);color:var(--sus);border:1px solid rgba(245,158,11,.35)}
+.badge.CLEAN{background:rgba(34,197,94,.14);color:var(--cln);border:1px solid rgba(34,197,94,.3)}
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.filter-bar input{max-width:300px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:9px 10px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid #1d2635;vertical-align:top}
+tr:hover td{background:rgba(255,255,255,.02)}
+.finding-item{display:grid;grid-template-columns:42px 150px 1fr;gap:8px;padding:4px 0;border-bottom:1px dotted #223044;font-size:12px}
+.finding-item .sv{text-align:right;font-weight:700}
+details summary{cursor:pointer;color:var(--acc2);font-size:12px}
+.muted{color:var(--mut);font-size:12px}
+.toast-msg{position:fixed;bottom:18px;right:18px;background:var(--panel2);border:1px solid var(--acc);color:var(--fg);padding:10px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45);display:none;z-index:99}
+.toast-msg.show{display:block}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="shield">CS</div>
+    <div>
+      <h1>CrackSentinel</h1>
+      <div class="sub">Game Download &amp; Crack Malware Scanner — Single &amp; Mass Check</div>
+    </div>
+  </div>
+  <div class="pills">
+    <span class="pill" id="pVer">loading...</span>
+    <span class="pill" id="pYara">YARA: -</span>
+    <span class="pill" id="pWatch">Download Guard: OFF</span>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" data-tab="scan">Scan (Drag &amp; Drop / Mass)</button>
+  <button class="tab" data-tab="guard">Download Guard (Real-Time)</button>
+  <button class="tab" data-tab="url">Cek Link Download</button>
+  <button class="tab" data-tab="history">Riwayat &amp; Ekstensi Browser</button>
+</nav>
+
+<main>
+  <div class="card-box" id="authBox" style="display:none;margin-top:0;margin-bottom:16px;border-color:rgba(245,158,11,.5)">
+    <div class="row-flex">
+      <b>Access Key Diperlukan:</b>
+      <input type="text" id="authKeyInput" class="mono" style="max-width:300px" placeholder="Masukkan Access Key...">
+      <button class="btn primary sm" id="btnSaveKey" type="button">Simpan Key</button>
+    </div>
+  </div>
+
+  <!-- TAB 1: SCAN -->
+  <section class="pane active" id="pane-scan">
+    <div class="dropzone" id="dropzone">
+      <h2>Drag &amp; Drop File / Archive / Folder Game ke Sini</h2>
+      <p id="dropHint">Bisa drop 1 file (<code>.exe .dll .zip .rar .7z .iso .bat .ps1</code>), banyak file sekaligus, atau folder game. Untuk folder game besar (GB), gunakan tombol <b>Pilih Folder (Scan Langsung)</b> agar 0 copy!</p>
+      <div class="actions">
+        <button class="btn primary local-only" id="btnPickFolder" type="button">Pilih Folder Game (Scan Langsung)</button>
+        <button class="btn local-only" id="btnPickFiles" type="button">Pilih File Lokal (1 / Banyak)</button>
+        <button class="btn" id="btnUploadPick" type="button">Pilih / Upload File (1 / Banyak)</button>
+      </div>
+      <input type="file" id="fileInput" multiple style="display:none">
+      <div class="opts">
+        <label><input type="checkbox" id="optExtract" checked> Bongkar isi ZIP / RAR / 7z / ISO / MSI</label>
+        <label><input type="checkbox" id="optCarve" checked> Carve executable tersembunyi di data game</label>
+        <label><input type="checkbox" id="optOnline"> Cek VirusTotal / MalwareBazaar (butuh API key)</label>
+      </div>
+    </div>
+
+    <div class="card-box local-only" id="massBox">
+      <h3>Mass Check / Scan Manual Banyak Folder &amp; File Sekaligus</h3>
+      <div class="muted" style="margin-bottom:8px">Masukkan 1 path per baris (bisa campuran folder game dan file archive/exe), lalu klik Scan Semua.</div>
+      <textarea id="massPaths" class="mono" placeholder="E:\Games\Game Pertama&#10;E:\Games\Game Kedua&#10;E:\Downloads\Setup_Repack.zip"></textarea>
+      <div class="row-flex" style="margin-top:10px">
+        <button class="btn primary" id="btnScanPaths" type="button">Scan Semua Path</button>
+        <button class="btn" id="btnAddFolderToMass" type="button">+ Tambah Folder ke Daftar</button>
+        <button class="btn" id="btnClearMass" type="button">Bersihkan</button>
+      </div>
+    </div>
+
+    <div class="status-bar" id="scanBusy">
+      <div class="spinner"></div>
+      <div id="scanBusyText">Sedang menganalisa file &amp; arsip...</div>
+    </div>
+
+    <div class="card-box" id="resultBox" style="display:none">
+      <div class="row-flex" style="justify-content:space-between">
+        <div>
+          <h3 id="resTitle" style="margin:0">Hasil Scan</h3>
+          <div class="muted" id="resMeta"></div>
+        </div>
+        <div class="row-flex">
+          <a class="btn sm" id="btnDownloadHTML" href="#" style="text-decoration:none">Export HTML Report</a>
+        </div>
+      </div>
+
+      <div class="metrics" id="resMetrics"></div>
+
+      <div class="filter-bar">
+        <button class="btn sm primary" data-vf="all">Semua</button>
+        <button class="btn sm" data-vf="MALICIOUS">Malicious</button>
+        <button class="btn sm" data-vf="SUSPICIOUS">Suspicious</button>
+        <button class="btn sm" data-vf="CLEAN">Clean</button>
+        <input type="text" id="resSearch" placeholder="Filter nama file, rule, atau detail...">
+        <span class="muted" id="resCount"></span>
+      </div>
+
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Verdict</th>
+              <th>Skor</th>
+              <th>File</th>
+              <th>Info</th>
+              <th>Temuan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="resBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: REAL-TIME DOWNLOAD GUARD -->
+  <section class="pane" id="pane-guard">
+    <div class="card-box">
+      <h3>Real-Time Download Guard (Pantau Folder Downloads Otomatis)</h3>
+      <p class="muted">Memantau folder download secara berkala, otomatis melewati file setengah download (<code>.crdownload</code>, <code>.part</code>, <code>.!qB</code>), membaca asal website (Mark-of-the-Web), dan memunculkan alert Windows begitu file berbahaya mendarat.</p>
+      <div class="row-flex" style="margin-bottom:10px">
+        <input type="text" id="guardDir" class="mono" style="flex:1;min-width:260px" placeholder="C:\Users\...\Downloads">
+        <button class="btn" id="btnPickGuardDir" type="button">Pilih Folder</button>
+        <label class="muted">Interval (dtk) <input type="number" id="guardInterval" value="4" min="2" max="120" style="width:72px"></label>
+      </div>
+      <div class="row-flex" style="margin-bottom:14px">
+        <label><input type="checkbox" id="guardToast" checked> Notifikasi Windows Desktop Alert</label>
+        <label><input type="checkbox" id="guardQuar"> Auto-Karantina file MALICIOUS (skor &ge; 70)</label>
+      </div>
+      <div class="row-flex">
+        <button class="btn primary" id="btnGuardStart" type="button">Aktifkan Download Guard</button>
+        <button class="btn danger" id="btnGuardStop" type="button" disabled>Matikan</button>
+        <span class="muted" id="guardStatusText"></span>
+      </div>
+    </div>
+
+    <div class="card-box">
+      <h3>Aktivitas Download Terbaru</h3>
+      <table>
+        <thead><tr><th>Waktu</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th><th>Temuan / Asal URL</th></tr></thead>
+        <tbody id="guardEvents"><tr><td colspan="6" class="muted">Belum ada aktivitas.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TAB 3: URL PRE-CHECK -->
+  <section class="pane" id="pane-url">
+    <div class="card-box">
+      <h3>Cek Link Download Game Sebelum Download (Aman — Tanpa Eksekusi)</h3>
+      <p class="muted">Melacak redirect chain (via HTTP HEAD), mendeteksi domain decoy numerik / random TLD, double-extension (<code>.pdf.exe</code>), host penyebar stealer (Discord CDN/Pastebin), dan ukuran repack palsu.</p>
+      <div style="display:grid;gap:10px">
+        <input type="text" id="urlInput" class="mono" placeholder="https://contoh-web-game.com/download/Setup_Game.zip">
+        <input type="text" id="refInput" class="mono" placeholder="(Opsional) Referrer / halaman asal website">
+        <div class="row-flex">
+          <label><input type="checkbox" id="urlProbe" checked> Lacak Redirect Chain &amp; Ukuran File (HTTP HEAD)</label>
+          <button class="btn primary" id="btnCheckUrl" type="button">Periksa Link</button>
+        </div>
+      </div>
+      <div id="urlResult" style="margin-top:16px;display:none"></div>
+    </div>
+  </section>
+
+  <!-- TAB 4: HISTORY & EXTENSION -->
+  <section class="pane" id="pane-history">
+    <div class="card-box">
+      <h3>Pasang Ekstensi Browser (Chrome / Edge / Brave)</h3>
+      <p class="muted">Dengan ekstensi terpasang + UI ini menyala di background, setiap kali kamu download game dari website, ekstensi otomatis mengecek link-nya &amp; langsung mengirim file yang selesai di-download ke CrackSentinel!</p>
+      <ol style="font-size:13px;line-height:1.7">
+        <li>Buka <code>chrome://extensions</code> (atau <code>edge://extensions</code>).</li>
+        <li>Aktifkan <b>Developer mode</b> di pojok kanan atas.</li>
+        <li>Klik <b>Load unpacked</b> lalu pilih folder <code>E:\ilham_yarsi\tools-virus\extension</code>.</li>
+      </ol>
+    </div>
+
+    <div class="card-box">
+      <div class="row-flex" style="justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0">Riwayat Scan Sesi Ini</h3>
+        <button class="btn sm" id="btnRefreshHist" type="button">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Waktu</th><th>Sumber</th><th>Target</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th></tr></thead>
+        <tbody id="histBody"><tr><td colspan="7" class="muted">Belum ada riwayat scan.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="toast-msg" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let currentItem = null;
+let verdictFilter = 'all';
+let isPublicMode = false;
+let accessKey = localStorage.getItem('cs_access_key') || '';
+
+function apiFetch(url, opts={}){
+  opts.headers = Object.assign({}, opts.headers || {});
+  if(accessKey) opts.headers['X-Access-Key'] = accessKey;
+  return fetch(url, opts);
+}
+
+$('#btnSaveKey').addEventListener('click', ()=>{
+  accessKey = $('#authKeyInput').value.trim();
+  localStorage.setItem('cs_access_key', accessKey);
+  toast('Access Key disimpan.');
+  loadHistory();
+});
+
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.classList.remove('show'), 3500);
+}
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    $('#pane-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='history') loadHistory();
+    if(btn.dataset.tab==='guard') loadWatchStatus();
+  });
+});
+
+async function loadHealth(){
+  try{
+    const r = await apiFetch('/api/health');
+    const d = await r.json();
+    isPublicMode = !!d.public_mode;
+    $('#pVer').textContent = 'CrackSentinel ' + (d.version||'') + (isPublicMode ? ' (Online)' : '');
+    $('#pYara').textContent = 'YARA: ' + (d.yara ? 'ON' : 'Builtin');
+    if(d.yara) $('#pYara').classList.add('on');
+    if(d.auth_required){
+      $('#authBox').style.display = 'block';
+      if(accessKey && !$('#authKeyInput').value) $('#authKeyInput').value = accessKey;
+    }
+    if(isPublicMode){
+      document.querySelectorAll('.local-only').forEach(el=>el.style.display='none');
+      const gTab = document.querySelector('[data-tab="guard"]');
+      if(gTab) gTab.style.display = 'none';
+      $('#pWatch').textContent = 'Online Mode (24/7)';
+      $('#pWatch').classList.add('on');
+      $('#btnUploadPick').classList.add('primary');
+      if(d.max_upload_mb > 0){
+        $('#dropHint').innerHTML = `Drag &amp; drop 1 atau banyak file/archive (<code>.exe .dll .zip .rar .7z .iso .bat .ps1</code>) maks <b>${d.max_upload_mb} MB</b> per upload. Untuk folder game puluhan GB di PC, gunakan mode lokal (<code>CrackSentinel-UI.bat</code>).`;
+      }
+    }else{
+      updateWatchPill(d.watching, d.watch_dir);
+      if(!$('#guardDir').value && d.default_downloads) $('#guardDir').value = d.default_downloads;
+    }
+  }catch(e){}
+}
+
+function updateWatchPill(on, dir){
+  const p = $('#pWatch');
+  p.textContent = on ? 'Download Guard: ON' : 'Download Guard: OFF';
+  p.classList.toggle('on', !!on);
+  $('#btnGuardStart').disabled = !!on;
+  $('#btnGuardStop').disabled = !on;
+  $('#guardStatusText').textContent = on ? ('Memantau: ' + dir) : 'Tidak aktif';
+}
+
+function setBusy(on, text){
+  $('#scanBusy').classList.toggle('show', on);
+  if(text) $('#scanBusyText').textContent = text;
+}
+
+// Drag & drop files and folders
+const dz = $('#dropzone');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.remove('over');}));
+dz.addEventListener('drop', async e=>{
+  const items = e.dataTransfer.items;
+  const files = [];
+  if(items && items.length && items[0].webkitGetAsEntry){
+    const walk = entry => new Promise(resolve=>{
+      if(entry.isFile){
+        entry.file(f=>{ f._rel = entry.fullPath.replace(/^\/+/,''); files.push(f); resolve(); }, ()=>resolve());
+      }else if(entry.isDirectory){
+        const rdr = entry.createReader();
+        const readAll = ()=>rdr.readEntries(async entries=>{
+          if(!entries.length) return resolve();
+          for(const en of entries) await walk(en);
+          readAll();
+        }, ()=>resolve());
+        readAll();
+      }else resolve();
+    });
+    for(const it of items){
+      const en = it.webkitGetAsEntry();
+      if(en) await walk(en);
+    }
+  }else if(e.dataTransfer.files){
+    for(const f of e.dataTransfer.files) files.push(f);
+  }
+  if(files.length) uploadAndScan(files);
+});
+
+$('#btnUploadPick').addEventListener('click', ()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change', e=>{
+  if(e.target.files.length) uploadAndScan(Array.from(e.target.files));
+  e.target.value = '';
+});
+
+async function uploadAndScan(files){
+  setBusy(true, `Mengirim & scan ${files.length} file...`);
+  try{
+    const fd = new FormData();
+    fd.append('extract', $('#optExtract').checked ? 'true' : 'false');
+    fd.append('carve', $('#optCarve').checked ? 'true' : 'false');
+    fd.append('online', $('#optOnline').checked ? 'true' : 'false');
+    const rels = files.map(f => f._rel || f.webkitRelativePath || f.name);
+    fd.append('paths', JSON.stringify(rels));
+    for(const f of files) fd.append('file', f, f.name);
+    const r = await apiFetch('/api/upload', {method:'POST', body:fd});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'Upload gagal');
+    renderResult(d);
+    toast(`Scan selesai: ${d.top_verdict} (${d.summary.files_scanned} file)`);
+  }catch(err){
+    toast('Error: ' + err.message);
+  }finally{
+    setBusy(false);
+  }
+}
+
+async function pickNative(mode){
+  const r = await apiFetch('/api/pick', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode})});
+  const d = await r.json();
+  if(!r.ok) throw new Error(d.error || 'Picker gagal');
+  return d.paths || [];
+}
+
+$('#btnPickFolder').addEventListener('click', async ()=>{
+  try{
+    const paths = await pickNative('folder');
+    if(paths.length) scanLocalPaths(paths);
+  }catch(e){ toast(e.message); }
+});
+$('#btnPickFiles').addEventListener('click', async ()=>{
+  try{
+    const paths = await pickNative('files');
+    if(paths.length) scanLocalPaths(paths);
+  }catch(e){ toast(e.message); }
+});
+$('#btnAddFolderToMass').addEventListener('click', async ()=>{
+  try{
+    const paths = await pickNative('folder');
+    if(paths.length){
+      const cur = $('#massPaths').value.trim();
+      $('#massPaths').value = (cur ? cur + '\n' : '') + paths.join('\n');
+    }
+  }catch(e){ toast(e.message); }
+});
+$('#btnClearMass').addEventListener('click', ()=>$('#massPaths').value='');
+$('#btnScanPaths').addEventListener('click', ()=>{
+  const paths = $('#massPaths').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!paths.length) return toast('Masukkan minimal 1 path file/folder');
+  scanLocalPaths(paths);
+});
+
+async function scanLocalPaths(paths){
+  setBusy(true, `Scanning ${paths.length} target langsung di disk...`);
+  try{
+    const body = {
+      paths,
+      extract_depth: $('#optExtract').checked ? 2 : 0,
+      carve: $('#optCarve').checked,
+      online: $('#optOnline').checked,
+      source: paths.length > 1 ? 'mass' : 'paths'
+    };
+    const r = await apiFetch('/api/scan-paths', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'Scan gagal');
+    renderResult(d);
+    toast(`Scan selesai: ${d.top_verdict} (${d.summary.files_scanned} file)`);
+  }catch(err){
+    toast('Error: ' + err.message);
+  }finally{
+    setBusy(false);
+  }
+}
+
+function renderResult(item){
+  currentItem = item;
+  const sum = item.summary;
+  $('#resultBox').style.display = 'block';
+  $('#resTitle').textContent = 'Hasil Scan: ' + item.target;
+  $('#resMeta').textContent = `${item.time} · ${sum.duration_ms} ms · ${(sum.bytes_scanned/1048576).toFixed(1)} MB` + (item.origin_url ? ' · Asal: ' + item.origin_url : '');
+  $('#btnDownloadHTML').href = '/api/report/' + encodeURIComponent(item.id) + '.html' + (accessKey ? ('?key=' + encodeURIComponent(accessKey)) : '');
+
+  $('#resMetrics').innerHTML = `
+    <div class="metric"><div class="n mal">${sum.malicious}</div><div class="l">Malicious</div></div>
+    <div class="metric"><div class="n sus">${sum.suspicious}</div><div class="l">Suspicious</div></div>
+    <div class="metric"><div class="n cln">${sum.clean}</div><div class="l">Clean</div></div>
+    <div class="metric"><div class="n acc">${sum.files_scanned}</div><div class="l">Scanned</div></div>
+    <div class="metric"><div class="n">${sum.files_skipped}</div><div class="l">Skipped</div></div>
+  `;
+  drawResultRows();
+}
+
+function drawResultRows(){
+  if(!currentItem) return;
+  const term = ($('#resSearch').value||'').toLowerCase();
+  const rows = (currentItem.summary.results||[]).filter(r => !r.skipped).filter(r=>{
+    if(verdictFilter !== 'all' && r.verdict !== verdictFilter) return false;
+    if(!term) return true;
+    const blob = (r.path + ' ' + r.type + ' ' + (r.findings||[]).map(f=>f.rule+' '+f.detail).join(' ')).toLowerCase();
+    return blob.includes(term);
+  });
+  $('#resCount').textContent = `${rows.length} file ditampilkan`;
+  const canQuar = currentItem.source !== 'drag-drop';
+  const tb = $('#resBody');
+  if(!rows.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted">Tidak ada file cocok dengan filter.</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.slice(0, 400).map(r=>{
+    const fs = (r.findings||[]);
+    const sevCount = fs.filter(f=>f.severity>0).length;
+    const infoBits = [r.type];
+    if(r.signature_status && r.signature_status !== 'none') infoBits.push('sig:' + r.signature_status);
+    if(r.signer) infoBits.push(r.signer);
+    if(r.packer) infoBits.push('pack:' + r.packer);
+    if(r.cached) infoBits.push('cached');
+    if(r.download_source && r.download_source.host_domain) infoBits.push('web:' + r.download_source.host_domain);
+
+    let findHTML = '<span class="muted">bersih</span>';
+    if(fs.length){
+      const top = fs.filter(f=>f.severity>0).slice(0,3).map(f=>f.rule).join(', ') || fs[0].rule;
+      findHTML = `<details ${r.verdict!=='CLEAN'?'open':''}><summary>${sevCount} temuan · ${esc(top)}</summary>` +
+        fs.map(f=>`<div class="finding-item"><div class="sv ${f.severity>=70?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div><div class="mono acc">${esc(f.rule)}</div><div>${esc(f.detail)}</div></div>`).join('') +
+        '</details>';
+    }
+    const acts = [];
+    if(!isPublicMode && canQuar && r.score >= 30){
+      acts.push(`<button class="btn sm danger" onclick="quarantinePath(${JSON.stringify(r.path)})">Karantina</button>`);
+    }
+    if(!isPublicMode && r.score >= 30){
+      acts.push(`<button class="btn sm" onclick="labelCorpus(${JSON.stringify(r.path)},'legitimate')">Legit</button>`);
+      acts.push(`<button class="btn sm" onclick="labelCorpus(${JSON.stringify(r.path)},'malicious')">Malware</button>`);
+    }
+    return `<tr>
+      <td><span class="badge ${esc(r.verdict)}">${esc(r.verdict)}</span></td>
+      <td class="mono"><b>${r.score}</b></td>
+      <td class="mono" style="word-break:break-all;max-width:340px">${esc(r.path)}</td>
+      <td class="muted">${esc(infoBits.join(' · '))}</td>
+      <td>${findHTML}</td>
+      <td><div class="row-flex">${acts.join('')}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+document.querySelectorAll('[data-vf]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-vf]').forEach(b=>b.classList.remove('primary'));
+    btn.classList.add('primary');
+    verdictFilter = btn.dataset.vf;
+    drawResultRows();
+  });
+});
+$('#resSearch').addEventListener('input', drawResultRows);
+
+async function quarantinePath(path){
+  if(!confirm('Pindahkan file ini ke folder .quarantine?\n' + path)) return;
+  const r = await apiFetch('/api/quarantine', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})});
+  const d = await r.json();
+  if(!r.ok) return toast('Gagal karantina: ' + (d.error||''));
+  toast('File dikarantina ke: ' + d.quarantined_to);
+}
+
+async function labelCorpus(path, label){
+  const r = await apiFetch('/api/corpus/label', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, label})});
+  const d = await r.json();
+  if(!r.ok) return toast('Gagal simpan label: ' + (d.error||''));
+  toast(`Label '${label}' disimpan ke corpus.json`);
+}
+
+// Watch / Download Guard
+$('#btnPickGuardDir').addEventListener('click', async ()=>{
+  try{
+    const p = await pickNative('folder');
+    if(p.length) $('#guardDir').value = p[0];
+  }catch(e){ toast(e.message); }
+});
+
+async function loadWatchStatus(){
+  if(isPublicMode) return;
+  try{
+    const r = await apiFetch('/api/watch/status');
+    const d = await r.json();
+    updateWatchPill(d.active, d.dir);
+    if(d.dir) $('#guardDir').value = d.dir;
+    const tb = $('#guardEvents');
+    if(!d.events || !d.events.length){
+      tb.innerHTML = '<tr><td colspan="6" class="muted">Belum ada aktivitas download baru.</td></tr>';
+      return;
+    }
+    tb.innerHTML = d.events.map(ev=>`<tr>
+      <td class="mono muted">${esc(ev.time.replace('T',' ').slice(0,19))}</td>
+      <td><span class="badge ${esc(ev.verdict||'CLEAN')}">${esc(ev.verdict||'INFO')}</span></td>
+      <td class="mono"><b>${ev.score||0}</b></td>
+      <td class="mono" style="word-break:break-all">${esc(ev.path)}</td>
+      <td>${esc(ev.action)}</td>
+      <td class="muted">${esc(ev.top_finding||'')}${ev.origin_url ? '<br>Asal: '+esc(ev.origin_url) : ''}</td>
+    </tr>`).join('');
+  }catch(e){}
+}
+
+$('#btnGuardStart').addEventListener('click', async ()=>{
+  const body = {
+    dir: $('#guardDir').value.trim(),
+    interval: parseInt($('#guardInterval').value,10) || 4,
+    quarantine: $('#guardQuar').checked,
+    toast: $('#guardToast').checked
+  };
+  const r = await apiFetch('/api/watch/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await r.json();
+  if(!r.ok) return toast('Gagal: ' + (d.error||''));
+  loadWatchStatus();
+  toast('Download Guard aktif!');
+});
+
+$('#btnGuardStop').addEventListener('click', async ()=>{
+  await apiFetch('/api/watch/stop', {method:'POST'});
+  loadWatchStatus();
+  toast('Download Guard dimatikan.');
+});
+
+// URL Pre-Check
+$('#btnCheckUrl').addEventListener('click', async ()=>{
+  const url = $('#urlInput').value.trim();
+  if(!url) return toast('Masukkan URL download terlebih dahulu');
+  const box = $('#urlResult');
+  box.style.display = 'block';
+  box.innerHTML = '<div class="muted">Memeriksa link &amp; redirect chain...</div>';
+  try{
+    const r = await apiFetch('/api/check-url', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url, referrer:$('#refInput').value.trim(), probe:$('#urlProbe').checked})
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'Gagal cek link');
+    const chain = (d.redirect_chain||[]).map((u,i)=>`<div class="mono muted">${i+1}. ${esc(u)}</div>`).join('');
+    const finds = (d.findings||[]).map(f=>`<div class="finding-item"><div class="sv ${f.severity>=30?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div><div class="mono acc">${esc(f.rule)}</div><div>${esc(f.detail)}</div></div>`).join('') || '<div class="muted">Tidak ada indikator mencurigakan pada URL.</div>';
+    box.innerHTML = `
+      <div class="row-flex" style="margin-bottom:10px">
+        <span class="badge ${esc(d.verdict)}">${esc(d.verdict)}</span>
+        <span class="mono"><b>Skor ${d.score}</b></span>
+        <span class="muted">Domain: ${esc(d.domain||'-')} ${d.filename ? '· File: '+esc(d.filename) : ''} ${d.content_length>0 ? '· '+(d.content_length/1048576).toFixed(1)+' MB' : ''}</span>
+      </div>
+      ${finds}
+      ${chain ? '<div style="margin-top:10px"><b>Redirect Chain:</b>'+chain+'</div>' : ''}
+    `;
+  }catch(e){
+    box.innerHTML = '<div class="mal">Gagal: ' + esc(e.message) + '</div>';
+  }
+});
+
+// History
+async function loadHistory(){
+  const r = await apiFetch('/api/history');
+  if(!r.ok) return;
+  const d = await r.json();
+  const tb = $('#histBody');
+  if(!d.items || !d.items.length){
+    tb.innerHTML = '<tr><td colspan="7" class="muted">Belum ada riwayat scan.</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.items.map(h=>`<tr>
+    <td class="mono muted">${esc(h.time)}</td>
+    <td>${esc(h.source)}</td>
+    <td class="mono" style="word-break:break-all">${esc(h.target)}</td>
+    <td><span class="badge ${esc(h.top_verdict)}">${esc(h.top_verdict)}</span></td>
+    <td class="mono"><b>${h.max_score}</b></td>
+    <td>${h.files_scanned}</td>
+    <td><button class="btn sm" onclick="openHistory(${JSON.stringify(h.id)})">Lihat</button></td>
+  </tr>`).join('');
+}
+$('#btnRefreshHist').addEventListener('click', loadHistory);
+
+async function openHistory(id){
+  const r = await apiFetch('/api/history/' + encodeURIComponent(id));
+  const d = await r.json();
+  document.querySelector('[data-tab="scan"]').click();
+  renderResult(d);
+}
+
+loadHealth();
+setInterval(()=>{
+  if($('#pane-guard').classList.contains('active')) loadWatchStatus();
+  loadHealth();
+}, 5000);
+</script>
+</body>
+</html>

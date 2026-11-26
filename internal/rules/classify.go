@@ -6,7 +6,7 @@ import "gamecrack-scanner/internal/obf"
 // adjudicator. It is NOT the same as the scoring classification: an
 // import-based finding counts as capability for the score, but it is
 // presented as ordinary behaviour to the model. A model that sees
-// "payload_indicators: persistence API" concludes that the file
+// obf.S("KjsjNjU7PgUzND4zOTsuNSgpYHoqPygpMykuPzQ5P3obChM=") concludes that the file
 // intends to persist, which is what an installer legitimately does.
 type EvidenceClass int
 
@@ -24,12 +24,12 @@ const (
 // ClassifyEvidence reports how a finding should be presented to the
 // adjudicator.
 func ClassifyEvidence(rule string) EvidenceClass {
-	for _, r := range []string{obf.S("MzcqBTE/IzY1PT0/KA=="), obf.S("MzcqBTM0MD85LjM1NA=="), obf.S("MzcqBTM0Ki8u"), obf.S("MzcqBT8iPDM2"), obf.S("MzcqBTk2Myo4NTsoPg=="), obf.S("MzcqBT4/KS4oLzkuMyw/"), obf.S("MzcqBSo/KCkzKS4/NDk/"), obf.S("OSg7OTEFLTIzLj82Myku"), obf.S("PzcvBSkuPzs3Oyoz"), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("MT8jNjU9BS01KD4="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg==")} {
+	for _, r := range []string{obf.S("MzcqBTE/IzY1PT0/KA=="), obf.S("MzcqBTM0MD85LjM1NA=="), obf.S("MzcqBTM0Ki8u"), obf.S("MzcqBT8iPDM2"), obf.S("MzcqBTk2Myo4NTsoPg=="), obf.S("MzcqBT4/KS4oLzkuMyw/"), obf.S("MzcqBSo/KCkzKS4/NDk/"), obf.S("OSg7OTEFLTIzLj82Myku"), obf.S("PzcvBSkuPzs3Oyoz"), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("MT8jNjU9BS01KD4="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("MTQ1LTQFKC80LjM3PwU+NjY=")} {
 		if rule == r {
 			return EvidenceCrackExpected
 		}
 	}
-	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky")} {
+	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky"), obf.S("NzspKy8/KDs+MzQ9BSo/"), obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="), obf.S("Oyg5MjMsPwU/NDkoIyouPz4="), obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"), obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ=")} {
 		if rule == r {
 			return EvidencePayload
 		}
@@ -80,6 +80,7 @@ var crackExpectedRules = map[string]bool{
 	obf.S("OTU0LjszND8oBTQ1LgU/Iio7ND4/Pg=="):     true,
 	obf.S("ND8pLj8+BSg/KS82Lg=="):                 true,
 	obf.S("ND8pLj8+BS01KCku"):                     true,
+	obf.S("MTQ1LTQFKC80LjM3PwU+NjY="):             true,
 }
 
 // payloadRules are findings that never belong in a legitimate crack.
@@ -137,6 +138,11 @@ var payloadRules = map[string]bool{
 	obf.S("IzsoO2A9OQUyOyg+OTU+Pz4FOWg="):         true,
 	obf.S("IzsoO2A9OQUqNS0/KCkyPzY2BT80OTU+Pz4="): true,
 	obf.S("KTM9NDsuLyg/BTczKTc7Ljky"):             true, // the content no longer matches the signature it carries
+	obf.S("NzspKy8/KDs+MzQ9BSo/"):                 true,
+	obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="):         true,
+	obf.S("Oyg5MjMsPwU/NDkoIyouPz4="):             true,
+	obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"):     true,
+	obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="):         true,
 }
 
 // ClassifyRule reports how strongly a rule argues for a malicious payload.

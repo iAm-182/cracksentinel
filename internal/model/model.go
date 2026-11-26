@@ -23,6 +23,31 @@ func (v Verdict) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + v.String() + `"`), nil
 }
 
+func (v *Verdict) UnmarshalJSON(b []byte) error {
+	s := string(b)
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		switch s[1 : len(s)-1] {
+		case "MALICIOUS":
+			*v = VerdictMalicious
+		case "SUSPICIOUS":
+			*v = VerdictSuspicious
+		default:
+			*v = VerdictClean
+		}
+		return nil
+	}
+	// Accept numeric enum fallback too.
+	switch s {
+	case "2":
+		*v = VerdictMalicious
+	case "1":
+		*v = VerdictSuspicious
+	default:
+		*v = VerdictClean
+	}
+	return nil
+}
+
 type Finding struct {
 	Rule     string `json:"rule"`
 	Category string `json:"category"`
@@ -106,6 +131,18 @@ type FileResult struct {
 	// layer ran. It is advisory: the deterministic Score and Verdict stay
 	// authoritative unless the user opted into an override.
 	Judge *JudgeResult `json:"judge,omitempty"`
+	// DownloadSource records Windows Mark-of-the-Web (Zone.Identifier) origin
+	// when the file was downloaded from a website.
+	DownloadSource *DownloadSource `json:"download_source,omitempty"`
+}
+
+// DownloadSource records the Mark-of-the-Web metadata attached to a downloaded file.
+type DownloadSource struct {
+	ZoneID      int    `json:"zone_id"`
+	ZoneName    string `json:"zone_name,omitempty"`
+	HostURL     string `json:"host_url,omitempty"`
+	ReferrerURL string `json:"referrer_url,omitempty"`
+	HostDomain  string `json:"host_domain,omitempty"`
 }
 
 // JudgeResult is the outcome of the semantic adjudication layer.

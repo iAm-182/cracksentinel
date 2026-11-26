@@ -1,7 +1,6 @@
 package known
 
 import (
-	"path/filepath"
 	"strings"
 )
 
@@ -87,10 +86,19 @@ var prefixRuntimeDLLs = []prefixEntry{
 	{"harfbuzz", "HarfBuzz text shaping runtime"},
 }
 
+// crossBase returns the lowercase filename for either Windows (\) or POSIX (/) paths.
+func crossBase(path string) string {
+	norm := strings.ReplaceAll(path, "\\", "/")
+	if i := strings.LastIndexByte(norm, '/'); i >= 0 {
+		norm = norm[i+1:]
+	}
+	return strings.ToLower(norm)
+}
+
 // RuntimeLabel returns a human-readable description if path's basename matches
 // a known benign game/language runtime DLL, or "" otherwise.
 func RuntimeLabel(path string) string {
-	base := strings.ToLower(filepath.Base(path))
+	base := crossBase(path)
 	if !strings.HasSuffix(base, ".dll") {
 		return ""
 	}
@@ -116,7 +124,7 @@ func IsRuntimeDLL(path string) bool {
 // Callers MUST still veto this whenever any intent/payload IOC, signature
 // mismatch, crypter layout, or online malware consensus is present.
 func UtilityLabel(path string, strs []string) string {
-	base := strings.ToLower(filepath.Base(path))
+	base := crossBase(path)
 	if !strings.HasSuffix(base, ".exe") || len(strs) == 0 {
 		return ""
 	}

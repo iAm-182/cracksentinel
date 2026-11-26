@@ -113,9 +113,11 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px}
       <div class="actions">
         <button class="btn primary local-only" id="btnPickFolder" type="button">Pilih Folder Game (Scan Langsung)</button>
         <button class="btn local-only" id="btnPickFiles" type="button">Pilih File Lokal (1 / Banyak)</button>
+        <button class="btn public-only" id="btnWebFolderPick" type="button" style="display:none">Pilih Folder Game (Smart Filter)</button>
         <button class="btn" id="btnUploadPick" type="button">Pilih / Upload File (1 / Banyak)</button>
       </div>
       <input type="file" id="fileInput" multiple style="display:none">
+      <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
       <div class="opts">
         <label><input type="checkbox" id="optExtract" checked> Bongkar isi ZIP / RAR / 7z / ISO / MSI</label>
         <label><input type="checkbox" id="optCarve" checked> Carve executable tersembunyi di data game</label>
@@ -258,7 +260,41 @@ const $ = s => document.querySelector(s);
 let currentItem = null;
 let verdictFilter = 'all';
 let isPublicMode = false;
+let maxUploadMB = 100;
 let accessKey = localStorage.getItem('cs_access_key') || '';
+
+const ASSET_EXTS = new Set([
+  '.pak','.mp4','.mkv','.avi','.wav','.ogg','.mp3','.flac','.uasset','.bundle',
+  '.bk2','.png','.jpg','.jpeg','.webp','.dds','.tga','.bmp','.fbx','.obj',
+  '.bank','.wem','.tex','.asset','.upk','.bik','.webm','.mov','.psd','.tif','.tiff'
+]);
+
+function fileExt(name){
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i).toLowerCase() : '';
+}
+
+async function isDisguisedPEClient(file){
+  try{
+    if(file.size < 64) return false;
+    const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+    if(head[0] !== 0x4D || head[1] !== 0x5A) return false; // "MZ"
+    const lfanew = head[0x3C] | (head[0x3D]<<8) | (head[0x3E]<<16) | (head[0x3F]<<24);
+    if(lfanew < 0x40 || lfanew + 4 > file.size || lfanew > 16*1024*1024) return false;
+    const sig = new Uint8Array(await file.slice(lfanew, lfanew + 4).arrayBuffer());
+    return sig[0] === 0x50 && sig[1] === 0x45 && sig[2] === 0 && sig[3] === 0; // "PE\0\0"
+  }catch(_){
+    return false;
+  }
+}
+
+async function parseJSONSafe(resp){
+  const txt = await resp.text();
+  try{ return JSON.parse(txt); }catch(_){
+    const brief = txt.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0, 160);
+    return { error: `HTTP ${resp.status}: ${brief || resp.statusText}` };
+  }
+}
 
 function apiFetch(url, opts={}){
   opts.headers = Object.assign({}, opts.headers || {});
@@ -309,15 +345,15 @@ async function loadHealth(){
       if(accessKey && !$('#authKeyInput').value) $('#authKeyInput').value = accessKey;
     }
     if(isPublicMode){
+      if(d.max_upload_mb > 0) maxUploadMB = d.max_upload_mb;
       document.querySelectorAll('.local-only').forEach(el=>el.style.display='none');
+      document.querySelectorAll('.public-only').forEach(el=>el.style.display='inline-block');
       const gTab = document.querySelector('[data-tab="guard"]');
       if(gTab) gTab.style.display = 'none';
       $('#pWatch').textContent = 'Online Mode (24/7)';
       $('#pWatch').classList.add('on');
-      $('#btnUploadPick').classList.add('primary');
-      if(d.max_upload_mb > 0){
-        $('#dropHint').innerHTML = `Drag &amp; drop 1 atau banyak file/archive (<code>.exe .dll .zip .rar .7z .iso .bat .ps1</code>) maks <b>${d.max_upload_mb} MB</b> per upload. Untuk folder game puluhan GB di PC, gunakan mode lokal (<code>CrackSentinel-UI.bat</code>).`;
-      }
+      $('#btnWebFolderPick').classList.add('primary');
+      $('#dropHint').innerHTML = `Drag &amp; drop <b>1 folder game utuh (bahkan puluhan GB!)</b> atau banyak file/archive. Smart Filter otomatis melewati asset besar (<code>.pak .mp4 .uasset</code> &amp; data &gt;${Math.min(75, Math.floor(maxUploadMB*0.75))} MB) di browser, tetap cek header <code>MZ/PE</code> tersembunyi, dan memecah sisanya per batch otomatis!`;
     }else{
       updateWatchPill(d.watching, d.watch_dir);
       if(!$('#guardDir').value && d.default_downloads) $('#guardDir').value = d.default_downloads;
@@ -375,22 +411,145 @@ $('#fileInput').addEventListener('change', e=>{
   if(e.target.files.length) uploadAndScan(Array.from(e.target.files));
   e.target.value = '';
 });
+$('#btnWebFolderPick').addEventListener('click', ()=>$('#folderInput').click());
+$('#folderInput').addEventListener('change', e=>{
+  if(e.target.files.length) uploadAndScan(Array.from(e.target.files));
+  e.target.value = '';
+});
 
 async function uploadAndScan(files){
-  setBusy(true, `Mengirim & scan ${files.length} file...`);
+  setBusy(true, `Menyaring ${files.length} file di browser (Smart Filter)...`);
   try{
-    const fd = new FormData();
-    fd.append('extract', $('#optExtract').checked ? 'true' : 'false');
-    fd.append('carve', $('#optCarve').checked ? 'true' : 'false');
-    fd.append('online', $('#optOnline').checked ? 'true' : 'false');
-    const rels = files.map(f => f._rel || f.webkitRelativePath || f.name);
-    fd.append('paths', JSON.stringify(rels));
-    for(const f of files) fd.append('file', f, f.name);
-    const r = await apiFetch('/api/upload', {method:'POST', body:fd});
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.error || 'Upload gagal');
-    renderResult(d);
-    toast(`Scan selesai: ${d.top_verdict} (${d.summary.files_scanned} file)`);
+    const maxFileBytes = isPublicMode ? Math.min(75, Math.max(20, Math.floor(maxUploadMB * 0.75))) * 1048576 : 512 * 1048576;
+    const maxBatchBytes = isPublicMode ? Math.min(45, Math.max(15, Math.floor(maxUploadMB * 0.45))) * 1048576 : 256 * 1048576;
+    const maxBatchFiles = 40;
+
+    const toSend = [];
+    const skippedClient = [];
+    let skippedBytes = 0;
+
+    for(let i = 0; i < files.length; i++){
+      const f = files[i];
+      const rel = f._rel || f.webkitRelativePath || f.name;
+      const ext = fileExt(f.name);
+      if(i % 25 === 0) setBusy(true, `Smart Filter: memeriksa ${i+1}/${files.length} file...`);
+
+      // Skip huge game assets locally UNLESS the file hides a real PE header (MZ + PE\0\0).
+      if(ASSET_EXTS.has(ext) && !(await isDisguisedPEClient(f))){
+        skippedClient.push({path: rel, size: f.size, reason: 'game asset dilewati lokal'});
+        skippedBytes += f.size;
+        continue;
+      }
+      if(f.size > maxFileBytes){
+        skippedClient.push({
+          path: rel,
+          size: f.size,
+          reason: `ukuran ${(f.size/1048576).toFixed(1)} MB melebihi batas upload web (${Math.round(maxFileBytes/1048576)} MB) — gunakan mode lokal CrackSentinel-Drop.bat untuk deep-carve file raksasa`
+        });
+        skippedBytes += f.size;
+        continue;
+      }
+      toSend.push({file: f, rel});
+    }
+
+    if(!toSend.length){
+      const msg = skippedClient.length
+        ? `Semua ${skippedClient.length} file dilewati oleh batas ukuran web (${(skippedBytes/1048576).toFixed(1)} MB). Untuk file >${Math.round(maxFileBytes/1048576)} MB gunakan CrackSentinel-Drop.bat lokal.`
+        : 'Tidak ada file yang bisa di-scan.';
+      throw new Error(msg);
+    }
+
+    // Group files into safe chunks below Cloudflare's 100 MB request cap.
+    const batches = [];
+    let cur = [], curBytes = 0;
+    for(const item of toSend){
+      if(cur.length > 0 && (curBytes + item.file.size > maxBatchBytes || cur.length >= maxBatchFiles)){
+        batches.push(cur);
+        cur = [];
+        curBytes = 0;
+      }
+      cur.push(item);
+      curBytes += item.file.size;
+    }
+    if(cur.length) batches.push(cur);
+
+    const mergedResults = [];
+    let totalScanned = 0, totalSkipped = skippedClient.length, totalBytes = 0, totalMs = 0;
+    let lastItem = null;
+    const skipNote = skippedClient.length ? ` (${skippedClient.length} file besar/asset · ${(skippedBytes/1048576).toFixed(0)} MB dilewati lokal)` : '';
+
+    for(let b = 0; b < batches.length; b++){
+      const batch = batches[b];
+      const bMB = (batch.reduce((a,x)=>a+x.file.size,0)/1048576).toFixed(1);
+      setBusy(true, `Scanning batch ${b+1}/${batches.length} (${batch.length} file · ${bMB} MB)${skipNote}...`);
+      const fd = new FormData();
+      fd.append('extract', $('#optExtract').checked ? 'true' : 'false');
+      fd.append('carve', $('#optCarve').checked ? 'true' : 'false');
+      fd.append('online', $('#optOnline').checked ? 'true' : 'false');
+      fd.append('paths', JSON.stringify(batch.map(x => x.rel)));
+      for(const x of batch) fd.append('file', x.file, x.file.name);
+
+      const r = await apiFetch('/api/upload', {method:'POST', body:fd});
+      const d = await parseJSONSafe(r);
+      if(!r.ok) throw new Error(d.error || 'Upload gagal');
+      lastItem = d;
+      totalScanned += d.summary.files_scanned || 0;
+      totalSkipped += d.summary.files_skipped || 0;
+      totalBytes += d.summary.bytes_scanned || 0;
+      totalMs += d.summary.duration_ms || 0;
+      if(d.summary.results) mergedResults.push(...d.summary.results);
+    }
+
+    // Add informational rows for oversized non-asset blobs so the user sees why they were skipped.
+    for(const sk of skippedClient){
+      if(sk.size > maxFileBytes){
+        mergedResults.push({
+          path: sk.path,
+          size: sk.size,
+          type: 'skipped-large',
+          score: 0,
+          verdict: 'CLEAN',
+          skipped: false,
+          findings: [{rule: 'web_size_skipped', category: 'info', severity: 0, detail: sk.reason}]
+        });
+      }
+    }
+
+    mergedResults.sort((a,b) => (b.score||0) - (a.score||0));
+    let mal = 0, sus = 0, cln = 0, maxScore = 0, topVerdict = 'CLEAN';
+    for(const r of mergedResults){
+      if(r.skipped) continue;
+      if(r.score > maxScore) maxScore = r.score;
+      if(r.verdict === 'MALICIOUS'){ mal++; topVerdict = 'MALICIOUS'; }
+      else if(r.verdict === 'SUSPICIOUS'){ sus++; if(topVerdict !== 'MALICIOUS') topVerdict = 'SUSPICIOUS'; }
+      else if(r.type !== 'skipped-large'){ cln++; }
+    }
+
+    // Derive clean folder or file label.
+    let targetLabel = toSend.length === 1 ? toSend[0].rel : `Smart Scan (${toSend.length} file)`;
+    const firstParts = toSend[0].rel.split('/');
+    if(firstParts.length > 1) targetLabel = firstParts[0] + ` (${toSend.length} file${skipNote})`;
+
+    const combined = {
+      id: lastItem ? lastItem.id : 'batch',
+      time: lastItem ? lastItem.time : new Date().toLocaleString(),
+      source: 'drag-drop',
+      target: targetLabel,
+      top_verdict: topVerdict,
+      max_score: maxScore,
+      summary: {
+        files_scanned: totalScanned,
+        files_skipped: totalSkipped,
+        bytes_scanned: totalBytes,
+        clean: cln,
+        suspicious: sus,
+        malicious: mal,
+        duration_ms: totalMs,
+        results: mergedResults
+      }
+    };
+    renderResult(combined);
+    toast(`Scan selesai: ${topVerdict} (${totalScanned} file dicek, ${skippedClient.length} besar/asset dilewati)`);
   }catch(err){
     toast('Error: ' + err.message);
   }finally{

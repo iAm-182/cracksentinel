@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -278,6 +279,7 @@ func runWatch(args []string) {
 	if !noYara {
 		if r, err := yara.New(yaraRules, true); err == nil {
 			yr = r
+			defer yr.Close()
 		} else if err != yara.ErrYaraMissing && !quiet {
 			fmt.Fprintln(os.Stderr, "warning: yara:", err)
 		}
@@ -504,6 +506,7 @@ func runScan(args []string) {
 		switch err {
 		case nil:
 			yr = r
+			defer yr.Close()
 		case yara.ErrYaraMissing:
 			fmt.Fprintln(os.Stderr, "warning: yara binary not in PATH - YARA layer disabled (builtin rules still apply via internal engine)")
 		default:
@@ -708,6 +711,13 @@ func runUI(args []string) {
 	if !noYara {
 		if r, err := yara.New(yaraRules, true); err == nil {
 			yr = r
+			defer yr.Close()
+		}
+	}
+	dataDir := ""
+	if !publicMode {
+		if exe, err := os.Executable(); err == nil {
+			dataDir = filepath.Join(filepath.Dir(exe), "data")
 		}
 	}
 	srv := ui.New(ui.Options{
@@ -717,6 +727,7 @@ func runUI(args []string) {
 		ExtractDepth:   extractDepth,
 		ExtractMaxMB:   extractMB,
 		TempDir:        tmpDir,
+		DataDir:        dataDir,
 		CachePath:      cachePath,
 		CorpusPath:     corpusPath,
 		Online:         oc,

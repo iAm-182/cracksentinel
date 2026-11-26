@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUIOriginGuardBlocksForeignSites(t *testing.T) {
@@ -118,7 +119,12 @@ func TestUIPublicModeAndAccessKeyHardening(t *testing.T) {
 	}
 
 	// Local-only endpoints MUST be blocked (403) in public mode even with valid key.
-	for _, ep := range []string{"/api/scan-paths", "/api/pick", "/api/quarantine", "/api/watch/start", "/api/corpus/label"} {
+	for _, ep := range []string{
+		"/api/scan-paths", "/api/jobs/scan-paths", "/api/pick",
+		"/api/quarantine", "/api/quarantine/list", "/api/quarantine/restore", "/api/quarantine/delete",
+		"/api/watch/start", "/api/corpus/label", "/api/settings", "/api/cache/clear",
+		"/api/history/clear", "/api/open-explorer", "/api/desktop/shortcut", "/api/app/quit",
+	} {
 		req := httptest.NewRequest(http.MethodPost, ep, strings.NewReader(`{}`))
 		req.Header.Set("X-Access-Key", "top-secret-key")
 		rec := httptest.NewRecorder()
@@ -135,6 +141,109 @@ func TestUIPublicModeAndAccessKeyHardening(t *testing.T) {
 	h.ServeHTTP(recOK, rOK)
 	if recOK.Code != http.StatusOK {
 		t.Fatalf("valid key check-url = %d %s", recOK.Code, recOK.Body.String())
+	}
+}
+
+func TestDesktopDashboardJobsQuarantineAndSettings(t *testing.T) {
+	tmp := t.TempDir()
+	dataDir := filepath.Join(tmp, "data")
+	quarDir := filepath.Join(tmp, "quarantine")
+	srv := New(Options{
+		Workers:       1,
+		TempDir:       tmp,
+		DataDir:       dataDir,
+		QuarantineDir: quarDir,
+		CachePath:     filepath.Join(tmp, "cache.jsonl"),
+		DesktopMode:   true,
+	})
+	h := srv.Handler()
+
+	// 1. Settings update & persistence.
+	setReq := httptest.NewRequest(http.MethodPost, "/api/settings", strings.NewReader(`{"workers":2,"extract_depth":1,"skip_assets":true}`))
+	setRec := httptest.NewRecorder()
+	h.ServeHTTP(setRec, setReq)
+	if setRec.Code != http.StatusOK {
+		t.Fatalf("settings save = %d %s", setRec.Code, setRec.Body.String())
+	}
+	getSetReq := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	getSetRec := httptest.NewRecorder()
+	h.ServeHTTP(getSetRec, getSetReq)
+	if !strings.Contains(getSetRec.Body.String(), `"workers":2`) {
+		t.Fatalf("expected persisted workers=2, got %s", getSetRec.Body.String())
+	}
+
+	// 2. Async live scan job on a malicious local script.
+	badFile := filepath.Join(tmp, "bad_dropper.ps1")
+	os.WriteFile(badFile, []byte("https://discord.com/api/webhooks/12345678901234567/"+strings.Repeat("xY9_-", 15)+"\nStart-Process -WindowStyle Hidden\nSet-MpPreference -DisableRealtimeMonitoring $true\n"), 0o644)
+
+	jobReq := httptest.NewRequest(http.MethodPost, "/api/jobs/scan-paths", strings.NewReader(`{"paths":[`+jsonString(badFile)+`]}`))
+	jobRec := httptest.NewRecorder()
+	h.ServeHTTP(jobRec, jobReq)
+	if jobRec.Code != http.StatusOK {
+		t.Fatalf("start job = %d %s", jobRec.Code, jobRec.Body.String())
+	}
+	var started struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(jobRec.Body.Bytes(), &started)
+	if started.ID == "" {
+		t.Fatalf("missing job id: %s", jobRec.Body.String())
+	}
+
+	// Poll until job completes.
+	var jobBody string
+	for i := 0; i < 120; i++ {
+		pollReq := httptest.NewRequest(http.MethodGet, "/api/jobs/"+started.ID, nil)
+		pollRec := httptest.NewRecorder()
+		h.ServeHTTP(pollRec, pollReq)
+		jobBody = pollRec.Body.String()
+		if strings.Contains(jobBody, `"status":"done"`) {
+			break
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	if !strings.Contains(jobBody, `"status":"done"`) || !strings.Contains(jobBody, `"MALICIOUS"`) {
+		t.Fatalf("job did not finish malicious: %s", jobBody)
+	}
+
+	// 3. Quarantine -> list -> restore -> re-quarantine -> delete.
+	qReq := httptest.NewRequest(http.MethodPost, "/api/quarantine", strings.NewReader(`{"path":`+jsonString(badFile)+`}`))
+	qRec := httptest.NewRecorder()
+	h.ServeHTTP(qRec, qReq)
+	if qRec.Code != http.StatusOK {
+		t.Fatalf("quarantine = %d %s", qRec.Code, qRec.Body.String())
+	}
+	if _, err := os.Stat(badFile); !os.IsNotExist(err) {
+		t.Fatalf("expected original file moved out to quarantine")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/quarantine/list", nil)
+	listRec := httptest.NewRecorder()
+	h.ServeHTTP(listRec, listReq)
+	var ql struct {
+		Items []QuarantineItem `json:"items"`
+	}
+	json.Unmarshal(listRec.Body.Bytes(), &ql)
+	if len(ql.Items) != 1 {
+		t.Fatalf("quarantine list count = %d, want 1 (%s)", len(ql.Items), listRec.Body.String())
+	}
+
+	resReq := httptest.NewRequest(http.MethodPost, "/api/quarantine/restore", strings.NewReader(`{"quarantined_path":`+jsonString(ql.Items[0].QuarantinedPath)+`}`))
+	resRec := httptest.NewRecorder()
+	h.ServeHTTP(resRec, resReq)
+	if resRec.Code != http.StatusOK {
+		t.Fatalf("restore = %d %s", resRec.Code, resRec.Body.String())
+	}
+	if _, err := os.Stat(badFile); err != nil {
+		t.Fatalf("expected restored file at %s: %v", badFile, err)
+	}
+
+	// 4. Dashboard summary reflects scan & desktop mode.
+	dashReq := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	dashRec := httptest.NewRecorder()
+	h.ServeHTTP(dashRec, dashReq)
+	if dashRec.Code != http.StatusOK || !strings.Contains(dashRec.Body.String(), `"desktop_mode":true`) || !strings.Contains(dashRec.Body.String(), `"total_scans":1`) {
+		t.Fatalf("dashboard = %d %s", dashRec.Code, dashRec.Body.String())
 	}
 }
 

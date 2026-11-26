@@ -32,6 +32,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gamecrack-scanner/internal/procutil"
 )
 
 // The built-in rules are embedded BASE64-ENCODED, not as a plain .yar file.
@@ -193,14 +195,16 @@ func splitRules(src string) []ruleBlock {
 	var cur []string
 	depth := 0
 	inRule := false
+	seenBrace := false
 	var name string
 
 	flush := func() {
-		if inRule && depth == 0 && name != "" {
+		if inRule && seenBrace && depth == 0 && name != "" {
 			out = append(out, ruleBlock{name: name, text: strings.Join(cur, "\n")})
 		}
 		cur = nil
 		inRule = false
+		seenBrace = false
 		name = ""
 	}
 
@@ -210,8 +214,11 @@ func splitRules(src string) []ruleBlock {
 				inRule = true
 				name = m[1]
 				cur = []string{line}
-				depth = countBraces(line)
-				if depth == 0 {
+				d, opened := countBraces(line)
+				depth = d
+				seenBrace = opened
+				if seenBrace && depth <= 0 {
+					depth = 0
 					flush()
 				}
 				continue
@@ -219,8 +226,12 @@ func splitRules(src string) []ruleBlock {
 			continue
 		}
 		cur = append(cur, line)
-		depth += countBraces(line)
-		if depth <= 0 {
+		d, opened := countBraces(line)
+		if opened {
+			seenBrace = true
+		}
+		depth += d
+		if seenBrace && depth <= 0 {
 			depth = 0
 			flush()
 		}
@@ -228,10 +239,11 @@ func splitRules(src string) []ruleBlock {
 	return out
 }
 
-// countBraces counts the braces of a line that are outside string literals
-// and comments.
-func countBraces(line string) int {
+// countBraces counts the brace delta of a line outside string literals and
+// comments, and also reports whether at least one opening '{' was encountered.
+func countBraces(line string) (int, bool) {
 	depth := 0
+	opened := false
 	inStr := false
 	inComment := false
 	for i := 0; i < len(line); i++ {
@@ -256,11 +268,12 @@ func countBraces(line string) int {
 			i++
 		case c == '{':
 			depth++
+			opened = true
 		case c == '}':
 			depth--
 		}
 	}
-	return depth
+	return depth, opened
 }
 
 // failingRule extracts the rule name from a YARA compile error.
@@ -278,7 +291,9 @@ func (r *Runner) compileWithRepair(path string, blocks []ruleBlock) error {
 			return err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		out, err := exec.CommandContext(ctx, r.bin, "-w", path, os.DevNull).CombinedOutput()
+		cmd := exec.CommandContext(ctx, r.bin, "-w", path, os.DevNull)
+		procutil.HideWindow(cmd)
+		out, err := cmd.CombinedOutput()
 		cancel()
 		if err == nil {
 			r.RulesLoaded = len(live)
@@ -341,6 +356,7 @@ func (r *Runner) Scan(target string) ([]Match, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, r.bin, "-w", r.rules, target)
+	procutil.HideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {

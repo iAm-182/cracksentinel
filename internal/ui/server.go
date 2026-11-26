@@ -22,6 +22,7 @@ import (
 	"gamecrack-scanner/internal/model"
 	"gamecrack-scanner/internal/motw"
 	"gamecrack-scanner/internal/online"
+	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
 	"gamecrack-scanner/internal/version"
@@ -29,7 +30,7 @@ import (
 	"gamecrack-scanner/internal/yara"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html web/favicon.png web/favicon.ico
 var webFS embed.FS
 
 // Options configures the local CrackSentinel Web UI & Extension Bridge server.
@@ -40,11 +41,15 @@ type Options struct {
 	ExtractDepth   int
 	ExtractMaxMB   int64
 	TempDir        string
+	DataDir        string // persistent desktop data dir (history.json, settings.json); empty disables persistence
+	QuarantineDir  string // central quarantine vault dir (default <exeDir>/quarantine in local mode)
 	CachePath      string
 	CorpusPath     string
 	Online         *online.Client
 	Yara           *yara.Runner
 	OpenBrowser    bool
+	DesktopMode    bool     // true when launched via CrackSentinel.exe desktop app
+	OnQuit         func()   // optional callback triggered by /api/app/quit
 	WatchDir       string   // optional auto-start download guard folder
 	PublicMode     bool     // hosted web mode: disables local disk paths/picker/quarantine/watch/corpus
 	AllowedOrigins []string // additional allowed Origin URLs (e.g. https://sentinel.breakthematrix.id)
@@ -67,11 +72,17 @@ type HistoryItem struct {
 type Server struct {
 	opts Options
 
-	mu          sync.RWMutex
-	history     []HistoryItem
-	flaggedPath map[string]model.FileResult
-	seq         int64
-	scanSem     chan struct{}
+	mu            sync.RWMutex
+	history       []HistoryItem
+	flaggedPath   map[string]model.FileResult
+	seq           int64
+	scanSem       chan struct{}
+	settings      DesktopSettings
+	jobs          map[string]*ScanJob
+	jobOrder      []string
+	lastHeartbeat int64
+	activeClients int64
+	seenClient    int64
 
 	watchMu     sync.Mutex
 	watchCancel context.CancelFunc
@@ -103,6 +114,13 @@ func New(opts Options) *Server {
 			opts.TempDir = filepath.Join(filepath.Dir(exe), "tmp")
 		}
 	}
+	if opts.QuarantineDir == "" && !opts.PublicMode {
+		if opts.DataDir != "" {
+			opts.QuarantineDir = filepath.Join(filepath.Dir(opts.DataDir), "quarantine")
+		} else if exe, err := os.Executable(); err == nil {
+			opts.QuarantineDir = filepath.Join(filepath.Dir(exe), "quarantine")
+		}
+	}
 	if opts.CachePath == "" {
 		opts.CachePath = ".gamecrack-cache.jsonl"
 	}
@@ -121,11 +139,15 @@ func New(opts Options) *Server {
 	if opts.MaxConcurrent > 0 {
 		sem = make(chan struct{}, opts.MaxConcurrent)
 	}
-	return &Server{
-		opts:        opts,
-		flaggedPath: map[string]model.FileResult{},
-		scanSem:     sem,
+	s := &Server{
+		opts:          opts,
+		flaggedPath:   map[string]model.FileResult{},
+		scanSem:       sem,
+		jobs:          map[string]*ScanJob{},
+		lastHeartbeat: time.Now().Unix(),
 	}
+	s.initDesktopState()
+	return s
 }
 
 // Handler returns the HTTP handler with local-origin protection.
@@ -133,50 +155,90 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/health", s.handleHealth)
+	mux.HandleFunc("/api/dashboard", s.handleDashboard)
 	mux.HandleFunc("/api/upload", s.handleUpload)
 	mux.HandleFunc("/api/scan-paths", s.handleScanPaths)
+	mux.HandleFunc("/api/jobs", s.handleJobsList)
+	mux.HandleFunc("/api/jobs/scan-paths", s.handleJobStartScanPaths)
+	mux.HandleFunc("/api/jobs/", s.handleJobByID)
 	mux.HandleFunc("/api/check-url", s.handleCheckURL)
 	mux.HandleFunc("/api/pick", s.handlePick)
 	mux.HandleFunc("/api/quarantine", s.handleQuarantine)
+	mux.HandleFunc("/api/quarantine/list", s.handleQuarantineList)
+	mux.HandleFunc("/api/quarantine/restore", s.handleQuarantineRestore)
+	mux.HandleFunc("/api/quarantine/delete", s.handleQuarantineDelete)
 	mux.HandleFunc("/api/history", s.handleHistory)
+	mux.HandleFunc("/api/history/clear", s.handleHistoryClear)
 	mux.HandleFunc("/api/history/", s.handleHistoryDetail)
-	mux.HandleFunc("/api/report/", s.handleReportHTML)
+	mux.HandleFunc("/api/report/", s.handleReportDownload)
 	mux.HandleFunc("/api/watch/status", s.handleWatchStatus)
 	mux.HandleFunc("/api/watch/start", s.handleWatchStart)
 	mux.HandleFunc("/api/watch/stop", s.handleWatchStop)
 	mux.HandleFunc("/api/corpus/label", s.handleCorpusLabel)
+	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/cache/clear", s.handleCacheClear)
+	mux.HandleFunc("/api/open-explorer", s.handleOpenExplorer)
+	mux.HandleFunc("/api/desktop/shortcut", s.handleDesktopShortcut)
+	mux.HandleFunc("/api/app/heartbeat", s.handleAppHeartbeat)
+	mux.HandleFunc("/api/app/stream", s.handleAppStream)
+	mux.HandleFunc("/api/app/quit", s.handleAppQuit)
 	return s.originGuard(mux)
 }
 
-// ListenAndServe starts the server bound strictly to loopback.
-func (s *Server) ListenAndServe() error {
+// StartListener validates loopback binding and starts listening on s.opts.Addr.
+func (s *Server) StartListener() (net.Listener, string, error) {
 	host, _, err := net.SplitHostPort(s.opts.Addr)
 	if err == nil && host != "127.0.0.1" && host != "localhost" && host != "::1" {
-		return fmt.Errorf("refusing to bind UI server to non-loopback address %q (use 127.0.0.1)", s.opts.Addr)
+		return nil, "", fmt.Errorf("refusing to bind UI server to non-loopback address %q (use 127.0.0.1)", s.opts.Addr)
 	}
 	ln, err := net.Listen("tcp", s.opts.Addr)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	url := "http://" + ln.Addr().String()
-	fmt.Printf("CrackSentinel UI %s listening on %s\n", version.Short(), url)
-	fmt.Printf("  temp dir : %s\n", s.opts.TempDir)
-	fmt.Printf("  press Ctrl+C to stop\n")
+	return ln, "http://" + ln.Addr().String(), nil
+}
 
+// ServeListener serves HTTP traffic on an existing listener and auto-starts
+// Download Guard when configured.
+func (s *Server) ServeListener(ln net.Listener) error {
 	if s.opts.WatchDir != "" {
 		_ = s.startWatch(s.opts.WatchDir, 4, false, true)
-	}
-	if s.opts.OpenBrowser {
-		go func() {
-			time.Sleep(350 * time.Millisecond)
-			openBrowser(url)
-		}()
+	} else if !s.opts.PublicMode {
+		s.mu.RLock()
+		autoStart := s.settings.WatchAutoStart
+		wdir := s.settings.WatchDir
+		wint := s.settings.WatchInterval
+		wquar := s.settings.WatchQuarantine
+		wtoast := s.settings.WatchToast
+		s.mu.RUnlock()
+		if autoStart && wdir != "" {
+			_ = s.startWatch(wdir, wint, wquar, wtoast)
+		}
 	}
 	srv := &http.Server{
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 	return srv.Serve(ln)
+}
+
+// ListenAndServe starts the server bound strictly to loopback.
+func (s *Server) ListenAndServe() error {
+	ln, url, err := s.StartListener()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("CrackSentinel UI %s listening on %s\n", version.Short(), url)
+	fmt.Printf("  temp dir : %s\n", s.opts.TempDir)
+	fmt.Printf("  press Ctrl+C to stop\n")
+
+	if s.opts.OpenBrowser {
+		go func() {
+			time.Sleep(350 * time.Millisecond)
+			openBrowser(url)
+		}()
+	}
+	return s.ServeListener(ln)
 }
 
 // originGuard blocks cross-origin calls from arbitrary internet websites while
@@ -243,32 +305,56 @@ func (s *Server) acquireScanSlot() (func(), bool) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	switch r.URL.Path {
+	case "/":
+		data, err := webFS.ReadFile("web/index.html")
+		if err != nil {
+			http.Error(w, "UI asset missing", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
+	case "/favicon.png":
+		data, err := webFS.ReadFile("web/favicon.png")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	case "/favicon.ico":
+		data, err := webFS.ReadFile("web/favicon.ico")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/x-icon")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	default:
 		http.NotFound(w, r)
-		return
 	}
-	data, err := webFS.ReadFile("web/index.html")
-	if err != nil {
-		http.Error(w, "UI asset missing", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(data)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.watchMu.Lock()
 	watching, wdir, wq, wt := s.watchActive, s.watchDir, s.watchQuar, s.watchToast
 	s.watchMu.Unlock()
+	s.mu.RLock()
+	workers := s.opts.Workers
+	onlineEnabled := s.opts.Online != nil && s.opts.Online.Enabled()
+	s.mu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":        "ok",
 		"version":       version.Short(),
-		"workers":       s.opts.Workers,
+		"workers":       workers,
 		"public_mode":   s.opts.PublicMode,
+		"desktop_mode":  s.opts.DesktopMode,
 		"auth_required": s.opts.AccessKey != "",
 		"max_upload_mb": s.opts.MaxUploadMB,
 		"yara":          s.opts.Yara != nil,
-		"online":        s.opts.Online != nil && s.opts.Online.Enabled(),
+		"online":        onlineEnabled,
 		"watching":      watching,
 		"watch_dir": func() string {
 			if s.opts.PublicMode {
@@ -598,13 +684,15 @@ func (s *Server) handlePick(w http.ResponseWriter, r *http.Request) {
 
 	var ps string
 	if req.Mode == "files" {
-		ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = 'CrackSentinel — Pilih File Game / Archive (bisa pilih banyak)'; $d.Multiselect = $true; $d.Filter = 'All files (*.*)|*.*'; if ($d.ShowDialog() -eq 'OK') { $d.FileNames -join [Environment]::NewLine }`
+		ps = `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.Form; $f.TopMost = $true; $f.ShowInTaskbar = $false; $f.StartPosition = 'CenterScreen'; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = 'CrackSentinel — Pilih File Game / Archive (bisa pilih banyak)'; $d.Multiselect = $true; $d.Filter = 'All files (*.*)|*.*'; if ($d.ShowDialog($f) -eq 'OK') { $d.FileNames -join [Environment]::NewLine }; $f.Dispose()`
 	} else {
-		ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'CrackSentinel — Pilih Folder Game untuk Di-scan Langsung'; $d.UseDescriptionForTitle = $true; if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }`
+		ps = `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.Form; $f.TopMost = $true; $f.ShowInTaskbar = $false; $f.StartPosition = 'CenterScreen'; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'CrackSentinel — Pilih Folder Game untuk Di-scan Langsung'; $d.UseDescriptionForTitle = $true; if ($d.ShowDialog($f) -eq 'OK') { $d.SelectedPath }; $f.Dispose()`
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "powershell", "-NoProfile", "-STA", "-Command", ps).Output()
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", ps)
+	procutil.HideWindow(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "picker canceled or failed"})
 		return
@@ -639,12 +727,21 @@ func (s *Server) handleQuarantine(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RLock()
 	fr, ok := s.flaggedPath[req.Path]
+	vaultDir := s.opts.QuarantineDir
 	s.mu.RUnlock()
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only flagged files from a local path scan can be quarantined"})
 		return
 	}
-	dest, err := watch.QuarantineFile(filepath.Dir(fr.Path), fr)
+	var (
+		dest string
+		err  error
+	)
+	if vaultDir != "" {
+		dest, err = watch.QuarantineToDir(vaultDir, fr)
+	} else {
+		dest, err = watch.QuarantineFile(filepath.Dir(fr.Path), fr)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -703,8 +800,10 @@ func (s *Server) handleHistoryDetail(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-func (s *Server) handleReportHTML(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/report/"), ".html")
+func (s *Server) handleReportDownload(w http.ResponseWriter, r *http.Request) {
+	rawID := strings.TrimPrefix(r.URL.Path, "/api/report/")
+	isJSON := strings.HasSuffix(rawID, ".json")
+	id := strings.TrimSuffix(strings.TrimSuffix(rawID, ".html"), ".json")
 	s.mu.RLock()
 	var found *HistoryItem
 	for i := range s.history {
@@ -717,6 +816,17 @@ func (s *Server) handleReportHTML(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 	if found == nil {
 		http.NotFound(w, r)
+		return
+	}
+	if isJSON {
+		b, err := json.MarshalIndent(found, "", "  ")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="cracksentinel-%s.json"`, id))
+		w.Write(b)
 		return
 	}
 	tmp, err := os.CreateTemp("", "cs-rep-*.html")
@@ -939,24 +1049,34 @@ func appendCorpusLabel(corpusPath, targetPath, label, note string) error {
 }
 
 func (s *Server) baseScanConfig(root string, extractDepth int, useOnline, carve bool) scan.Config {
+	s.mu.RLock()
+	workers := s.opts.Workers
+	maxSizeMB := s.opts.MaxSizeMB
+	extractMaxMB := s.opts.ExtractMaxMB
+	tempDir := s.opts.TempDir
+	cachePath := s.opts.CachePath
+	skipAssets := s.settings.SkipAssets
+	useCache := s.settings.UseCache
 	var oc *online.Client
 	if useOnline && s.opts.Online != nil && s.opts.Online.Enabled() {
 		oc = s.opts.Online
 	}
+	yr := s.opts.Yara
+	s.mu.RUnlock()
 	return scan.Config{
 		Root:         root,
-		Workers:      s.opts.Workers,
-		MaxSizeMB:    s.opts.MaxSizeMB,
-		SkipAssets:   true,
-		UseCache:     true,
-		CachePath:    s.opts.CachePath,
+		Workers:      workers,
+		MaxSizeMB:    maxSizeMB,
+		SkipAssets:   skipAssets,
+		UseCache:     useCache,
+		CachePath:    cachePath,
 		Quiet:        true,
 		FullReadMB:   32,
 		Online:       oc,
-		Yara:         s.opts.Yara,
+		Yara:         yr,
 		ExtractDepth: extractDepth,
-		ExtractMaxMB: s.opts.ExtractMaxMB,
-		TempDir:      s.opts.TempDir,
+		ExtractMaxMB: extractMaxMB,
+		TempDir:      tempDir,
 		Carve:        carve,
 		CarveMaxMB:   16384,
 	}
@@ -990,10 +1110,9 @@ func (s *Server) recordHistory(source, target, originURL string, sum *model.Summ
 		MaxScore:   maxS,
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.history = append(s.history, item)
-	if len(s.history) > 50 {
-		s.history = s.history[len(s.history)-50:]
+	if len(s.history) > 100 {
+		s.history = s.history[len(s.history)-100:]
 	}
 	if source != "drag-drop" {
 		for _, r := range sum.Results {
@@ -1002,6 +1121,8 @@ func (s *Server) recordHistory(source, target, originURL string, sum *model.Summ
 			}
 		}
 	}
+	s.mu.Unlock()
+	s.persistHistory()
 	return item
 }
 

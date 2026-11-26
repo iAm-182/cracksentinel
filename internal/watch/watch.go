@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/scan"
 )
 
@@ -290,7 +291,17 @@ func QuarantineFile(root string, r model.FileResult) (string, error) {
 	if root == "" {
 		root = filepath.Dir(r.Path)
 	}
-	destDir := filepath.Join(root, quarantineDir, time.Now().Format("20060102-150405"))
+	return QuarantineToDir(filepath.Join(root, quarantineDir), r)
+}
+
+// QuarantineToDir moves a flagged file into <vaultDir>/<timestamp>/ and writes
+// its JSON metadata sidecar so the Desktop Quarantine Vault can list, restore,
+// or permanently delete it.
+func QuarantineToDir(vaultDir string, r model.FileResult) (string, error) {
+	if vaultDir == "" {
+		vaultDir = filepath.Join(filepath.Dir(r.Path), quarantineDir)
+	}
+	destDir := filepath.Join(vaultDir, time.Now().Format("20060102-150405"))
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", err
 	}
@@ -382,6 +393,7 @@ func sendToast(ev Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps)
+	procutil.HideWindow(cmd)
 	cmd.Env = append(os.Environ(), "CS_TOAST_TITLE="+title, "CS_TOAST_MSG="+msg)
 	_ = cmd.Run()
 }

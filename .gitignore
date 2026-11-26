@@ -40,6 +40,9 @@ campaign/
 tmp/
 reports/
 batch-reports/
+data/
+quarantine/
+.appdata/
 .env
 .bridge.env
 .tunnel.env

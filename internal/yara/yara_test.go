@@ -110,3 +110,19 @@ func TestCompileWithRepairDropsBadRules(t *testing.T) {
 		t.Errorf("the combined file does not compile: %v: %s", err, b)
 	}
 }
+
+// TestBuiltinRulesLoad verifies that builtin.yar (whose opening '{' sits on the
+// next line) splits cleanly and compiles all rules without dropping them.
+func TestBuiltinRulesLoad(t *testing.T) {
+	if !BinaryAvailable() {
+		t.Skip("no yara binary available")
+	}
+	r, err := New("", true)
+	if err != nil {
+		t.Fatalf("New builtin failed: %v", err)
+	}
+	defer r.Close()
+	if r.RulesLoaded < 5 {
+		t.Errorf("RulesLoaded = %d, want >= 5 (dropped=%d %v)", r.RulesLoaded, r.RulesDropped, r.DroppedNames)
+	}
+}

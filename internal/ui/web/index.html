@@ -4,264 +4,755 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CrackSentinel — Game Malware Guard</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="shortcut icon" href="/favicon.ico">
 <style>
 :root{
-  --bg:#0b0f14;--panel:#131922;--panel2:#1a2230;--line:#263244;
-  --fg:#e6edf3;--mut:#8b9bb0;--acc:#3b82f6;--acc2:#60a5fa;
-  --mal:#f85149;--sus:#f59e0b;--cln:#22c55e;--purple:#a855f7;
+  --bg:#070b12;
+  --bg2:#0b111d;
+  --panel:#0f1726;
+  --panel2:#152035;
+  --panel3:#1b2942;
+  --line:#1f2e47;
+  --line2:#2a3e5f;
+  --fg:#e8eef7;
+  --mut:#8b9eb8;
+  --dim:#5e7290;
+  --acc:#3b82f6;
+  --acc2:#60a5fa;
+  --cyan:#06b6d4;
+  --mal:#f43f5e;
+  --sus:#f59e0b;
+  --cln:#10b981;
+  --purple:#8b5cf6;
+  --radius:14px;
+  --shadow:0 12px 32px rgba(0,0,0,.38);
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;-webkit-font-smoothing:antialiased}
 code,.mono{font-family:ui-monospace,SFMono-Regular,"Cascadia Code",Consolas,monospace}
-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 24px;background:var(--panel);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:10px}
-.shield{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff}
-.brand h1{margin:0;font-size:17px;letter-spacing:.3px}
-.brand .sub{font-size:12px;color:var(--mut)}
-.pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--mut)}
-.pill.on{border-color:rgba(34,197,94,.45);color:var(--cln);background:rgba(34,197,94,.1)}
-nav{display:flex;gap:4px;padding:10px 24px 0;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
-.tab{background:transparent;border:none;color:var(--mut);padding:10px 16px;cursor:pointer;font-weight:600;font-size:13px;border-bottom:2px solid transparent;white-space:nowrap}
-.tab:hover{color:var(--fg)}
-.tab.active{color:var(--acc2);border-bottom-color:var(--acc)}
-main{max-width:1240px;margin:0 auto;padding:22px 24px 64px}
-.pane{display:none}.pane.active{display:block}
-.dropzone{border:2px dashed #365078;background:linear-gradient(180deg,rgba(59,130,246,.07),rgba(59,130,246,.02));border-radius:14px;padding:34px 20px;text-align:center;transition:.18s;cursor:pointer}
-.dropzone.over{border-color:var(--acc2);background:rgba(59,130,246,.16);transform:scale(1.005)}
-.dropzone h2{margin:0 0 6px;font-size:18px}
-.dropzone p{margin:0 0 18px;color:var(--mut);font-size:13px}
-.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-button.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
-button.btn:hover{border-color:var(--acc2);color:#fff}
-button.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
-button.btn.primary:hover{background:#2563eb}
-button.btn.danger{background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.5);color:var(--mal)}
-button.btn.sm{padding:5px 10px;font-size:11.5px;border-radius:6px}
-button.btn:disabled{opacity:.5;cursor:not-allowed}
-.opts{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:16px;font-size:12.5px;color:var(--mut)}
-.opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
-.card-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:18px}
-.card-box h3{margin:0 0 10px;font-size:14.5px}
-textarea,input[type=text],input[type=number]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit}
-textarea{min-height:84px;resize:vertical}
-.row-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.status-bar{margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);display:none;align-items:center;gap:12px}
-.status-bar.show{display:flex}
-.spinner{width:18px;height:18px;border:2.5px solid rgba(96,165,250,.25);border-top-color:var(--acc2);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0}
-.metric{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.metric .n{font-size:24px;font-weight:800;line-height:1.1}
-.metric .l{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin-top:3px}
-.mal{color:var(--mal)}.sus{color:var(--sus)}.cln{color:var(--cln)}.acc{color:var(--acc2)}
-.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:700;font-size:11.5px;white-space:nowrap}
-.badge.MALICIOUS{background:rgba(248,81,73,.16);color:var(--mal);border:1px solid rgba(248,81,73,.35)}
-.badge.SUSPICIOUS{background:rgba(245,158,11,.16);color:var(--sus);border:1px solid rgba(245,158,11,.35)}
-.badge.CLEAN{background:rgba(34,197,94,.14);color:var(--cln);border:1px solid rgba(34,197,94,.3)}
-.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
-.filter-bar input{max-width:300px}
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{text-align:left;padding:9px 10px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
-td{padding:9px 10px;border-bottom:1px solid #1d2635;vertical-align:top}
-tr:hover td{background:rgba(255,255,255,.02)}
-.finding-item{display:grid;grid-template-columns:42px 150px 1fr;gap:8px;padding:4px 0;border-bottom:1px dotted #223044;font-size:12px}
-.finding-item .sv{text-align:right;font-weight:700}
-details summary{cursor:pointer;color:var(--acc2);font-size:12px}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#23344f;border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:#324a6f}
+
+.app{display:grid;grid-template-columns:252px 1fr;height:100vh;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px 14px;overflow-y:auto;user-select:none}
+.brand{display:flex;align-items:center;gap:11px;padding:2px 6px 14px}
+.brand-logo{width:40px;height:40px;border-radius:11px;overflow:hidden;display:grid;place-items:center;box-shadow:0 6px 18px rgba(37,99,235,.35);flex-shrink:0}
+.brand-logo img{width:100%;height:100%;object-fit:cover;display:block}
+.brand-name{font-weight:800;font-size:15.5px;letter-spacing:.2px;line-height:1.15}
+.brand-sub{font-size:11px;color:var(--mut);margin-top:2px}
+
+.prot-pill{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(59,130,246,.14),rgba(6,182,212,.06));border:1px solid rgba(59,130,246,.28);margin-bottom:16px;cursor:pointer;transition:.18s}
+.prot-pill:hover{border-color:rgba(96,165,250,.55);transform:translateY(-1px)}
+.prot-pill.active{background:linear-gradient(135deg,rgba(16,185,129,.16),rgba(6,182,212,.06));border-color:rgba(16,185,129,.4)}
+.prot-dot{width:10px;height:10px;border-radius:50%;background:var(--acc2);box-shadow:0 0 0 4px rgba(59,130,246,.18);flex-shrink:0}
+.prot-pill.active .prot-dot{background:var(--cln);box-shadow:0 0 0 4px rgba(16,185,129,.2);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(16,185,129,.22)}50%{box-shadow:0 0 0 7px rgba(16,185,129,.06)}}
+.prot-t{font-size:12px;font-weight:700;line-height:1.2}
+.prot-s{font-size:11px;color:var(--mut)}
+
+.nav-sec{font-size:10.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--dim);padding:10px 10px 6px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:1px solid transparent;color:var(--mut);padding:9px 11px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;text-align:left;transition:.15s;margin-bottom:2px}
+.nav-item svg{width:17px;height:17px;flex-shrink:0;opacity:.85}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--fg)}
+.nav-item.active{background:linear-gradient(90deg,rgba(59,130,246,.2),rgba(59,130,246,.07));border-color:rgba(59,130,246,.32);color:#fff}
+.nav-item.active svg{color:var(--acc2);opacity:1}
+.nav-badge{margin-left:auto;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--panel2);color:var(--mut)}
+.nav-badge.on{background:rgba(16,185,129,.18);color:var(--cln)}
+.nav-badge.mal{background:rgba(244,63,94,.2);color:var(--mal)}
+.nav-badge.run{background:rgba(59,130,246,.22);color:var(--acc2);animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
+
+.side-footer{margin-top:auto;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:8px}
+.diag-row{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--mut);padding:0 4px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--dim)}
+.dot.ok{background:var(--cln)}
+.dot.warn{background:var(--sus)}
+
+/* MAIN AREA */
+.shell{display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+.topbar{height:62px;padding:0 24px;border-bottom:1px solid var(--line);background:rgba(11,17,29,.88);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-shrink:0}
+.top-left{display:flex;align-items:center;gap:12px;min-width:0}
+.menu-btn{display:none;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 9px;cursor:pointer}
+.page-title{font-size:16px;font-weight:800;margin:0;line-height:1.2}
+.page-sub{font-size:11.5px;color:var(--mut)}
+.top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+.live-job-pill{display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:99px;background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.4);color:var(--acc2);font-size:12px;font-weight:600;cursor:pointer}
+.live-job-pill.show{display:flex}
+
+.workspace{flex:1;overflow-y:auto;padding:22px 26px 48px}
+.view{display:none;max-width:1280px;margin:0 auto}
+.view.active{display:block;animation:fadeIn .16s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* COMPONENTS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--panel2);color:var(--fg);border:1px solid var(--line2);border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;text-decoration:none;white-space:nowrap}
+.btn svg{width:15px;height:15px}
+.btn:hover{background:var(--panel3);border-color:var(--acc2);color:#fff}
+.btn.primary{background:linear-gradient(135deg,#2563eb,#3b82f6);border-color:#3b82f6;color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.28)}
+.btn.primary:hover{background:linear-gradient(135deg,#1d4ed8,#2563eb);transform:translateY(-1px)}
+.btn.success{background:rgba(16,185,129,.16);border-color:rgba(16,185,129,.45);color:var(--cln)}
+.btn.success:hover{background:rgba(16,185,129,.26);color:#fff}
+.btn.danger{background:rgba(244,63,94,.14);border-color:rgba(244,63,94,.42);color:var(--mal)}
+.btn.danger:hover{background:rgba(244,63,94,.25);color:#fff}
+.btn.ghost{background:transparent;border-color:var(--line)}
+.btn.sm{padding:5px 10px;font-size:11.5px;border-radius:7px}
+.btn:disabled{opacity:.48;cursor:not-allowed;transform:none}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.card-head h3{margin:0;font-size:14.5px;font-weight:700}
 .muted{color:var(--mut);font-size:12px}
-.toast-msg{position:fixed;bottom:18px;right:18px;background:var(--panel2);border:1px solid var(--acc);color:var(--fg);padding:10px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45);display:none;z-index:99}
-.toast-msg.show{display:block}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* HERO BANNER */
+.hero{position:relative;overflow:hidden;border-radius:16px;padding:24px 26px;margin-bottom:18px;background:radial-gradient(circle at 90% 10%,rgba(6,182,212,.18),transparent 42%),radial-gradient(circle at 12% 95%,rgba(37,99,235,.22),transparent 46%),var(--panel);border:1px solid var(--line2);display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap}
+.hero.protected{background:radial-gradient(circle at 90% 10%,rgba(16,185,129,.2),transparent 45%),radial-gradient(circle at 10% 90%,rgba(6,182,212,.16),transparent 45%),var(--panel);border-color:rgba(16,185,129,.35)}
+.hero-left{display:flex;align-items:center;gap:18px;min-width:260px;flex:1}
+.hero-shield{width:62px;height:62px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#06b6d4);display:grid;place-items:center;box-shadow:0 10px 26px rgba(37,99,235,.38);flex-shrink:0}
+.hero.protected .hero-shield{background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 10px 26px rgba(16,185,129,.35)}
+.hero-shield svg{width:34px;height:34px;color:#fff}
+.hero h2{margin:0 0 4px;font-size:20px;font-weight:800;letter-spacing:-.2px}
+.hero p{margin:0;color:var(--mut);font-size:13px;max-width:600px}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap}
+
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.kpi-val{font-size:26px;font-weight:800;line-height:1.1;margin-top:4px}
+.kpi-lbl{font-size:11.5px;color:var(--mut);font-weight:600}
+.kpi-sub{font-size:11px;color:var(--dim);margin-top:4px}
+.kpi-ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--panel2);color:var(--acc2);flex-shrink:0}
+.kpi-ico.mal{background:rgba(244,63,94,.14);color:var(--mal)}
+.kpi-ico.cln{background:rgba(16,185,129,.14);color:var(--cln)}
+.kpi-ico.sus{background:rgba(245,158,11,.14);color:var(--sus)}
+.kpi-ico svg{width:19px;height:19px}
+
+.dash-grid{display:grid;grid-template-columns:1.1fr 1.4fr;gap:18px}
+
+.quick-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.quick-card{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:11px;background:var(--bg2);border:1px solid var(--line);cursor:pointer;transition:.15s;text-align:left;color:var(--fg)}
+.quick-card:hover{border-color:var(--acc);background:var(--panel2);transform:translateY(-1px)}
+.quick-ico{width:34px;height:34px;border-radius:9px;background:rgba(59,130,246,.14);color:var(--acc2);display:grid;place-items:center;flex-shrink:0}
+.quick-ico svg{width:17px;height:17px}
+.quick-name{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick-path{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:155px}
+
+.mod-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mod-item{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px}
+
+/* DROPZONE & LIVE SCAN */
+.dropzone{border:2px dashed #2e4872;background:radial-gradient(circle at 50% 0%,rgba(59,130,246,.11),transparent 65%),var(--panel);border-radius:16px;padding:32px 22px;text-align:center;transition:.18s;margin-bottom:18px}
+.dropzone.over{border-color:var(--cyan);background:rgba(6,182,212,.14);transform:scale(1.004)}
+.dz-icon{width:54px;height:54px;border-radius:15px;background:rgba(59,130,246,.14);color:var(--acc2);display:inline-grid;place-items:center;margin-bottom:12px}
+.dz-icon svg{width:28px;height:28px}
+.dropzone h2{margin:0 0 6px;font-size:18px;font-weight:800}
+.dropzone p{margin:0 auto 18px;color:var(--mut);font-size:12.5px;max-width:680px}
+.opts{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:16px;font-size:12px;color:var(--mut)}
+.opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
+
+.live-card{display:none;background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(6,182,212,.06)),var(--panel);border:1px solid rgba(59,130,246,.45);border-radius:15px;padding:20px;margin-bottom:18px}
+.live-card.show{display:block}
+.progress-track{height:7px;background:var(--bg);border-radius:99px;overflow:hidden;margin:14px 0}
+.progress-bar{height:100%;width:35%;background:linear-gradient(90deg,#2563eb,#06b6d4,#60a5fa);border-radius:99px;animation:indet 1.5s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-110%)}100%{transform:translateX(320%)}}
+.live-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.live-stat{background:rgba(7,11,18,.65);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.live-stat .n{font-size:20px;font-weight:800}
+.live-stat .l{font-size:11px;color:var(--mut)}
+.live-file{font-size:11.5px;color:var(--acc2);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* INPUTS & TABLES */
+textarea,input[type=text],input[type=password],input[type=number],select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:.15s}
+textarea:focus,input:focus,select:focus{border-color:var(--acc)}
+textarea{min-height:84px;resize:vertical}
+input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px;cursor:pointer}
+input[type=range]{accent-color:var(--acc);cursor:pointer}
+
+.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
+.metric{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.metric .n{font-size:22px;font-weight:800;line-height:1.1}
+.metric .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin-top:4px}
+
+.mal{color:var(--mal)}.sus{color:var(--sus)}.cln{color:var(--cln)}.acc{color:var(--acc2)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:6px;font-weight:700;font-size:11px;white-space:nowrap}
+.badge.MALICIOUS{background:rgba(244,63,94,.16);color:var(--mal);border:1px solid rgba(244,63,94,.38)}
+.badge.SUSPICIOUS{background:rgba(245,158,11,.16);color:var(--sus);border:1px solid rgba(245,158,11,.38)}
+.badge.CLEAN{background:rgba(16,185,129,.14);color:var(--cln);border:1px solid rgba(16,185,129,.32)}
+.badge.INFO{background:rgba(96,165,250,.14);color:var(--acc2);border:1px solid rgba(96,165,250,.3)}
+
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:9px 10px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #162135;vertical-align:top}
+tr:hover td{background:rgba(255,255,255,.02)}
+.finding-item{display:grid;grid-template-columns:36px 155px 1fr;gap:8px;padding:4px 0;border-bottom:1px dotted #1e2d45;font-size:11.5px}
+.finding-item .sv{text-align:right;font-weight:700}
+details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
+
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.field{display:grid;gap:6px}
+.field label{font-size:12px;font-weight:600;color:var(--mut)}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+
+.spinner{width:16px;height:16px;border:2.5px solid rgba(96,165,250,.25);border-top-color:var(--acc2);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--acc);color:var(--fg);padding:11px 16px;border-radius:11px;box-shadow:var(--shadow);display:none;z-index:200;max-width:440px;font-size:13px;font-weight:500}
+.toast.show{display:block;animation:fadeIn .15s ease}
+
+@media (max-width:980px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:-270px;top:0;bottom:0;width:256px;z-index:120;transition:.2s;box-shadow:var(--shadow)}
+  .sidebar.open{left:0}
+  .menu-btn{display:inline-flex}
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-grid,.form-grid{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <div class="shield">CS</div>
-    <div>
-      <h1>CrackSentinel</h1>
-      <div class="sub">Game Download &amp; Crack Malware Scanner — Single &amp; Mass Check</div>
-    </div>
-  </div>
-  <div class="pills">
-    <span class="pill" id="pVer">loading...</span>
-    <span class="pill" id="pYara">YARA: -</span>
-    <span class="pill" id="pWatch">Download Guard: OFF</span>
-  </div>
-</header>
-
-<nav>
-  <button class="tab active" data-tab="scan">Scan (Drag &amp; Drop / Mass)</button>
-  <button class="tab" data-tab="guard">Download Guard (Real-Time)</button>
-  <button class="tab" data-tab="url">Cek Link Download</button>
-  <button class="tab" data-tab="history">Riwayat &amp; Ekstensi Browser</button>
-</nav>
-
-<main>
-  <div class="card-box" id="authBox" style="display:none;margin-top:0;margin-bottom:16px;border-color:rgba(245,158,11,.5)">
-    <div class="row-flex">
-      <b>Access Key Diperlukan:</b>
-      <input type="text" id="authKeyInput" class="mono" style="max-width:300px" placeholder="Masukkan Access Key...">
-      <button class="btn primary sm" id="btnSaveKey" type="button">Simpan Key</button>
-    </div>
-  </div>
-
-  <!-- TAB 1: SCAN -->
-  <section class="pane active" id="pane-scan">
-    <div class="dropzone" id="dropzone">
-      <h2>Drag &amp; Drop File / Archive / Folder Game ke Sini</h2>
-      <p id="dropHint">Bisa drop 1 file (<code>.exe .dll .zip .rar .7z .iso .bat .ps1</code>), banyak file sekaligus, atau folder game. Untuk folder game besar (GB), gunakan tombol <b>Pilih Folder (Scan Langsung)</b> agar 0 copy!</p>
-      <div class="actions">
-        <button class="btn primary local-only" id="btnPickFolder" type="button">Pilih Folder Game (Scan Langsung)</button>
-        <button class="btn local-only" id="btnPickFiles" type="button">Pilih File Lokal (1 / Banyak)</button>
-        <button class="btn public-only" id="btnWebFolderPick" type="button" style="display:none">Pilih Folder Game (Smart Filter)</button>
-        <button class="btn" id="btnUploadPick" type="button">Pilih / Upload File (1 / Banyak)</button>
+<div class="app">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">
+        <img src="/favicon.png" alt="CrackSentinel">
       </div>
-      <input type="file" id="fileInput" multiple style="display:none">
-      <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
-      <div class="opts">
-        <label><input type="checkbox" id="optExtract" checked> Bongkar isi ZIP / RAR / 7z / ISO / MSI</label>
-        <label><input type="checkbox" id="optCarve" checked> Carve executable tersembunyi di data game</label>
-        <label><input type="checkbox" id="optOnline"> Cek VirusTotal / MalwareBazaar (butuh API key)</label>
+      <div>
+        <div class="brand-name">CrackSentinel</div>
+        <div class="brand-sub" id="sideVersion">Loading...</div>
       </div>
     </div>
 
-    <div class="card-box local-only" id="massBox">
-      <h3>Mass Check / Scan Manual Banyak Folder &amp; File Sekaligus</h3>
-      <div class="muted" style="margin-bottom:8px">Masukkan 1 path per baris (bisa campuran folder game dan file archive/exe), lalu klik Scan Semua.</div>
-      <textarea id="massPaths" class="mono" placeholder="E:\Games\Game Pertama&#10;E:\Games\Game Kedua&#10;E:\Downloads\Setup_Repack.zip"></textarea>
-      <div class="row-flex" style="margin-top:10px">
-        <button class="btn primary" id="btnScanPaths" type="button">Scan Semua Path</button>
-        <button class="btn" id="btnAddFolderToMass" type="button">+ Tambah Folder ke Daftar</button>
-        <button class="btn" id="btnClearMass" type="button">Bersihkan</button>
+    <div class="prot-pill" id="sideProtPill" title="Status proteksi">
+      <span class="prot-dot"></span>
+      <div>
+        <div class="prot-t" id="sideProtTitle">Siap Memindai</div>
+        <div class="prot-s" id="sideProtSub">Engine lokal aktif</div>
       </div>
     </div>
 
-    <div class="status-bar" id="scanBusy">
-      <div class="spinner"></div>
-      <div id="scanBusyText">Sedang menganalisa file &amp; arsip...</div>
-    </div>
+    <div class="nav-sec">Utama</div>
+    <button class="nav-item active" data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-view="scanner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+      Scanner
+      <span class="nav-badge run" id="navScanBadge" style="display:none">SCAN</span>
+    </button>
+    <button class="nav-item local-only" data-view="guard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Download Guard
+      <span class="nav-badge" id="navGuardBadge">OFF</span>
+    </button>
+    <button class="nav-item" data-view="url">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Cek Link URL
+    </button>
 
-    <div class="card-box" id="resultBox" style="display:none">
-      <div class="row-flex" style="justify-content:space-between">
+    <div class="nav-sec">Manajemen</div>
+    <button class="nav-item local-only" data-view="quarantine">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Karantina
+      <span class="nav-badge" id="navQuarBadge">0</span>
+    </button>
+    <button class="nav-item" data-view="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Riwayat &amp; Ekstensi
+    </button>
+    <button class="nav-item local-only" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Pengaturan
+    </button>
+
+    <div class="side-footer">
+      <div class="diag-row"><span><span class="dot" id="dotYara"></span>YARA Engine</span><span class="mono" id="lblYara">-</span></div>
+      <div class="diag-row"><span><span class="dot" id="dot7z"></span>Arsip (7z/RAR)</span><span class="mono" id="lbl7z">-</span></div>
+      <div class="diag-row"><span><span class="dot ok"></span>Hash Cache</span><span class="mono" id="lblCache">0</span></div>
+      <button class="btn ghost sm desktop-only" id="btnAppQuit" style="display:none;margin-top:4px;width:100%" type="button">Tutup Aplikasi</button>
+    </div>
+  </aside>
+
+  <!-- MAIN SHELL -->
+  <div class="shell">
+    <header class="topbar">
+      <div class="top-left">
+        <button class="menu-btn" id="btnMenuToggle" type="button" aria-label="Menu">☰</button>
         <div>
-          <h3 id="resTitle" style="margin:0">Hasil Scan</h3>
-          <div class="muted" id="resMeta"></div>
-        </div>
-        <div class="row-flex">
-          <a class="btn sm" id="btnDownloadHTML" href="#" style="text-decoration:none">Export HTML Report</a>
+          <h1 class="page-title" id="topTitle">Dashboard</h1>
+          <div class="page-sub" id="topSub">Ringkasan keamanan &amp; kontrol cepat CrackSentinel</div>
         </div>
       </div>
-
-      <div class="metrics" id="resMetrics"></div>
-
-      <div class="filter-bar">
-        <button class="btn sm primary" data-vf="all">Semua</button>
-        <button class="btn sm" data-vf="MALICIOUS">Malicious</button>
-        <button class="btn sm" data-vf="SUSPICIOUS">Suspicious</button>
-        <button class="btn sm" data-vf="CLEAN">Clean</button>
-        <input type="text" id="resSearch" placeholder="Filter nama file, rule, atau detail...">
-        <span class="muted" id="resCount"></span>
+      <div class="top-actions">
+        <div class="live-job-pill" id="topJobPill" title="Lihat proses scan yang sedang berjalan">
+          <div class="spinner" style="width:13px;height:13px;border-width:2px"></div>
+          <span id="topJobText">Memindai...</span>
+        </div>
+        <button class="btn primary local-only" id="topScanFolder" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Scan Folder Game
+        </button>
+        <button class="btn primary public-only" id="topWebFolder" style="display:none" type="button">Pilih Folder (Smart Filter)</button>
+        <button class="btn local-only" id="topScanFiles" type="button">Scan File</button>
       </div>
+    </header>
 
-      <div style="overflow-x:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Verdict</th>
-              <th>Skor</th>
-              <th>File</th>
-              <th>Info</th>
-              <th>Temuan</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="resBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- TAB 2: REAL-TIME DOWNLOAD GUARD -->
-  <section class="pane" id="pane-guard">
-    <div class="card-box">
-      <h3>Real-Time Download Guard (Pantau Folder Downloads Otomatis)</h3>
-      <p class="muted">Memantau folder download secara berkala, otomatis melewati file setengah download (<code>.crdownload</code>, <code>.part</code>, <code>.!qB</code>), membaca asal website (Mark-of-the-Web), dan memunculkan alert Windows begitu file berbahaya mendarat.</p>
-      <div class="row-flex" style="margin-bottom:10px">
-        <input type="text" id="guardDir" class="mono" style="flex:1;min-width:260px" placeholder="C:\Users\...\Downloads">
-        <button class="btn" id="btnPickGuardDir" type="button">Pilih Folder</button>
-        <label class="muted">Interval (dtk) <input type="number" id="guardInterval" value="4" min="2" max="120" style="width:72px"></label>
-      </div>
-      <div class="row-flex" style="margin-bottom:14px">
-        <label><input type="checkbox" id="guardToast" checked> Notifikasi Windows Desktop Alert</label>
-        <label><input type="checkbox" id="guardQuar"> Auto-Karantina file MALICIOUS (skor &ge; 70)</label>
-      </div>
-      <div class="row-flex">
-        <button class="btn primary" id="btnGuardStart" type="button">Aktifkan Download Guard</button>
-        <button class="btn danger" id="btnGuardStop" type="button" disabled>Matikan</button>
-        <span class="muted" id="guardStatusText"></span>
-      </div>
-    </div>
-
-    <div class="card-box">
-      <h3>Aktivitas Download Terbaru</h3>
-      <table>
-        <thead><tr><th>Waktu</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th><th>Temuan / Asal URL</th></tr></thead>
-        <tbody id="guardEvents"><tr><td colspan="6" class="muted">Belum ada aktivitas.</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- TAB 3: URL PRE-CHECK -->
-  <section class="pane" id="pane-url">
-    <div class="card-box">
-      <h3>Cek Link Download Game Sebelum Download (Aman — Tanpa Eksekusi)</h3>
-      <p class="muted">Melacak redirect chain (via HTTP HEAD), mendeteksi domain decoy numerik / random TLD, double-extension (<code>.pdf.exe</code>), host penyebar stealer (Discord CDN/Pastebin), dan ukuran repack palsu.</p>
-      <div style="display:grid;gap:10px">
-        <input type="text" id="urlInput" class="mono" placeholder="https://contoh-web-game.com/download/Setup_Game.zip">
-        <input type="text" id="refInput" class="mono" placeholder="(Opsional) Referrer / halaman asal website">
-        <div class="row-flex">
-          <label><input type="checkbox" id="urlProbe" checked> Lacak Redirect Chain &amp; Ukuran File (HTTP HEAD)</label>
-          <button class="btn primary" id="btnCheckUrl" type="button">Periksa Link</button>
+    <main class="workspace">
+      <div class="card" id="authBox" style="display:none;border-color:rgba(245,158,11,.5)">
+        <div class="row">
+          <b>Access Key Diperlukan:</b>
+          <input type="text" id="authKeyInput" class="mono" style="max-width:280px" placeholder="Masukkan Access Key...">
+          <button class="btn primary sm" id="btnSaveKey" type="button">Simpan Key</button>
         </div>
       </div>
-      <div id="urlResult" style="margin-top:16px;display:none"></div>
-    </div>
-  </section>
 
-  <!-- TAB 4: HISTORY & EXTENSION -->
-  <section class="pane" id="pane-history">
-    <div class="card-box">
-      <h3>Pasang Ekstensi Browser (Chrome / Edge / Brave)</h3>
-      <p class="muted">Dengan ekstensi terpasang + UI ini menyala di background, setiap kali kamu download game dari website, ekstensi otomatis mengecek link-nya &amp; langsung mengirim file yang selesai di-download ke CrackSentinel!</p>
-      <ol style="font-size:13px;line-height:1.7">
-        <li>Buka <code>chrome://extensions</code> (atau <code>edge://extensions</code>).</li>
-        <li>Aktifkan <b>Developer mode</b> di pojok kanan atas.</li>
-        <li>Klik <b>Load unpacked</b> lalu pilih folder <code>E:\ilham_yarsi\tools-virus\extension</code>.</li>
-      </ol>
-    </div>
+      <!-- VIEW 1: DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="hero" id="dashHero">
+          <div class="hero-left">
+            <div class="hero-shield">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <div>
+              <h2 id="heroTitle">CrackSentinel Siap Melindungi PC Kamu</h2>
+              <p id="heroDesc">Scan folder game puluhan GB langsung di harddisk (0 copy), bongkar arsip ZIP/RAR/7z/ISO otomatis, deteksi stealer &amp; decoy installer sebelum dijalankan.</p>
+            </div>
+          </div>
+          <div class="hero-cta">
+            <button class="btn primary local-only" id="heroBtnFolder" type="button">Pilih Folder Game</button>
+            <button class="btn public-only primary" id="heroBtnWebFolder" style="display:none" type="button">Scan Folder (Smart Filter)</button>
+            <button class="btn local-only" id="heroBtnFiles" type="button">Pilih File / Arsip</button>
+            <button class="btn" id="heroBtnURL" type="button">Cek Link Download</button>
+          </div>
+        </div>
 
-    <div class="card-box">
-      <div class="row-flex" style="justify-content:space-between;margin-bottom:10px">
-        <h3 style="margin:0">Riwayat Scan Sesi Ini</h3>
-        <button class="btn sm" id="btnRefreshHist" type="button">Refresh</button>
-      </div>
-      <table>
-        <thead><tr><th>Waktu</th><th>Sumber</th><th>Target</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th></tr></thead>
-        <tbody id="histBody"><tr><td colspan="7" class="muted">Belum ada riwayat scan.</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-</main>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div>
+              <div class="kpi-lbl">Total Scan</div>
+              <div class="kpi-val acc" id="kpiScans">0</div>
+              <div class="kpi-sub" id="kpiScansSub">Riwayat tersimpan</div>
+            </div>
+            <div class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          </div>
+          <div class="kpi">
+            <div>
+              <div class="kpi-lbl">File Dianalisa</div>
+              <div class="kpi-val" id="kpiFiles">0</div>
+              <div class="kpi-sub" id="kpiFilesSub">Cache: 0 hash</div>
+            </div>
+            <div class="kpi-ico cln"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          </div>
+          <div class="kpi">
+            <div>
+              <div class="kpi-lbl">Ancaman Terdeteksi</div>
+              <div class="kpi-val mal" id="kpiThreats">0</div>
+              <div class="kpi-sub" id="kpiThreatsSub">0 malicious · 0 suspicious</div>
+            </div>
+            <div class="kpi-ico mal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          </div>
+          <div class="kpi" id="kpiFourthCard" style="cursor:pointer">
+            <div>
+              <div class="kpi-lbl" id="kpiFourthLbl">File di Karantina</div>
+              <div class="kpi-val sus" id="kpiQuar">0</div>
+              <div class="kpi-sub" id="kpiFourthSub">Klik untuk buka Vault</div>
+            </div>
+            <div class="kpi-ico sus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+          </div>
+        </div>
 
-<div class="toast-msg" id="toast"></div>
+        <div class="dash-grid">
+          <div>
+            <div class="card local-only">
+              <div class="card-head">
+                <h3>Quick Scan Folder Terdeteksi</h3>
+                <span class="muted">1 klik langsung scan</span>
+              </div>
+              <div class="quick-list" id="quickTargets">
+                <div class="muted">Memuat daftar folder...</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Status Engine &amp; Modul Deteksi</h3>
+                <button class="btn ghost sm local-only" onclick="switchView('settings')" type="button">Atur</button>
+              </div>
+              <div class="mod-grid" id="modGrid">
+                <div class="mod-item"><span>Static Heuristic + PE</span><span class="badge CLEAN">AKTIF</span></div>
+                <div class="mod-item"><span>YARA Signatures</span><span class="badge INFO" id="modYara">-</span></div>
+                <div class="mod-item"><span>7-Zip / UnRAR</span><span class="badge INFO" id="mod7z">-</span></div>
+                <div class="mod-item"><span>Online Reputation</span><span class="badge INFO" id="modOnline">-</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Riwayat Scan Terbaru</h3>
+              <button class="btn ghost sm" onclick="switchView('history')" type="button">Lihat Semua</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Target</th><th>Verdict</th><th>Skor</th><th>File</th><th></th></tr></thead>
+                <tbody id="dashRecentBody"><tr><td colspan="5" class="muted">Belum ada scan. Mulai scan folder game atau drop file!</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: SCANNER -->
+      <section class="view" id="view-scanner">
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h2>Drag &amp; Drop File / Archive / Folder Game ke Sini</h2>
+          <p id="dropHint">Untuk game ukuran besar (10–100 GB), klik <b>Pilih Folder Game (Scan Langsung)</b> agar scan langsung di disk tanpa menyalin file. Kamu juga bisa drop <code>.exe .dll .zip .rar .7z .iso .ps1 .bat</code> langsung ke kotak ini.</p>
+          <div class="row" style="justify-content:center">
+            <button class="btn primary local-only" id="btnPickFolder" type="button">Pilih Folder Game (Scan Langsung)</button>
+            <button class="btn local-only" id="btnPickFiles" type="button">Pilih File Lokal (1 / Banyak)</button>
+            <button class="btn primary public-only" id="btnWebFolderPick" style="display:none" type="button">Pilih Folder Game (Smart Filter)</button>
+            <button class="btn" id="btnUploadPick" type="button">Upload / Drop File</button>
+          </div>
+          <input type="file" id="fileInput" multiple style="display:none">
+          <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+          <div class="opts">
+            <label><input type="checkbox" id="optExtract" checked> Bongkar isi ZIP / RAR / 7z / ISO / MSI</label>
+            <label><input type="checkbox" id="optCarve" checked> Carve executable tersembunyi di data game</label>
+            <label><input type="checkbox" id="optOnline"> Cek VirusTotal / MalwareBazaar</label>
+          </div>
+        </div>
+
+        <!-- LIVE SCAN MONITOR -->
+        <div class="live-card" id="liveScanCard">
+          <div class="card-head" style="margin-bottom:6px">
+            <div class="row">
+              <div class="spinner"></div>
+              <div>
+                <h3 id="liveTitle" style="margin:0">Memindai Target...</h3>
+                <div class="muted" id="liveSub">Menyiapkan worker scanner...</div>
+              </div>
+            </div>
+            <button class="btn danger sm" id="btnCancelJob" type="button">Batalkan Scan</button>
+          </div>
+          <div class="progress-track"><div class="progress-bar"></div></div>
+          <div class="live-stats">
+            <div class="live-stat"><div class="n acc" id="liveScanned">0</div><div class="l">File Discan</div></div>
+            <div class="live-stat"><div class="n mal" id="liveMal">0</div><div class="l">Malicious</div></div>
+            <div class="live-stat"><div class="n sus" id="liveSus">0</div><div class="l">Suspicious</div></div>
+            <div class="live-stat"><div class="n cln" id="liveCln">0</div><div class="l">Clean</div></div>
+          </div>
+          <div class="live-file mono" id="liveCurFile">Menunggu file pertama...</div>
+          <div id="liveFlaggedWrap" style="display:none;margin-top:12px">
+            <div class="muted" style="margin-bottom:6px;font-weight:700;color:var(--sus)">Temuan Sementara (Live):</div>
+            <div id="liveFlaggedList" style="display:grid;gap:4px"></div>
+          </div>
+        </div>
+
+        <!-- MASS SCAN BOX (LOCAL ONLY) -->
+        <div class="card local-only">
+          <div class="card-head">
+            <h3>Mass Check — Scan Banyak Folder Game &amp; File Sekaligus</h3>
+            <div class="row">
+              <button class="btn sm" id="btnAddFolderToMass" type="button">+ Tambah Folder</button>
+              <button class="btn sm ghost" id="btnClearMass" type="button">Bersihkan</button>
+              <button class="btn sm primary" id="btnScanPaths" type="button">Scan Semua Path</button>
+            </div>
+          </div>
+          <textarea id="massPaths" class="mono" placeholder="E:\Games\The Liar Princess and the Blind Prince&#10;E:\Games\Game Kedua&#10;E:\Downloads\Setup_Repack.zip"></textarea>
+        </div>
+
+        <!-- UPLOAD BUSY INDICATOR -->
+        <div class="card" id="uploadBusy" style="display:none;border-color:rgba(59,130,246,.45)">
+          <div class="row">
+            <div class="spinner"></div>
+            <div id="uploadBusyText">Sedang memproses file...</div>
+          </div>
+        </div>
+
+        <!-- SCAN RESULTS -->
+        <div class="card" id="resultBox" style="display:none">
+          <div class="card-head">
+            <div>
+              <h3 id="resTitle" style="margin:0">Hasil Scan</h3>
+              <div class="muted" id="resMeta"></div>
+            </div>
+            <div class="row">
+              <a class="btn sm" id="btnDownloadHTML" href="#">Export HTML</a>
+              <a class="btn sm ghost" id="btnDownloadJSON" href="#">Export JSON</a>
+            </div>
+          </div>
+
+          <div class="metrics" id="resMetrics"></div>
+
+          <div class="row" style="margin:12px 0">
+            <button class="btn sm primary" data-vf="all" type="button">Semua</button>
+            <button class="btn sm" data-vf="MALICIOUS" type="button">Malicious</button>
+            <button class="btn sm" data-vf="SUSPICIOUS" type="button">Suspicious</button>
+            <button class="btn sm" data-vf="CLEAN" type="button">Clean</button>
+            <input type="text" id="resSearch" style="max-width:300px" placeholder="Cari nama file, rule, atau detail...">
+            <span class="muted" id="resCount" style="margin-left:auto"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Verdict</th>
+                  <th>Skor</th>
+                  <th>File</th>
+                  <th>Info</th>
+                  <th>Temuan</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="resBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: DOWNLOAD GUARD -->
+      <section class="view" id="view-guard">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Real-Time Download Guard</h3>
+              <div class="muted">Memantau folder download otomatis, melewati file setengah download (<code>.crdownload</code>, <code>.part</code>, <code>.!qB</code>), membaca asal website (MOTW), dan memunculkan alert Windows.</div>
+            </div>
+            <span class="badge INFO" id="guardBadge">TIDAK AKTIF</span>
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <input type="text" id="guardDir" class="mono" style="flex:1;min-width:260px" placeholder="C:\Users\...\Downloads">
+            <button class="btn" id="btnPickGuardDir" type="button">Pilih Folder</button>
+            <label class="muted row" style="gap:6px">Interval (dtk) <input type="number" id="guardInterval" value="4" min="2" max="120" style="width:74px"></label>
+          </div>
+          <div class="row" style="margin-bottom:16px;gap:20px">
+            <label class="row" style="cursor:pointer"><input type="checkbox" id="guardToast" checked> Notifikasi Windows Desktop Toast</label>
+            <label class="row" style="cursor:pointer"><input type="checkbox" id="guardQuar"> Auto-Karantina file MALICIOUS (skor &ge; 70)</label>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="btnGuardStart" type="button">Aktifkan Download Guard</button>
+            <button class="btn danger" id="btnGuardStop" type="button" disabled>Matikan Guard</button>
+            <span class="muted" id="guardStatusText"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Aktivitas Download Real-Time</h3>
+            <button class="btn sm ghost" onclick="loadWatchStatus()" type="button">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Waktu</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th><th>Temuan / Asal URL</th></tr></thead>
+              <tbody id="guardEvents"><tr><td colspan="6" class="muted">Belum ada aktivitas download baru.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: URL PRE-CHECK -->
+      <section class="view" id="view-url">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Cek Link Download Sebelum Mengunduh (Aman — Tanpa Eksekusi)</h3>
+              <div class="muted">Melacak redirect chain (HTTP HEAD), mendeteksi domain decoy numerik / random TLD, double-extension (<code>.pdf.exe</code>), host penyebar stealer, dan repack palsu.</div>
+            </div>
+          </div>
+          <div style="display:grid;gap:10px">
+            <input type="text" id="urlInput" class="mono" placeholder="https://contoh-web-game.com/download/Setup_Game.zip">
+            <input type="text" id="refInput" class="mono" placeholder="(Opsional) Referrer / URL halaman asal">
+            <div class="row">
+              <label class="row" style="cursor:pointer"><input type="checkbox" id="urlProbe" checked> Lacak Redirect Chain &amp; Ukuran File (HTTP HEAD)</label>
+              <button class="btn primary" id="btnCheckUrl" type="button" style="margin-left:auto">Periksa Link Sekarang</button>
+            </div>
+          </div>
+          <div id="urlResult" style="margin-top:18px;display:none"></div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: QUARANTINE VAULT -->
+      <section class="view" id="view-quarantine">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Quarantine Vault — Isolasi File Berbahaya</h3>
+              <div class="muted">Lokasi Vault: <code id="quarVaultPath">-</code></div>
+            </div>
+            <div class="row">
+              <button class="btn sm" id="btnOpenVaultDir" type="button">Buka Folder Vault</button>
+              <button class="btn sm ghost" id="btnRefreshQuar" type="button">Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Waktu</th><th>Verdict</th><th>Skor</th><th>File &amp; Lokasi Asli</th><th>Temuan Utama</th><th>Aksi</th></tr></thead>
+              <tbody id="quarBody"><tr><td colspan="6" class="muted">Vault karantina kosong — tidak ada file yang diisolasi.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 6: HISTORY & EXTENSION -->
+      <section class="view" id="view-history">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Riwayat Scan Tersimpan</h3>
+              <div class="muted">Klik <b>Lihat</b> untuk membuka kembali detail hasil scan atau export laporan.</div>
+            </div>
+            <div class="row">
+              <button class="btn sm ghost" id="btnRefreshHist" type="button">Refresh</button>
+              <button class="btn sm danger local-only" id="btnClearHist" type="button">Hapus Riwayat</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Waktu</th><th>Sumber</th><th>Target</th><th>Verdict</th><th>Skor</th><th>File</th><th>Aksi</th></tr></thead>
+              <tbody id="histBody"><tr><td colspan="7" class="muted">Belum ada riwayat scan.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Integrasi Ekstensi Browser (Chrome / Edge / Brave)</h3></div>
+          <p class="muted" style="margin-top:0">Pasang ekstensi browser agar setiap link download game otomatis dicek sebelum selesai &amp; file yang baru turun langsung dikirim ke CrackSentinel!</p>
+          <ol style="font-size:13px;line-height:1.75;margin:8px 0 0;padding-left:20px">
+            <li>Buka <code>chrome://extensions</code> atau <code>edge://extensions</code>.</li>
+            <li>Aktifkan <b>Developer mode</b> di pojok kanan atas.</li>
+            <li>Klik <b>Load unpacked</b> lalu pilih folder <code>extension</code> di dalam folder CrackSentinel.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- VIEW 7: SETTINGS (LOCAL ONLY) -->
+      <section class="view" id="view-settings">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Pengaturan Engine Scanner</h3>
+              <div class="muted">Perubahan tersimpan permanen di <code>data/settings.json</code> dan langsung berlaku tanpa restart.</div>
+            </div>
+            <button class="btn primary" id="btnSaveSettings" type="button">Simpan Pengaturan</button>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Parallel Workers: <b id="setWorkersVal" class="acc">3</b> <span class="muted" id="setCpuHint"></span></label>
+              <input type="range" id="setWorkers" min="1" max="8" value="3">
+            </div>
+            <div class="field">
+              <label>Batas Ukuran File Penuh (MB)</label>
+              <input type="number" id="setMaxSize" min="32" max="4096" value="512">
+            </div>
+            <div class="field">
+              <label>Kedalaman Ekstrak Arsip (0 = matikan, 2 = standar)</label>
+              <input type="number" id="setExtractDepth" min="0" max="4" value="2">
+            </div>
+            <div class="field">
+              <label>Batas Ekstrak per Arsip (MB)</label>
+              <input type="number" id="setExtractMB" min="50" max="4096" value="500">
+            </div>
+            <div class="field">
+              <label>Folder Temporary Ekstraksi (disarankan drive E:)</label>
+              <div class="row"><input type="text" id="setTempDir" class="mono" style="flex:1"><button class="btn sm" id="btnPickTemp" type="button">Pilih</button></div>
+            </div>
+            <div class="field">
+              <label>Folder Quarantine Vault</label>
+              <div class="row"><input type="text" id="setQuarDir" class="mono" style="flex:1"><button class="btn sm" id="btnPickQuar" type="button">Pilih</button></div>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:10px;margin-top:16px">
+            <div class="switch-row">
+              <div><b>Lewati Aset Game Besar (.pak, .mp4, .uasset, dll)</b><div class="muted">Tetap memeriksa header MZ/PE tersembunyi (anti penyamaran)</div></div>
+              <input type="checkbox" id="setSkipAssets" checked>
+            </div>
+            <div class="switch-row">
+              <div><b>Carve Executable Tersembunyi di Data Raksasa</b><div class="muted">Memeriksa file data besar (misal data.dat / .bin) untuk payload PE tersembunyi</div></div>
+              <input type="checkbox" id="setCarve" checked>
+            </div>
+            <div class="switch-row">
+              <div><b>Gunakan SHA-256 Hash Cache</b><div class="muted">Scan ulang folder yang sama jadi instan</div></div>
+              <input type="checkbox" id="setUseCache" checked>
+            </div>
+            <div class="switch-row">
+              <div><b>Auto-Aktifkan Download Guard Saat Aplikasi Dibuka</b><div class="muted">Otomatis menjaga folder Downloads begitu CrackSentinel dijalankan</div></div>
+              <input type="checkbox" id="setWatchAuto">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Reputasi Online (VirusTotal &amp; MalwareBazaar — Opsional)</h3></div>
+          <div class="form-grid">
+            <div class="field">
+              <label>VirusTotal API Key <span id="vtStatusBadge" class="badge INFO">Belum diatur</span></label>
+              <div class="row">
+                <input type="password" id="setVTKey" class="mono" style="flex:1" placeholder="Tempel API key baru untuk mengubah...">
+                <button class="btn sm ghost" id="btnClearVT" type="button">Hapus</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>MalwareBazaar Auth Key <span id="mbStatusBadge" class="badge INFO">Belum diatur</span></label>
+              <div class="row">
+                <input type="password" id="setMBKey" class="mono" style="flex:1" placeholder="Tempel Auth key baru untuk mengubah...">
+                <button class="btn sm ghost" id="btnClearMB" type="button">Hapus</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Pemeliharaan &amp; Integrasi Windows</h3></div>
+          <div class="row">
+            <button class="btn primary" id="btnCreateShortcut" type="button">Buat Shortcut di Desktop</button>
+            <button class="btn danger" id="btnClearCache" type="button">Bersihkan Hash Cache</button>
+            <span class="muted" id="cacheInfoText"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 const $ = s => document.querySelector(s);
-let currentItem = null;
-let verdictFilter = 'all';
+const $$ = s => document.querySelectorAll(s);
+
 let isPublicMode = false;
+let isDesktopMode = false;
 let maxUploadMB = 100;
 let accessKey = localStorage.getItem('cs_access_key') || '';
+let currentItem = null;
+let verdictFilter = 'all';
+let activeJobID = null;
+let jobPollTimer = null;
+let currentVaultDir = '';
+
+const VIEW_META = {
+  dashboard:  ['Dashboard', 'Ringkasan keamanan, status engine, & quick scan'],
+  scanner:    ['Scanner', 'Drag & drop, scan folder game puluhan GB, & mass check'],
+  guard:      ['Download Guard', 'Proteksi real-time folder Downloads + Windows alert'],
+  url:        ['Cek Link URL', 'Analisa keamanan link download & redirect chain'],
+  quarantine: ['Quarantine Vault', 'Kelola, pulihkan, atau hapus permanen file berbahaya'],
+  history:    ['Riwayat & Ekstensi', 'Laporan scan tersimpan & integrasi browser'],
+  settings:   ['Pengaturan', 'Konfigurasi engine, penyimpanan, API key, & shortcut']
+};
 
 const ASSET_EXTS = new Set([
   '.pak','.mp4','.mkv','.avi','.wav','.ogg','.mp3','.flac','.uasset','.bundle',
@@ -269,25 +760,33 @@ const ASSET_EXTS = new Set([
   '.bank','.wem','.tex','.asset','.upk','.bik','.webm','.mov','.psd','.tif','.tiff'
 ]);
 
-function fileExt(name){
-  const i = name.lastIndexOf('.');
-  return i >= 0 ? name.slice(i).toLowerCase() : '';
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
-async function isDisguisedPEClient(file){
-  try{
-    if(file.size < 64) return false;
-    const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-    if(head[0] !== 0x4D || head[1] !== 0x5A) return false; // "MZ"
-    const lfanew = head[0x3C] | (head[0x3D]<<8) | (head[0x3E]<<16) | (head[0x3F]<<24);
-    if(lfanew < 0x40 || lfanew + 4 > file.size || lfanew > 16*1024*1024) return false;
-    const sig = new Uint8Array(await file.slice(lfanew, lfanew + 4).arrayBuffer());
-    return sig[0] === 0x50 && sig[1] === 0x45 && sig[2] === 0 && sig[3] === 0; // "PE\0\0"
-  }catch(_){
-    return false;
-  }
+function fmtBytes(b){
+  if(!b || b <= 0) return '0 B';
+  if(b < 1024) return b + ' B';
+  if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if(b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
 }
-
+function fmtMs(ms){
+  if(!ms || ms < 1000) return (ms||0) + ' ms';
+  const s = (ms/1000).toFixed(1);
+  return s + ' dtk';
+}
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.classList.remove('show'), 3800);
+}
+function apiFetch(url, opts={}){
+  opts.headers = Object.assign({}, opts.headers || {});
+  if(accessKey) opts.headers['X-Access-Key'] = accessKey;
+  return fetch(url, opts);
+}
 async function parseJSONSafe(resp){
   const txt = await resp.text();
   try{ return JSON.parse(txt); }catch(_){
@@ -296,86 +795,312 @@ async function parseJSONSafe(resp){
   }
 }
 
-function apiFetch(url, opts={}){
-  opts.headers = Object.assign({}, opts.headers || {});
-  if(accessKey) opts.headers['X-Access-Key'] = accessKey;
-  return fetch(url, opts);
+// Navigation
+function switchView(name){
+  $$('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.view === name));
+  $$('.view').forEach(v=>v.classList.toggle('active', v.id === 'view-' + name));
+  const m = VIEW_META[name] || ['CrackSentinel',''];
+  $('#topTitle').textContent = m[0];
+  $('#topSub').textContent = m[1];
+  $('#sidebar').classList.remove('open');
+  if(name === 'dashboard') loadDashboard();
+  if(name === 'guard') loadWatchStatus();
+  if(name === 'quarantine') loadQuarantine();
+  if(name === 'history') loadHistory();
+  if(name === 'settings') loadSettings();
 }
+$$('.nav-item').forEach(btn=>btn.addEventListener('click', ()=>switchView(btn.dataset.view)));
+$('#btnMenuToggle').addEventListener('click', ()=>$('#sidebar').classList.toggle('open'));
+$('#topJobPill').addEventListener('click', ()=>switchView('scanner'));
+$('#sideProtPill').addEventListener('click', ()=>switchView(isPublicMode ? 'scanner' : 'guard'));
+$('#kpiFourthCard').addEventListener('click', ()=>{ if(!isPublicMode) switchView('quarantine'); });
 
 $('#btnSaveKey').addEventListener('click', ()=>{
   accessKey = $('#authKeyInput').value.trim();
   localStorage.setItem('cs_access_key', accessKey);
   toast('Access Key disimpan.');
-  loadHistory();
+  loadDashboard();
 });
 
-function toast(msg){
-  const el = $('#toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(()=>el.classList.remove('show'), 3500);
-}
-function esc(s){
-  return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// Tabs
-document.querySelectorAll('.tab').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    $('#pane-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='history') loadHistory();
-    if(btn.dataset.tab==='guard') loadWatchStatus();
-  });
-});
-
+// Health & Dashboard
 async function loadHealth(){
   try{
     const r = await apiFetch('/api/health');
     const d = await r.json();
     isPublicMode = !!d.public_mode;
-    $('#pVer').textContent = 'CrackSentinel ' + (d.version||'') + (isPublicMode ? ' (Online)' : '');
-    $('#pYara').textContent = 'YARA: ' + (d.yara ? 'ON' : 'Builtin');
-    if(d.yara) $('#pYara').classList.add('on');
+    isDesktopMode = !!d.desktop_mode;
+    $('#sideVersion').textContent = 'v' + (d.version||'') + (isPublicMode ? ' · Online 24/7' : isDesktopMode ? ' · Desktop App' : ' · Local UI');
+
     if(d.auth_required){
       $('#authBox').style.display = 'block';
       if(accessKey && !$('#authKeyInput').value) $('#authKeyInput').value = accessKey;
     }
+    if(isDesktopMode){
+      $$('.desktop-only').forEach(el=>el.style.display='inline-flex');
+    }
     if(isPublicMode){
       if(d.max_upload_mb > 0) maxUploadMB = d.max_upload_mb;
-      document.querySelectorAll('.local-only').forEach(el=>el.style.display='none');
-      document.querySelectorAll('.public-only').forEach(el=>el.style.display='inline-block');
-      const gTab = document.querySelector('[data-tab="guard"]');
-      if(gTab) gTab.style.display = 'none';
-      $('#pWatch').textContent = 'Online Mode (24/7)';
-      $('#pWatch').classList.add('on');
-      $('#btnWebFolderPick').classList.add('primary');
-      $('#dropHint').innerHTML = `Drag &amp; drop <b>1 folder game utuh (bahkan puluhan GB!)</b> atau banyak file/archive. Smart Filter otomatis melewati asset besar (<code>.pak .mp4 .uasset</code> &amp; data &gt;${Math.min(75, Math.floor(maxUploadMB*0.75))} MB) di browser, tetap cek header <code>MZ/PE</code> tersembunyi, dan memecah sisanya per batch otomatis!`;
+      $$('.local-only').forEach(el=>el.style.display='none');
+      $$('.public-only').forEach(el=>el.style.display='inline-flex');
+      $('#sideProtTitle').textContent = 'Scanner Online 24/7';
+      $('#sideProtSub').textContent = 'Smart Filter aktif';
+      $('#sideProtPill').classList.add('active');
+      $('#heroTitle').textContent = 'CrackSentinel Web Scanner (24/7)';
+      $('#heroDesc').textContent = 'Drop folder game utuh atau arsip installer. Smart Filter otomatis menyaring aset besar di browser, memeriksa header MZ/PE tersembunyi, dan memecah batch upload otomatis.';
+      $('#dropHint').innerHTML = `Drag &amp; drop <b>1 folder game utuh (bahkan puluhan GB!)</b> atau banyak file/archive. Smart Filter otomatis melewati aset besar (&gt;${Math.min(75, Math.floor(maxUploadMB*0.75))} MB) di browser &amp; tetap cek header <code>MZ/PE</code> tersembunyi.`;
+      $('#kpiFourthLbl').textContent = 'Mode Scanner';
+      $('#kpiQuar').textContent = '24/7';
+      $('#kpiFourthSub').textContent = 'Smart Filter Aktif';
     }else{
-      updateWatchPill(d.watching, d.watch_dir);
+      updateWatchUI(d.watching, d.watch_dir);
       if(!$('#guardDir').value && d.default_downloads) $('#guardDir').value = d.default_downloads;
     }
-  }catch(e){}
+  }catch(_){}
 }
 
-function updateWatchPill(on, dir){
-  const p = $('#pWatch');
-  p.textContent = on ? 'Download Guard: ON' : 'Download Guard: OFF';
-  p.classList.toggle('on', !!on);
+function updateWatchUI(on, dir){
+  const pill = $('#sideProtPill');
+  const hero = $('#dashHero');
+  const badge = $('#navGuardBadge');
+  pill.classList.toggle('active', !!on);
+  hero.classList.toggle('protected', !!on);
+  if(!isPublicMode){
+    $('#sideProtTitle').textContent = on ? 'Download Guard Aktif' : 'Siap Memindai';
+    $('#sideProtSub').textContent = on ? 'Memantau folder otomatis' : 'Download Guard nonaktif';
+    $('#heroTitle').textContent = on ? 'Proteksi Real-Time Download Guard Aktif' : 'CrackSentinel Siap Melindungi PC Kamu';
+  }
+  badge.textContent = on ? 'ON' : 'OFF';
+  badge.classList.toggle('on', !!on);
+  $('#guardBadge').textContent = on ? 'AKTIF' : 'TIDAK AKTIF';
+  $('#guardBadge').className = 'badge ' + (on ? 'CLEAN' : 'INFO');
   $('#btnGuardStart').disabled = !!on;
   $('#btnGuardStop').disabled = !on;
   $('#guardStatusText').textContent = on ? ('Memantau: ' + dir) : 'Tidak aktif';
 }
 
-function setBusy(on, text){
-  $('#scanBusy').classList.toggle('show', on);
-  if(text) $('#scanBusyText').textContent = text;
+async function loadDashboard(){
+  try{
+    const r = await apiFetch('/api/dashboard');
+    if(!r.ok) return;
+    const d = await r.json();
+    const st = d.stats || {};
+    $('#kpiScans').textContent = st.total_scans || 0;
+    $('#kpiFiles').textContent = (st.total_files || 0).toLocaleString();
+    $('#kpiFilesSub').textContent = `Cache: ${(d.cache_entries||0).toLocaleString()} hash (${fmtBytes(d.cache_bytes||0)})`;
+    const threats = (st.total_malicious||0) + (st.total_suspicious||0);
+    $('#kpiThreats').textContent = threats;
+    $('#kpiThreatsSub').textContent = `${st.total_malicious||0} malicious · ${st.total_suspicious||0} suspicious`;
+    if(!isPublicMode){
+      $('#kpiQuar').textContent = st.quarantine_count || 0;
+      const qb = $('#navQuarBadge');
+      qb.textContent = st.quarantine_count || 0;
+      qb.classList.toggle('mal', (st.quarantine_count||0) > 0);
+      updateWatchUI(d.watching, d.watch_dir);
+    }
+
+    // Sidebar & engine diagnostics
+    $('#dotYara').className = 'dot ' + (d.yara ? 'ok' : 'warn');
+    $('#lblYara').textContent = d.yara ? ((d.yara_rules||0) + ' rules') : 'Builtin';
+    $('#modYara').textContent = d.yara ? ('ON (' + (d.yara_rules||0) + ')') : 'BUILTIN';
+    $('#modYara').className = 'badge ' + (d.yara ? 'CLEAN' : 'INFO');
+
+    const hasArc = d.extractor_7z || d.extractor_unrar;
+    $('#dot7z').className = 'dot ' + (hasArc ? 'ok' : 'warn');
+    $('#lbl7z').textContent = d.extractor_7z ? '7z OK' : d.extractor_unrar ? 'RAR OK' : 'ZIP Only';
+    $('#mod7z').textContent = d.extractor_7z ? '7-ZIP OK' : d.extractor_unrar ? 'UNRAR' : 'ZIP ONLY';
+    $('#mod7z').className = 'badge ' + (hasArc ? 'CLEAN' : 'SUSPICIOUS');
+
+    $('#lblCache').textContent = (d.cache_entries||0).toLocaleString();
+    $('#modOnline').textContent = d.online_enabled ? 'VT / MB ON' : 'OFFLINE';
+    $('#modOnline').className = 'badge ' + (d.online_enabled ? 'CLEAN' : 'INFO');
+    $('#cacheInfoText').textContent = `Hash cache: ${(d.cache_entries||0).toLocaleString()} entri (${fmtBytes(d.cache_bytes||0)})`;
+
+    // Quick scan targets
+    if(!isPublicMode && d.quick_targets){
+      const qt = $('#quickTargets');
+      if(!d.quick_targets.length){
+        qt.innerHTML = '<div class="muted">Gunakan tombol Pilih Folder Game untuk mulai scan.</div>';
+      }else{
+        qt.innerHTML = d.quick_targets.map(t=>`
+          <button class="quick-card" type="button" onclick="startQuickTarget(${JSON.stringify(t.path)})">
+            <div class="quick-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+            <div style="min-width:0">
+              <div class="quick-name">${esc(t.label)}</div>
+              <div class="quick-path mono">${esc(t.path)}</div>
+            </div>
+          </button>`).join('');
+      }
+    }
+
+    // Recent scans
+    const rb = $('#dashRecentBody');
+    const recs = d.recent_scans || [];
+    if(!recs.length){
+      rb.innerHTML = '<tr><td colspan="5" class="muted">Belum ada scan. Mulai scan folder game atau drop file!</td></tr>';
+    }else{
+      rb.innerHTML = recs.map(h=>`<tr>
+        <td class="mono" style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.target)}">${esc(h.target)}<div class="muted">${esc(h.time)}</div></td>
+        <td><span class="badge ${esc(h.top_verdict)}">${esc(h.top_verdict)}</span></td>
+        <td class="mono"><b>${h.max_score}</b></td>
+        <td>${h.files_scanned}</td>
+        <td><button class="btn sm ghost" onclick="openHistory(${JSON.stringify(h.id)})" type="button">Buka</button></td>
+      </tr>`).join('');
+    }
+  }catch(_){}
 }
 
-// Drag & drop files and folders
+// Native Picker + Live Scan Jobs
+async function pickNative(mode){
+  const r = await apiFetch('/api/pick', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) throw new Error(d.error || 'Picker dibatalkan atau gagal');
+  return d.paths || [];
+}
+
+async function pickAndScan(mode){
+  try{
+    const paths = await pickNative(mode);
+    if(paths.length){
+      switchView('scanner');
+      startLocalJob(paths);
+    }
+  }catch(e){ toast(e.message); }
+}
+
+function startQuickTarget(path){
+  switchView('scanner');
+  startLocalJob([path]);
+}
+
+$('#topScanFolder').addEventListener('click', ()=>pickAndScan('folder'));
+$('#heroBtnFolder').addEventListener('click', ()=>pickAndScan('folder'));
+$('#btnPickFolder').addEventListener('click', ()=>pickAndScan('folder'));
+$('#topScanFiles').addEventListener('click', ()=>pickAndScan('files'));
+$('#heroBtnFiles').addEventListener('click', ()=>pickAndScan('files'));
+$('#btnPickFiles').addEventListener('click', ()=>pickAndScan('files'));
+$('#heroBtnURL').addEventListener('click', ()=>switchView('url'));
+$('#topWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
+$('#heroBtnWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
+
+$('#btnAddFolderToMass').addEventListener('click', async ()=>{
+  try{
+    const paths = await pickNative('folder');
+    if(paths.length){
+      const cur = $('#massPaths').value.trim();
+      $('#massPaths').value = (cur ? cur + '\n' : '') + paths.join('\n');
+    }
+  }catch(e){ toast(e.message); }
+});
+$('#btnClearMass').addEventListener('click', ()=>$('#massPaths').value='');
+$('#btnScanPaths').addEventListener('click', ()=>{
+  const paths = $('#massPaths').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!paths.length) return toast('Masukkan minimal 1 path file/folder.');
+  startLocalJob(paths);
+});
+
+async function startLocalJob(paths){
+  if(isPublicMode) return toast('Mode web hanya mendukung drag & drop / Smart Filter.');
+  try{
+    const body = {
+      paths,
+      extract_depth: $('#optExtract').checked ? 2 : 0,
+      carve: $('#optCarve').checked,
+      online: $('#optOnline').checked,
+      source: paths.length > 1 ? 'mass' : 'paths'
+    };
+    const r = await apiFetch('/api/jobs/scan-paths', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d = await parseJSONSafe(r);
+    if(!r.ok) throw new Error(d.error || 'Gagal memulai scan');
+    activeJobID = d.id;
+    showLiveJob(d);
+    pollJob();
+  }catch(e){
+    toast('Error: ' + e.message);
+  }
+}
+
+function showLiveJob(d){
+  const running = d.status === 'running';
+  $('#liveScanCard').classList.toggle('show', running);
+  $('#topJobPill').classList.toggle('show', running);
+  $('#navScanBadge').style.display = running ? 'inline-block' : 'none';
+  if(!running) return;
+  const targets = (d.targets||[]).join(', ');
+  $('#liveTitle').textContent = 'Memindai: ' + (targets.length > 68 ? targets.slice(0,68) + '...' : targets);
+  const sec = Math.max(0.1, (d.elapsed_ms||100)/1000);
+  const fps = Math.round((d.files_scanned||0) / sec);
+  $('#liveSub').textContent = `Berjalan ${fmtMs(d.elapsed_ms)} · ${fps} file/dtk · ${fmtBytes(d.bytes_scanned)}`;
+  $('#topJobText').textContent = `Scanning: ${d.files_scanned||0} file (${d.malicious||0} mal)`;
+  $('#liveScanned').textContent = d.files_scanned || 0;
+  $('#liveMal').textContent = d.malicious || 0;
+  $('#liveSus').textContent = d.suspicious || 0;
+  $('#liveCln').textContent = d.clean || 0;
+  $('#liveCurFile').textContent = d.current_file || 'Menelusuri folder & memeriksa struktur...';
+  const fl = d.recent_flagged || [];
+  if(fl.length){
+    $('#liveFlaggedWrap').style.display = 'block';
+    $('#liveFlaggedList').innerHTML = fl.slice(0, 6).map(f=>`
+      <div class="row" style="font-size:12px;background:rgba(7,11,18,.6);padding:6px 10px;border-radius:8px;border:1px solid var(--line)">
+        <span class="badge ${esc(f.verdict)}">${esc(f.verdict)} ${f.score}</span>
+        <span class="mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.path)}</span>
+      </div>`).join('');
+  }else{
+    $('#liveFlaggedWrap').style.display = 'none';
+  }
+}
+
+async function pollJob(){
+  clearTimeout(jobPollTimer);
+  if(!activeJobID) return;
+  try{
+    const r = await apiFetch('/api/jobs/' + encodeURIComponent(activeJobID));
+    const d = await parseJSONSafe(r);
+    if(!r.ok) throw new Error(d.error || 'Job error');
+    showLiveJob(d);
+    if(d.status === 'running'){
+      jobPollTimer = setTimeout(pollJob, 350);
+    }else{
+      activeJobID = null;
+      if(d.status === 'error'){
+        toast('Scan gagal: ' + (d.error||''));
+      }else if(d.result){
+        renderResult(d.result);
+        toast(`Scan selesai (${d.result.top_verdict}): ${d.result.summary.files_scanned} file dalam ${fmtMs(d.elapsed_ms)}`);
+        loadDashboard();
+      }
+    }
+  }catch(e){
+    activeJobID = null;
+    $('#liveScanCard').classList.remove('show');
+    $('#topJobPill').classList.remove('show');
+    $('#navScanBadge').style.display = 'none';
+    toast('Error polling scan: ' + e.message);
+  }
+}
+
+$('#btnCancelJob').addEventListener('click', async ()=>{
+  if(!activeJobID) return;
+  await apiFetch('/api/jobs/' + encodeURIComponent(activeJobID) + '/cancel', {method:'POST'});
+  toast('Membatalkan scan...');
+});
+
+// Drag & Drop + Smart Folder Filter Upload
+function fileExt(name){
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i).toLowerCase() : '';
+}
+async function isDisguisedPEClient(file){
+  try{
+    if(file.size < 64) return false;
+    const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+    if(head[0] !== 0x4D || head[1] !== 0x5A) return false;
+    const lfanew = head[0x3C] | (head[0x3D]<<8) | (head[0x3E]<<16) | (head[0x3F]<<24);
+    if(lfanew < 0x40 || lfanew + 4 > file.size || lfanew > 16*1024*1024) return false;
+    const sig = new Uint8Array(await file.slice(lfanew, lfanew + 4).arrayBuffer());
+    return sig[0] === 0x50 && sig[1] === 0x45 && sig[2] === 0 && sig[3] === 0;
+  }catch(_){ return false; }
+}
+
 const dz = $('#dropzone');
 ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.remove('over');}));
@@ -417,8 +1142,13 @@ $('#folderInput').addEventListener('change', e=>{
   e.target.value = '';
 });
 
+function setUploadBusy(on, text){
+  $('#uploadBusy').style.display = on ? 'block' : 'none';
+  if(text) $('#uploadBusyText').textContent = text;
+}
+
 async function uploadAndScan(files){
-  setBusy(true, `Menyaring ${files.length} file di browser (Smart Filter)...`);
+  setUploadBusy(true, `Menyaring ${files.length} file (Smart Filter)...`);
   try{
     const maxFileBytes = isPublicMode ? Math.min(75, Math.max(20, Math.floor(maxUploadMB * 0.75))) * 1048576 : 512 * 1048576;
     const maxBatchBytes = isPublicMode ? Math.min(45, Math.max(15, Math.floor(maxUploadMB * 0.45))) * 1048576 : 256 * 1048576;
@@ -432,9 +1162,7 @@ async function uploadAndScan(files){
       const f = files[i];
       const rel = f._rel || f.webkitRelativePath || f.name;
       const ext = fileExt(f.name);
-      if(i % 25 === 0) setBusy(true, `Smart Filter: memeriksa ${i+1}/${files.length} file...`);
-
-      // Skip huge game assets locally UNLESS the file hides a real PE header (MZ + PE\0\0).
+      if(i % 25 === 0) setUploadBusy(true, `Smart Filter: memeriksa ${i+1}/${files.length} file...`);
       if(ASSET_EXTS.has(ext) && !(await isDisguisedPEClient(f))){
         skippedClient.push({path: rel, size: f.size, reason: 'game asset dilewati lokal'});
         skippedBytes += f.size;
@@ -442,46 +1170,39 @@ async function uploadAndScan(files){
       }
       if(f.size > maxFileBytes){
         skippedClient.push({
-          path: rel,
-          size: f.size,
-          reason: `ukuran ${(f.size/1048576).toFixed(1)} MB melebihi batas upload web (${Math.round(maxFileBytes/1048576)} MB) — gunakan mode lokal CrackSentinel-Drop.bat untuk deep-carve file raksasa`
+          path: rel, size: f.size,
+          reason: `ukuran ${(f.size/1048576).toFixed(1)} MB melebihi batas upload (${Math.round(maxFileBytes/1048576)} MB) — gunakan tombol Pilih Folder Game (Scan Langsung) di aplikasi desktop`
         });
         skippedBytes += f.size;
         continue;
       }
       toSend.push({file: f, rel});
     }
-
     if(!toSend.length){
-      const msg = skippedClient.length
-        ? `Semua ${skippedClient.length} file dilewati oleh batas ukuran web (${(skippedBytes/1048576).toFixed(1)} MB). Untuk file >${Math.round(maxFileBytes/1048576)} MB gunakan CrackSentinel-Drop.bat lokal.`
-        : 'Tidak ada file yang bisa di-scan.';
-      throw new Error(msg);
+      throw new Error(skippedClient.length
+        ? `Semua ${skippedClient.length} file melewati batas ukuran upload (${(skippedBytes/1048576).toFixed(1)} MB). Gunakan tombol Pilih Folder Game (Scan Langsung).`
+        : 'Tidak ada file yang bisa di-scan.');
     }
 
-    // Group files into safe chunks below Cloudflare's 100 MB request cap.
     const batches = [];
     let cur = [], curBytes = 0;
     for(const item of toSend){
       if(cur.length > 0 && (curBytes + item.file.size > maxBatchBytes || cur.length >= maxBatchFiles)){
-        batches.push(cur);
-        cur = [];
-        curBytes = 0;
+        batches.push(cur); cur = []; curBytes = 0;
       }
-      cur.push(item);
-      curBytes += item.file.size;
+      cur.push(item); curBytes += item.file.size;
     }
     if(cur.length) batches.push(cur);
 
     const mergedResults = [];
     let totalScanned = 0, totalSkipped = skippedClient.length, totalBytes = 0, totalMs = 0;
     let lastItem = null;
-    const skipNote = skippedClient.length ? ` (${skippedClient.length} file besar/asset · ${(skippedBytes/1048576).toFixed(0)} MB dilewati lokal)` : '';
+    const skipNote = skippedClient.length ? ` (${skippedClient.length} file besar/asset · ${(skippedBytes/1048576).toFixed(0)} MB dilewati)` : '';
 
     for(let b = 0; b < batches.length; b++){
       const batch = batches[b];
       const bMB = (batch.reduce((a,x)=>a+x.file.size,0)/1048576).toFixed(1);
-      setBusy(true, `Scanning batch ${b+1}/${batches.length} (${batch.length} file · ${bMB} MB)${skipNote}...`);
+      setUploadBusy(true, `Scanning batch ${b+1}/${batches.length} (${batch.length} file · ${bMB} MB)${skipNote}...`);
       const fd = new FormData();
       fd.append('extract', $('#optExtract').checked ? 'true' : 'false');
       fd.append('carve', $('#optCarve').checked ? 'true' : 'false');
@@ -500,21 +1221,14 @@ async function uploadAndScan(files){
       if(d.summary.results) mergedResults.push(...d.summary.results);
     }
 
-    // Add informational rows for oversized non-asset blobs so the user sees why they were skipped.
     for(const sk of skippedClient){
       if(sk.size > maxFileBytes){
         mergedResults.push({
-          path: sk.path,
-          size: sk.size,
-          type: 'skipped-large',
-          score: 0,
-          verdict: 'CLEAN',
-          skipped: false,
+          path: sk.path, size: sk.size, type: 'skipped-large', score: 0, verdict: 'CLEAN', skipped: false,
           findings: [{rule: 'web_size_skipped', category: 'info', severity: 0, detail: sk.reason}]
         });
       }
     }
-
     mergedResults.sort((a,b) => (b.score||0) - (a.score||0));
     let mal = 0, sus = 0, cln = 0, maxScore = 0, topVerdict = 'CLEAN';
     for(const r of mergedResults){
@@ -524,13 +1238,11 @@ async function uploadAndScan(files){
       else if(r.verdict === 'SUSPICIOUS'){ sus++; if(topVerdict !== 'MALICIOUS') topVerdict = 'SUSPICIOUS'; }
       else if(r.type !== 'skipped-large'){ cln++; }
     }
-
-    // Derive clean folder or file label.
     let targetLabel = toSend.length === 1 ? toSend[0].rel : `Smart Scan (${toSend.length} file)`;
     const firstParts = toSend[0].rel.split('/');
     if(firstParts.length > 1) targetLabel = firstParts[0] + ` (${toSend.length} file${skipNote})`;
 
-    const combined = {
+    renderResult({
       id: lastItem ? lastItem.id : 'batch',
       time: lastItem ? lastItem.time : new Date().toLocaleString(),
       source: 'drag-drop',
@@ -538,89 +1250,29 @@ async function uploadAndScan(files){
       top_verdict: topVerdict,
       max_score: maxScore,
       summary: {
-        files_scanned: totalScanned,
-        files_skipped: totalSkipped,
-        bytes_scanned: totalBytes,
-        clean: cln,
-        suspicious: sus,
-        malicious: mal,
-        duration_ms: totalMs,
-        results: mergedResults
+        files_scanned: totalScanned, files_skipped: totalSkipped, bytes_scanned: totalBytes,
+        clean: cln, suspicious: sus, malicious: mal, duration_ms: totalMs, results: mergedResults
       }
-    };
-    renderResult(combined);
-    toast(`Scan selesai: ${topVerdict} (${totalScanned} file dicek, ${skippedClient.length} besar/asset dilewati)`);
+    });
+    toast(`Scan selesai: ${topVerdict} (${totalScanned} file dicek)`);
+    loadDashboard();
   }catch(err){
     toast('Error: ' + err.message);
   }finally{
-    setBusy(false);
+    setUploadBusy(false);
   }
 }
 
-async function pickNative(mode){
-  const r = await apiFetch('/api/pick', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode})});
-  const d = await r.json();
-  if(!r.ok) throw new Error(d.error || 'Picker gagal');
-  return d.paths || [];
-}
-
-$('#btnPickFolder').addEventListener('click', async ()=>{
-  try{
-    const paths = await pickNative('folder');
-    if(paths.length) scanLocalPaths(paths);
-  }catch(e){ toast(e.message); }
-});
-$('#btnPickFiles').addEventListener('click', async ()=>{
-  try{
-    const paths = await pickNative('files');
-    if(paths.length) scanLocalPaths(paths);
-  }catch(e){ toast(e.message); }
-});
-$('#btnAddFolderToMass').addEventListener('click', async ()=>{
-  try{
-    const paths = await pickNative('folder');
-    if(paths.length){
-      const cur = $('#massPaths').value.trim();
-      $('#massPaths').value = (cur ? cur + '\n' : '') + paths.join('\n');
-    }
-  }catch(e){ toast(e.message); }
-});
-$('#btnClearMass').addEventListener('click', ()=>$('#massPaths').value='');
-$('#btnScanPaths').addEventListener('click', ()=>{
-  const paths = $('#massPaths').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  if(!paths.length) return toast('Masukkan minimal 1 path file/folder');
-  scanLocalPaths(paths);
-});
-
-async function scanLocalPaths(paths){
-  setBusy(true, `Scanning ${paths.length} target langsung di disk...`);
-  try{
-    const body = {
-      paths,
-      extract_depth: $('#optExtract').checked ? 2 : 0,
-      carve: $('#optCarve').checked,
-      online: $('#optOnline').checked,
-      source: paths.length > 1 ? 'mass' : 'paths'
-    };
-    const r = await apiFetch('/api/scan-paths', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.error || 'Scan gagal');
-    renderResult(d);
-    toast(`Scan selesai: ${d.top_verdict} (${d.summary.files_scanned} file)`);
-  }catch(err){
-    toast('Error: ' + err.message);
-  }finally{
-    setBusy(false);
-  }
-}
-
+// Render Scan Result Table
 function renderResult(item){
   currentItem = item;
   const sum = item.summary;
   $('#resultBox').style.display = 'block';
   $('#resTitle').textContent = 'Hasil Scan: ' + item.target;
-  $('#resMeta').textContent = `${item.time} · ${sum.duration_ms} ms · ${(sum.bytes_scanned/1048576).toFixed(1)} MB` + (item.origin_url ? ' · Asal: ' + item.origin_url : '');
-  $('#btnDownloadHTML').href = '/api/report/' + encodeURIComponent(item.id) + '.html' + (accessKey ? ('?key=' + encodeURIComponent(accessKey)) : '');
+  $('#resMeta').textContent = `${item.time} · ${fmtMs(sum.duration_ms)} · ${fmtBytes(sum.bytes_scanned)}` + (item.origin_url ? ' · Asal: ' + item.origin_url : '');
+  const q = accessKey ? ('?key=' + encodeURIComponent(accessKey)) : '';
+  $('#btnDownloadHTML').href = '/api/report/' + encodeURIComponent(item.id) + '.html' + q;
+  $('#btnDownloadJSON').href = '/api/report/' + encodeURIComponent(item.id) + '.json' + q;
 
   $('#resMetrics').innerHTML = `
     <div class="metric"><div class="n mal">${sum.malicious}</div><div class="l">Malicious</div></div>
@@ -630,6 +1282,7 @@ function renderResult(item){
     <div class="metric"><div class="n">${sum.files_skipped}</div><div class="l">Skipped</div></div>
   `;
   drawResultRows();
+  $('#resultBox').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 function drawResultRows(){
@@ -642,16 +1295,16 @@ function drawResultRows(){
     return blob.includes(term);
   });
   $('#resCount').textContent = `${rows.length} file ditampilkan`;
-  const canQuar = currentItem.source !== 'drag-drop';
+  const isLocalScan = !isPublicMode && currentItem.source !== 'drag-drop';
   const tb = $('#resBody');
   if(!rows.length){
     tb.innerHTML = '<tr><td colspan="6" class="muted">Tidak ada file cocok dengan filter.</td></tr>';
     return;
   }
   tb.innerHTML = rows.slice(0, 400).map(r=>{
-    const fs = (r.findings||[]);
+    const fs = r.findings || [];
     const sevCount = fs.filter(f=>f.severity>0).length;
-    const infoBits = [r.type];
+    const infoBits = [r.type, fmtBytes(r.size)];
     if(r.signature_status && r.signature_status !== 'none') infoBits.push('sig:' + r.signature_status);
     if(r.signer) infoBits.push(r.signer);
     if(r.packer) infoBits.push('pack:' + r.packer);
@@ -666,63 +1319,64 @@ function drawResultRows(){
         '</details>';
     }
     const acts = [];
-    if(!isPublicMode && canQuar && r.score >= 30){
-      acts.push(`<button class="btn sm danger" onclick="quarantinePath(${JSON.stringify(r.path)})">Karantina</button>`);
+    if(isLocalScan && r.score >= 30){
+      acts.push(`<button class="btn sm danger" type="button" onclick="quarantinePath(${JSON.stringify(r.path)})">Karantina</button>`);
+    }
+    if(isLocalScan){
+      acts.push(`<button class="btn sm ghost" type="button" onclick="openExplorer(${JSON.stringify(r.path)})">Explorer</button>`);
     }
     if(!isPublicMode && r.score >= 30){
-      acts.push(`<button class="btn sm" onclick="labelCorpus(${JSON.stringify(r.path)},'legitimate')">Legit</button>`);
-      acts.push(`<button class="btn sm" onclick="labelCorpus(${JSON.stringify(r.path)},'malicious')">Malware</button>`);
+      acts.push(`<button class="btn sm ghost" type="button" onclick="labelCorpus(${JSON.stringify(r.path)},'legitimate')">Legit</button>`);
+      acts.push(`<button class="btn sm ghost" type="button" onclick="labelCorpus(${JSON.stringify(r.path)},'malicious')">Malware</button>`);
     }
     return `<tr>
       <td><span class="badge ${esc(r.verdict)}">${esc(r.verdict)}</span></td>
       <td class="mono"><b>${r.score}</b></td>
-      <td class="mono" style="word-break:break-all;max-width:340px">${esc(r.path)}</td>
+      <td class="mono" style="word-break:break-all;max-width:320px">${esc(r.path)}</td>
       <td class="muted">${esc(infoBits.join(' · '))}</td>
       <td>${findHTML}</td>
-      <td><div class="row-flex">${acts.join('')}</div></td>
+      <td><div class="row" style="gap:5px">${acts.join('')}</div></td>
     </tr>`;
   }).join('');
 }
 
-document.querySelectorAll('[data-vf]').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('[data-vf]').forEach(b=>b.classList.remove('primary'));
-    btn.classList.add('primary');
-    verdictFilter = btn.dataset.vf;
-    drawResultRows();
-  });
-});
+$$('[data-vf]').forEach(btn=>btn.addEventListener('click', ()=>{
+  $$('[data-vf]').forEach(b=>b.classList.remove('primary'));
+  btn.classList.add('primary');
+  verdictFilter = btn.dataset.vf;
+  drawResultRows();
+}));
 $('#resSearch').addEventListener('input', drawResultRows);
 
 async function quarantinePath(path){
-  if(!confirm('Pindahkan file ini ke folder .quarantine?\n' + path)) return;
+  if(!confirm('Isolasi file ini ke Quarantine Vault?\n\n' + path)) return;
   const r = await apiFetch('/api/quarantine', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})});
-  const d = await r.json();
+  const d = await parseJSONSafe(r);
   if(!r.ok) return toast('Gagal karantina: ' + (d.error||''));
-  toast('File dikarantina ke: ' + d.quarantined_to);
+  toast('File dipindahkan ke Quarantine Vault!');
+  loadDashboard();
 }
-
+async function openExplorer(path){
+  const r = await apiFetch('/api/open-explorer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})});
+  if(!r.ok){ const d = await parseJSONSafe(r); toast(d.error || 'Gagal buka Explorer'); }
+}
 async function labelCorpus(path, label){
   const r = await apiFetch('/api/corpus/label', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, label})});
-  const d = await r.json();
+  const d = await parseJSONSafe(r);
   if(!r.ok) return toast('Gagal simpan label: ' + (d.error||''));
   toast(`Label '${label}' disimpan ke corpus.json`);
 }
 
-// Watch / Download Guard
+// Download Guard
 $('#btnPickGuardDir').addEventListener('click', async ()=>{
-  try{
-    const p = await pickNative('folder');
-    if(p.length) $('#guardDir').value = p[0];
-  }catch(e){ toast(e.message); }
+  try{ const p = await pickNative('folder'); if(p.length) $('#guardDir').value = p[0]; }catch(e){ toast(e.message); }
 });
-
 async function loadWatchStatus(){
   if(isPublicMode) return;
   try{
     const r = await apiFetch('/api/watch/status');
     const d = await r.json();
-    updateWatchPill(d.active, d.dir);
+    updateWatchUI(d.active, d.dir);
     if(d.dir) $('#guardDir').value = d.dir;
     const tb = $('#guardEvents');
     if(!d.events || !d.events.length){
@@ -737,9 +1391,8 @@ async function loadWatchStatus(){
       <td>${esc(ev.action)}</td>
       <td class="muted">${esc(ev.top_finding||'')}${ev.origin_url ? '<br>Asal: '+esc(ev.origin_url) : ''}</td>
     </tr>`).join('');
-  }catch(e){}
+  }catch(_){}
 }
-
 $('#btnGuardStart').addEventListener('click', async ()=>{
   const body = {
     dir: $('#guardDir').value.trim(),
@@ -748,15 +1401,16 @@ $('#btnGuardStart').addEventListener('click', async ()=>{
     toast: $('#guardToast').checked
   };
   const r = await apiFetch('/api/watch/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const d = await r.json();
+  const d = await parseJSONSafe(r);
   if(!r.ok) return toast('Gagal: ' + (d.error||''));
   loadWatchStatus();
+  loadDashboard();
   toast('Download Guard aktif!');
 });
-
 $('#btnGuardStop').addEventListener('click', async ()=>{
   await apiFetch('/api/watch/stop', {method:'POST'});
   loadWatchStatus();
+  loadDashboard();
   toast('Download Guard dimatikan.');
 });
 
@@ -766,30 +1420,84 @@ $('#btnCheckUrl').addEventListener('click', async ()=>{
   if(!url) return toast('Masukkan URL download terlebih dahulu');
   const box = $('#urlResult');
   box.style.display = 'block';
-  box.innerHTML = '<div class="muted">Memeriksa link &amp; redirect chain...</div>';
+  box.innerHTML = '<div class="row muted"><div class="spinner"></div> Memeriksa link &amp; melacak redirect chain...</div>';
   try{
     const r = await apiFetch('/api/check-url', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({url, referrer:$('#refInput').value.trim(), probe:$('#urlProbe').checked})
     });
-    const d = await r.json();
+    const d = await parseJSONSafe(r);
     if(!r.ok) throw new Error(d.error || 'Gagal cek link');
-    const chain = (d.redirect_chain||[]).map((u,i)=>`<div class="mono muted">${i+1}. ${esc(u)}</div>`).join('');
-    const finds = (d.findings||[]).map(f=>`<div class="finding-item"><div class="sv ${f.severity>=30?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div><div class="mono acc">${esc(f.rule)}</div><div>${esc(f.detail)}</div></div>`).join('') || '<div class="muted">Tidak ada indikator mencurigakan pada URL.</div>';
+    const chain = (d.redirect_chain||[]).map((u,i)=>`<div class="mono muted" style="padding:3px 0">${i+1}. ${esc(u)}</div>`).join('');
+    const finds = (d.findings||[]).map(f=>`<div class="finding-item"><div class="sv ${f.severity>=30?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div><div class="mono acc">${esc(f.rule)}</div><div>${esc(f.detail)}</div></div>`).join('') || '<div class="muted">Tidak ada indikator mencurigakan pada URL ini.</div>';
     box.innerHTML = `
-      <div class="row-flex" style="margin-bottom:10px">
+      <div class="row" style="margin-bottom:12px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:10px">
         <span class="badge ${esc(d.verdict)}">${esc(d.verdict)}</span>
-        <span class="mono"><b>Skor ${d.score}</b></span>
-        <span class="muted">Domain: ${esc(d.domain||'-')} ${d.filename ? '· File: '+esc(d.filename) : ''} ${d.content_length>0 ? '· '+(d.content_length/1048576).toFixed(1)+' MB' : ''}</span>
+        <span class="mono"><b>Skor Risiko ${d.score}/100</b></span>
+        <span class="muted">Domain: ${esc(d.domain||'-')} ${d.filename ? '· File: '+esc(d.filename) : ''} ${d.content_length>0 ? '· '+fmtBytes(d.content_length) : ''}</span>
       </div>
       ${finds}
-      ${chain ? '<div style="margin-top:10px"><b>Redirect Chain:</b>'+chain+'</div>' : ''}
+      ${chain ? '<div style="margin-top:12px"><b>Redirect Chain:</b><div style="margin-top:4px;padding:10px;background:var(--bg2);border-radius:9px;border:1px solid var(--line)">'+chain+'</div></div>' : ''}
     `;
   }catch(e){
     box.innerHTML = '<div class="mal">Gagal: ' + esc(e.message) + '</div>';
   }
 });
+
+// Quarantine Vault
+async function loadQuarantine(){
+  if(isPublicMode) return;
+  try{
+    const r = await apiFetch('/api/quarantine/list');
+    const d = await parseJSONSafe(r);
+    if(!r.ok) return;
+    currentVaultDir = d.vault_dir || '';
+    $('#quarVaultPath').textContent = currentVaultDir || '(default)';
+    const items = d.items || [];
+    const qb = $('#navQuarBadge');
+    qb.textContent = items.length;
+    qb.classList.toggle('mal', items.length > 0);
+    const tb = $('#quarBody');
+    if(!items.length){
+      tb.innerHTML = '<tr><td colspan="6" class="muted">Vault karantina kosong — tidak ada file yang diisolasi.</td></tr>';
+      return;
+    }
+    tb.innerHTML = items.map(it=>`<tr>
+      <td class="mono muted">${esc((it.quarantined_at||'').replace('T',' ').slice(0,19))}</td>
+      <td><span class="badge ${esc(it.verdict||'MALICIOUS')}">${esc(it.verdict||'FLAGGED')}</span></td>
+      <td class="mono"><b>${it.score||0}</b></td>
+      <td class="mono" style="word-break:break-all;max-width:310px"><b>${esc(it.filename)}</b><div class="muted">${esc(it.original_path)}</div><div class="muted">${fmtBytes(it.size)} · SHA256: ${esc((it.sha256||'').slice(0,16))}...</div></td>
+      <td class="muted">${esc(it.top_finding||'-')}</td>
+      <td><div class="row" style="gap:6px">
+        <button class="btn sm success" type="button" onclick="restoreQuar(${JSON.stringify(it.quarantined_path)},${JSON.stringify(it.filename)})">Pulihkan</button>
+        <button class="btn sm danger" type="button" onclick="deleteQuar(${JSON.stringify(it.quarantined_path)},${JSON.stringify(it.filename)})">Hapus Permanen</button>
+      </div></td>
+    </tr>`).join('');
+  }catch(_){}
+}
+$('#btnRefreshQuar').addEventListener('click', loadQuarantine);
+$('#btnOpenVaultDir').addEventListener('click', ()=>{
+  if(currentVaultDir) openExplorer(currentVaultDir);
+  else toast('Folder vault belum dibuat (belum ada file dikarantina).');
+});
+async function restoreQuar(qPath, name){
+  if(!confirm(`Pulihkan file "${name}" kembali ke lokasi aslinya?\nPastikan kamu yakin file ini aman (false positive).`)) return;
+  const r = await apiFetch('/api/quarantine/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({quarantined_path: qPath})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal restore: ' + (d.error||''));
+  toast('File dipulihkan ke: ' + d.restored_to);
+  loadQuarantine();
+  loadDashboard();
+}
+async function deleteQuar(qPath, name){
+  if(!confirm(`Hapus PERMANEN file "${name}" dari Quarantine Vault?\nTindakan ini tidak bisa dibatalkan.`)) return;
+  const r = await apiFetch('/api/quarantine/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({quarantined_path: qPath})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal hapus: ' + (d.error||''));
+  toast('File berbahaya dihapus permanen.');
+  loadQuarantine();
+  loadDashboard();
+}
 
 // History
 async function loadHistory(){
@@ -804,27 +1512,153 @@ async function loadHistory(){
   tb.innerHTML = d.items.map(h=>`<tr>
     <td class="mono muted">${esc(h.time)}</td>
     <td>${esc(h.source)}</td>
-    <td class="mono" style="word-break:break-all">${esc(h.target)}</td>
+    <td class="mono" style="word-break:break-all;max-width:300px">${esc(h.target)}</td>
     <td><span class="badge ${esc(h.top_verdict)}">${esc(h.top_verdict)}</span></td>
     <td class="mono"><b>${h.max_score}</b></td>
     <td>${h.files_scanned}</td>
-    <td><button class="btn sm" onclick="openHistory(${JSON.stringify(h.id)})">Lihat</button></td>
+    <td><div class="row" style="gap:5px">
+      <button class="btn sm" type="button" onclick="openHistory(${JSON.stringify(h.id)})">Lihat</button>
+      <a class="btn sm ghost" href="/api/report/${encodeURIComponent(h.id)}.html${accessKey?('?key='+encodeURIComponent(accessKey)):''}">HTML</a>
+    </div></td>
   </tr>`).join('');
 }
 $('#btnRefreshHist').addEventListener('click', loadHistory);
-
+$('#btnClearHist').addEventListener('click', async ()=>{
+  if(!confirm('Hapus seluruh riwayat scan tersimpan?')) return;
+  await apiFetch('/api/history/clear', {method:'POST'});
+  toast('Riwayat scan dibersihkan.');
+  loadHistory();
+  loadDashboard();
+});
 async function openHistory(id){
   const r = await apiFetch('/api/history/' + encodeURIComponent(id));
+  if(!r.ok) return toast('Riwayat tidak ditemukan');
   const d = await r.json();
-  document.querySelector('[data-tab="scan"]').click();
+  switchView('scanner');
   renderResult(d);
 }
 
-loadHealth();
+// Settings
+$('#setWorkers').addEventListener('input', ()=>$('#setWorkersVal').textContent = $('#setWorkers').value);
+$('#btnPickTemp').addEventListener('click', async ()=>{
+  try{ const p = await pickNative('folder'); if(p.length) $('#setTempDir').value = p[0]; }catch(e){ toast(e.message); }
+});
+$('#btnPickQuar').addEventListener('click', async ()=>{
+  try{ const p = await pickNative('folder'); if(p.length) $('#setQuarDir').value = p[0]; }catch(e){ toast(e.message); }
+});
+
+async function loadSettings(){
+  if(isPublicMode) return;
+  const r = await apiFetch('/api/settings');
+  if(!r.ok) return;
+  const d = await r.json();
+  $('#setWorkers').max = Math.max(4, Math.min(16, d.cpu_cores || 8));
+  $('#setWorkers').value = d.workers || 3;
+  $('#setWorkersVal').textContent = d.workers || 3;
+  $('#setCpuHint').textContent = `(CPU tersedia: ${d.cpu_cores||4} thread)`;
+  $('#setMaxSize').value = d.max_size_mb || 512;
+  $('#setExtractDepth').value = d.extract_depth ?? 2;
+  $('#setExtractMB').value = d.extract_max_mb || 500;
+  $('#setTempDir').value = d.temp_dir || '';
+  $('#setQuarDir').value = d.quarantine_dir || '';
+  $('#setSkipAssets').checked = d.skip_assets !== false;
+  $('#setCarve').checked = d.carve !== false;
+  $('#setUseCache').checked = d.use_cache !== false;
+  $('#setWatchAuto').checked = !!d.watch_auto_start;
+  $('#vtStatusBadge').textContent = d.vt_key_set ? 'Tersimpan' : 'Belum diatur';
+  $('#vtStatusBadge').className = 'badge ' + (d.vt_key_set ? 'CLEAN' : 'INFO');
+  $('#mbStatusBadge').textContent = d.mb_key_set ? 'Tersimpan' : 'Belum diatur';
+  $('#mbStatusBadge').className = 'badge ' + (d.mb_key_set ? 'CLEAN' : 'INFO');
+  $('#setVTKey').value = '';
+  $('#setMBKey').value = '';
+}
+
+$('#btnSaveSettings').addEventListener('click', async ()=>{
+  const body = {
+    workers: parseInt($('#setWorkers').value, 10),
+    max_size_mb: parseInt($('#setMaxSize').value, 10),
+    extract_depth: parseInt($('#setExtractDepth').value, 10),
+    extract_max_mb: parseInt($('#setExtractMB').value, 10),
+    temp_dir: $('#setTempDir').value.trim(),
+    quarantine_dir: $('#setQuarDir').value.trim(),
+    skip_assets: $('#setSkipAssets').checked,
+    carve: $('#setCarve').checked,
+    use_cache: $('#setUseCache').checked,
+    watch_auto_start: $('#setWatchAuto').checked,
+    watch_dir: $('#guardDir').value.trim(),
+    watch_interval: parseInt($('#guardInterval').value, 10) || 4,
+    watch_quarantine: $('#guardQuar').checked,
+    watch_toast: $('#guardToast').checked
+  };
+  if($('#setVTKey').value.trim()) body.vt_api_key = $('#setVTKey').value.trim();
+  if($('#setMBKey').value.trim()) body.mb_api_key = $('#setMBKey').value.trim();
+  const r = await apiFetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal menyimpan: ' + (d.error||''));
+  toast('Pengaturan disimpan!');
+  loadSettings();
+  loadDashboard();
+});
+
+$('#btnClearVT').addEventListener('click', async ()=>{
+  await apiFetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({clear_vt_key:true})});
+  toast('VirusTotal API Key dihapus.');
+  loadSettings(); loadDashboard();
+});
+$('#btnClearMB').addEventListener('click', async ()=>{
+  await apiFetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({clear_mb_key:true})});
+  toast('MalwareBazaar Key dihapus.');
+  loadSettings(); loadDashboard();
+});
+$('#btnClearCache').addEventListener('click', async ()=>{
+  if(!confirm('Bersihkan semua Hash Cache? Scan berikutnya akan menganalisa ulang semua file.')) return;
+  await apiFetch('/api/cache/clear', {method:'POST'});
+  toast('Hash cache dibersihkan.');
+  loadDashboard();
+});
+$('#btnCreateShortcut').addEventListener('click', async ()=>{
+  const r = await apiFetch('/api/desktop/shortcut', {method:'POST'});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal: ' + (d.error||''));
+  toast('Shortcut Desktop dibuat: ' + d.shortcut);
+});
+$('#btnAppQuit').addEventListener('click', async ()=>{
+  if(!confirm('Tutup aplikasi CrackSentinel?')) return;
+  await apiFetch('/api/app/quit', {method:'POST'});
+  window.close();
+});
+
+// Boot + Persistent SSE Window Lifecycle + Auto-scan dropped args onto CrackSentinel.exe
+let appStream = null;
+function connectDesktopStream(){
+  if(!isDesktopMode || isPublicMode || appStream) return;
+  try{
+    appStream = new EventSource('/api/app/stream');
+  }catch(_){}
+}
+
+async function boot(){
+  await loadHealth();
+  connectDesktopStream();
+  await loadDashboard();
+  const params = new URLSearchParams(location.search);
+  const autoPaths = params.getAll('autopath').filter(Boolean);
+  if(autoPaths.length && !isPublicMode){
+    history.replaceState(null, '', '/');
+    switchView('scanner');
+    startLocalJob(autoPaths);
+  }
+}
+boot();
+
 setInterval(()=>{
-  if($('#pane-guard').classList.contains('active')) loadWatchStatus();
-  loadHealth();
-}, 5000);
+  if(isDesktopMode && !isPublicMode) apiFetch('/api/app/heartbeat', {method:'POST'}).catch(()=>{});
+}, 10000);
+
+setInterval(()=>{
+  if($('#view-guard').classList.contains('active')) loadWatchStatus();
+  if($('#view-dashboard').classList.contains('active')) loadDashboard();
+}, 6000);
 </script>
 </body>
 </html>

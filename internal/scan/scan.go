@@ -27,6 +27,7 @@ import (
 	"gamecrack-scanner/internal/motw"
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/pe"
+	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/rules"
 	"gamecrack-scanner/internal/sandbox"
 	"gamecrack-scanner/internal/telemetry"
@@ -101,6 +102,8 @@ type Config struct {
 	CarveMaxMB int64
 	// OnProgress is an optional callback invoked as each file completes.
 	OnProgress func(scanned int, r model.FileResult)
+	// Cancel, when non-nil and closed, stops feeding new files to workers.
+	Cancel <-chan struct{}
 }
 
 type Scanner struct {
@@ -215,6 +218,7 @@ func (s *Scanner) tryUnpackUPX(path string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "-d", "-q", "-o", out, path)
+	procutil.HideWindow(cmd)
 	if err := cmd.Run(); err != nil {
 		return ""
 	}
@@ -350,11 +354,20 @@ func (s *Scanner) Close() {
 	if s.cache != nil {
 		s.cache.Close()
 	}
-	if s.cfg.Yara != nil {
-		s.cfg.Yara.Close()
-	}
 	if s.tmp != "" {
 		os.RemoveAll(s.tmp)
+	}
+}
+
+func (s *Scanner) isCanceled() bool {
+	if s.cfg.Cancel == nil {
+		return false
+	}
+	select {
+	case <-s.cfg.Cancel:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -369,6 +382,9 @@ func (s *Scanner) Run() (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
+				if s.isCanceled() {
+					continue
+				}
 				results <- s.scanFile(p, 0, false)
 			}
 		}()
@@ -449,6 +465,9 @@ func (s *Scanner) ScanPaths(targets []string) (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
+				if s.isCanceled() {
+					continue
+				}
 				results <- s.scanFile(p, 0, false)
 			}
 		}()
@@ -492,6 +511,9 @@ func (s *Scanner) ScanPaths(targets []string) (*model.Summary, error) {
 		if info.IsDir() {
 			scannedDirs = append(scannedDirs, abs)
 			filepath.WalkDir(abs, func(path string, d os.DirEntry, werr error) error {
+				if s.isCanceled() {
+					return filepath.SkipAll
+				}
 				if werr != nil {
 					return nil
 				}
@@ -519,6 +541,9 @@ func (s *Scanner) ScanPaths(targets []string) (*model.Summary, error) {
 				return nil
 			})
 		} else if info.Mode().IsRegular() && !seen[abs] {
+			if s.isCanceled() {
+				break
+			}
 			seen[abs] = true
 			atomic.AddInt64(&walked, 1)
 			jobs <- abs
@@ -549,6 +574,9 @@ func (s *Scanner) ScanFiles(paths []string) (*model.Summary, error) {
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
+				if s.isCanceled() {
+					continue
+				}
 				results <- s.scanFile(p, 0, false)
 			}
 		}()

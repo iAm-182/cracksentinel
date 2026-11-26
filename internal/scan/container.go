@@ -31,6 +31,7 @@ import (
 
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/procutil"
 )
 
 const (
@@ -135,6 +136,7 @@ func (s *Scanner) plan7z(path string) archivePlan {
 	ctx, cancel := context.WithTimeout(context.Background(), archiveListTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "l", "-slt", "-y", "-p", path)
+	procutil.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	lowOut := strings.ToLower(string(out))
 	var p archivePlan
@@ -203,7 +205,9 @@ func (s *Scanner) planFreeArc(path string) archivePlan {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), archiveListTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "lb", path).CombinedOutput()
+	cmd := exec.CommandContext(ctx, bin, "lb", path)
+	procutil.HideWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil && len(out) == 0 {
 		return archivePlan{}
 	}
@@ -509,6 +513,7 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, bin, "x", "-y", "-o+", "-dp"+dest, path)
+		procutil.HideWindow(cmd)
 		if err := cmd.Run(); err != nil {
 			return "freearc", err
 		}
@@ -521,6 +526,7 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, bin, args...)
+		procutil.HideWindow(cmd)
 		if err := cmd.Run(); err == nil {
 			return "7z", nil
 		}
@@ -529,7 +535,9 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 			if unrar := findUnRAR(); unrar != "" {
 				ctx2, cancel2 := context.WithTimeout(context.Background(), archiveExtractTimeout)
 				defer cancel2()
-				if err2 := exec.CommandContext(ctx2, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator)).Run(); err2 == nil {
+				cmd2 := exec.CommandContext(ctx2, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator))
+				procutil.HideWindow(cmd2)
+				if err2 := cmd2.Run(); err2 == nil {
 					return "unrar", nil
 				}
 			}
@@ -540,7 +548,9 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 		if unrar := findUnRAR(); unrar != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)
 			defer cancel()
-			if err := exec.CommandContext(ctx, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator)).Run(); err != nil {
+			cmd := exec.CommandContext(ctx, unrar, "x", "-y", "-o+", "-p-", path, dest+string(os.PathSeparator))
+			procutil.HideWindow(cmd)
+			if err := cmd.Run(); err != nil {
 				return "unrar", err
 			}
 			return "unrar", nil
@@ -582,6 +592,11 @@ func findUnRAR() string {
 		}
 	}
 	return ""
+}
+
+// ExtractorsAvailable reports which external archive extractors are present on this host.
+func ExtractorsAvailable() (has7z, hasUnrar, hasFreeArc bool) {
+	return find7z() != "", findUnRAR() != "", findFreeArc() != ""
 }
 
 // extractZip expands a zip with the stdlib reader (no external binary).

@@ -1,8 +1,13 @@
-# CrackSentinel
+<p align="center">
+  <img src="assets/cracksentinel.png" alt="CrackSentinel" width="112" height="112">
+</p>
+
+<h1 align="center">CrackSentinel</h1>
 
 **Defensive malware scanner & download guard for game downloads and cracked-game folders** — built for the classic problem: pirated game folders and web game mirrors are packed with trojanized cracks, fake repack droppers, keyloggers, credential stealers, miners, and RATs wrapped around legitimate emulators (Goldberg, SmartSteam, RUNE, FLT, TENOKE...).
 
-- **Live 24/7 Web Scanner & URL Pre-Checker:** `https://sentinel.breakthematrix.id` *(hosted mode: drag & drop files/archives up to 100 MB + safe link pre-check)*
+- **Standalone Windows Desktop App (`CrackSentinel.exe`):** Full dark cybersecurity dashboard, zero console window, embedded custom icon, live scan monitor, Quarantine Vault, Real-Time Download Guard, URL Pre-Checker, and persistent history/settings.
+- **Live 24/7 Web Scanner & URL Pre-Checker:** `https://sentinel.breakthematrix.id` *(hosted mode with Smart Folder Filter + auto-batching + safe link pre-check)*
 - **Pure Go, zero external Go dependencies, no cgo** — builds cleanly for Windows, Linux, and macOS.
 - **No-install, read-only design** — never executes, mounts, or modifies scanned targets (the only layer that executes samples is the opt-in network-isolated Docker+wine sandbox).
 
@@ -10,14 +15,16 @@
 
 ## Quick Start — 4 Easy Ways to Use
 
-### 1. Drag & Drop Web UI (Local PC — Best for 20–100 GB Game Folders)
-Double-click **`CrackSentinel-UI.bat`** (or run `scanner.exe ui -tmp-dir E:\path\to\tmp`) to open the local dashboard at `http://127.0.0.1:8787`:
-- **Single or Multi-File Drag & Drop** — drop `.exe`, `.dll`, `.zip`, `.rar`, `.7z`, `.iso`, `.msi`, `.bat`, `.ps1`, `.lnk`, `.py`, `.rpy`, or folders directly into the browser.
-- **Zero-Copy Large Folder Scan** — click **Pilih Folder Game (Scan Langsung)** to open a native Windows picker and scan 60+ GB folders directly on disk with zero copying.
-- **Mass Check** — add multiple game folders/archives at once and scan them in one combined report.
-- **Real-Time Download Guard** — monitors your `Downloads` folder continuously, skips in-progress downloads (`.crdownload`, `.part`, `.!qB`, `.aria2`, `.tmp`), reads Windows **Mark-of-the-Web** (`Zone.Identifier`) origin URLs, triggers Windows desktop alerts, and optionally auto-quarantines `MALICIOUS` files.
-- **URL Pre-Check** — paste a download URL before clicking to inspect redirect chains (safe HTTP `HEAD` only), decoy domains, double extensions, and suspiciously tiny repacks.
-- **One-Click Actions** — export standalone HTML reports, quarantine flagged files, or submit human ground-truth labels directly to `corpus.json`.
+### 1. Windows Desktop App — `CrackSentinel.exe` (Recommended — Handles 20–100+ GB Games)
+Double-click **`CrackSentinel.exe`** (or drag & drop a game folder / `.zip` directly onto its icon) to open the standalone CrackSentinel desktop dashboard:
+- **Dashboard & Quick Scan:** KPI overview, engine health (`YARA`, `7-Zip/UnRAR`, `Hash Cache`), and 1-click Quick Scan cards for detected folders (`Downloads`, `Desktop`, `E:\Games`).
+- **Live Progress Scanner (0-Copy):** Click **Pilih Folder Game (Scan Langsung)** to scan 50–100 GB game folders straight off disk with live file counter, threat feed, and Cancel button — or Drag & Drop / Mass Check multiple folders at once.
+- **Real-Time Download Guard:** Continuously monitors `Downloads`, skips partial downloads (`.crdownload`, `.part`, `.!qB`, `.aria2`, `.tmp`), reads Windows **Mark-of-the-Web** (`Zone.Identifier`) origin URLs, pops Windows desktop toast alerts, and optionally auto-quarantines `MALICIOUS` files.
+- **Quarantine Vault:** Inspect isolated threats (original path, SHA-256, score, findings) with 1-click **Restore** or **Permanent Delete**.
+- **URL Pre-Check:** Paste a download URL before clicking to trace redirect chains (safe HTTP `HEAD` only), decoy domains, double extensions, and suspiciously tiny repacks.
+- **Settings & Persistence:** Configure CPU workers, `E:` temp directory, Quarantine Vault path, VirusTotal / MalwareBazaar API keys, persistent scan history (`data/history.json`), and 1-click Desktop shortcut creation.
+
+*(Alternative CLI launcher: `CrackSentinel-UI.bat` or `scanner.exe ui -tmp-dir E:\path\to\tmp`.)*
 
 ### 2. Direct Windows Explorer Drag & Drop
 Drag **1 file, 1 folder, or multiple game folders** directly onto **`CrackSentinel-Drop.bat`** (works great as a Desktop shortcut). CrackSentinel scans all dropped targets and automatically opens the standalone HTML report.
@@ -125,10 +132,12 @@ Because a malware detector contains indicator patterns (`GetAsyncKeyState`, `Cry
 ## Repository Layout
 
 ```text
+cmd/desktop/            Standalone Windows GUI desktop app (CrackSentinel.exe + embedded icon)
 cmd/scanner/            Main CLI (scan, ui, watch, deep subcommands)
 cmd/batch/              Mass batch folder scanner + NEEDS A HUMAN disputed queue
 cmd/label/              Interactive ground-truth corpus labeling CLI
 cmd/calibrate/          Semantic adjudicator calibration harness
+assets/                 Application icon master (cracksentinel.png, cracksentinel.ico)
 internal/scan/          Walker, worker pool, scoring policy, container expansion, decoy checks
 internal/filetype/      Magic-byte-first classifier, disguised PE, archive & multi-volume detection
 internal/rules/         Import IOCs, string IOCs, kind-aware rules, evidence classification
@@ -166,7 +175,11 @@ gofmt -w cmd internal
 go vet ./...
 go test ./...
 
-# Build Windows binaries
+# Regenerate icons & Windows PE resource (.syso)
+python scripts/gen_desktop_icon.py
+
+# Build Windows binaries (Desktop GUI + CLI tools)
+go build -trimpath -ldflags "-s -w -H=windowsgui" -o CrackSentinel.exe ./cmd/desktop
 go build -trimpath -ldflags "-s -w" -o scanner.exe ./cmd/scanner
 go build -trimpath -ldflags "-s -w" -o scanner-batch.exe ./cmd/batch
 go build -trimpath -ldflags "-s -w" -o scanner-label.exe ./cmd/label

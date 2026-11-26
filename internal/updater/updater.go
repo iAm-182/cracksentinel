@@ -173,17 +173,15 @@ func ApplyWindowsUpdate(ctx context.Context, info ReleaseInfo, exePath string) e
 		return fmt.Errorf("file %s tidak ditemukan di rilis GitHub %s", targetAssetName, info.LatestVersion)
 	}
 
-	checksums := map[string]string{}
-	if info.ChecksumsURL != "" {
-		var err error
-		checksums, err = fetchChecksums(ctx, info.ChecksumsURL)
-		if err != nil {
-			return fmt.Errorf("gagal mengunduh checksums.txt: %w", err)
-		}
+	if info.ChecksumsURL == "" {
+		return fmt.Errorf("checksums.txt tidak tersedia pada rilis %s (update dibatalkan demi keamanan)", info.LatestVersion)
 	}
-
+	checksums, err := fetchChecksums(ctx, info.ChecksumsURL)
+	if err != nil {
+		return fmt.Errorf("gagal mengunduh checksums.txt: %w", err)
+	}
 	expected := checksums[strings.ToLower(targetAssetName)]
-	if len(checksums) > 0 && expected == "" {
+	if expected == "" {
 		return fmt.Errorf("checksum SHA-256 untuk %s tidak ditemukan di checksums.txt", targetAssetName)
 	}
 
@@ -295,8 +293,11 @@ func ParseChecksums(text string) map[string]string {
 		if len(hash) != 64 {
 			continue
 		}
-		name := strings.ToLower(filepath.Base(strings.TrimPrefix(fields[1], "*")))
-		out[name] = hash
+		rawName := strings.ReplaceAll(strings.TrimPrefix(fields[1], "*"), "\\", "/")
+		if idx := strings.LastIndexByte(rawName, '/'); idx >= 0 {
+			rawName = rawName[idx+1:]
+		}
+		out[strings.ToLower(rawName)] = hash
 	}
 	return out
 }

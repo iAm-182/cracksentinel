@@ -83,11 +83,35 @@ if (Get-Command go -ErrorAction SilentlyContinue) {
 } else {
     Write-Host "      Go tidak terpasang -> mengunduh binary resmi terbaru dari GitHub Releases..." -ForegroundColor Cyan
     $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $headers
+    $checksums = @{}
+    $csAsset = $rel.assets | Where-Object { $_.name -ieq "checksums.txt" } | Select-Object -First 1
+    if ($csAsset) {
+        $csRaw = (Invoke-WebRequest -UseBasicParsing -Uri $csAsset.browser_download_url -Headers $headers).Content
+        $csText = if ($csRaw -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($csRaw) } else { [string]$csRaw }
+        foreach ($line in ($csText -split "`r?`n")) {
+            $parts = ($line.Trim() -split "\s+")
+            if ($parts.Length -ge 2 -and $parts[0].Length -eq 64) {
+                $fname = [System.IO.Path]::GetFileName($parts[1].TrimStart('*')).ToLower()
+                $checksums[$fname] = $parts[0].ToLower()
+            }
+        }
+    }
     foreach ($name in @("CrackSentinel.exe", "scanner.exe")) {
         $a = $rel.assets | Where-Object { $_.name -ieq $name } | Select-Object -First 1
         if ($a) {
-            Invoke-WebRequest -UseBasicParsing -Uri $a.browser_download_url -OutFile (Join-Path $Root $name) -Headers $headers
-            Write-Host "      OK: $name ($($rel.tag_name)) diunduh." -ForegroundColor Green
+            $dst = Join-Path $Root $name
+            $tmp = "$dst.download"
+            Invoke-WebRequest -UseBasicParsing -Uri $a.browser_download_url -OutFile $tmp -Headers $headers
+            $exp = $checksums[$name.ToLower()]
+            if ($exp) {
+                $got = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLower()
+                if ($got -ne $exp) {
+                    Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+                    throw "SHA-256 mismatch untuk $name!"
+                }
+            }
+            Move-Item -Force $tmp $dst
+            Write-Host "      OK: $name ($($rel.tag_name)) diunduh & SHA-256 terverifikasi." -ForegroundColor Green
         }
     }
 }

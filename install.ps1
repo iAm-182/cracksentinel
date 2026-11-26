@@ -34,31 +34,37 @@ function Get-AssetUrl($release, $name) {
     return $null
 }
 
-# 2. Download checksums.txt
+# 2. Download checksums.txt (GitHub S3 serves release .txt as application/octet-stream -> decode byte[] in PS 5.1)
 $checksums = @{}
 $csUrl = Get-AssetUrl $rel "checksums.txt"
-if ($csUrl) {
-    $csText = (Invoke-WebRequest -UseBasicParsing -Uri $csUrl -Headers $headers).Content
-    foreach ($line in ($csText -split "`n")) {
-        $parts = ($line.Trim() -split "\s+")
-        if ($parts.Length -ge 2 -and $parts[0].Length -eq 64) {
-            $checksums[$parts[1].TrimStart('*').ToLower()] = $parts[0].ToLower()
-        }
+if (-not $csUrl) { throw "checksums.txt tidak ditemukan pada rilis $ver" }
+$csRaw = (Invoke-WebRequest -UseBasicParsing -Uri $csUrl -Headers $headers).Content
+$csText = if ($csRaw -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($csRaw) } else { [string]$csRaw }
+foreach ($line in ($csText -split "`r?`n")) {
+    $parts = ($line.Trim() -split "\s+")
+    if ($parts.Length -ge 2 -and $parts[0].Length -eq 64) {
+        $fname = [System.IO.Path]::GetFileName($parts[1].TrimStart('*')).ToLower()
+        $checksums[$fname] = $parts[0].ToLower()
     }
+}
+if ($checksums.Count -eq 0) {
+    throw "Gagal membaca daftar SHA-256 dari checksums.txt"
 }
 
 function Download-Verified($url, $dest, $assetName) {
     $tmp = "$dest.download"
     Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $tmp -Headers $headers
     $expected = $checksums[$assetName.ToLower()]
-    if ($expected) {
-        $got = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLower()
-        if ($got -ne $expected) {
-            Remove-Item -Force $tmp -ErrorAction SilentlyContinue
-            throw "SHA-256 mismatch untuk $assetName! (expected $expected, got $got)"
-        }
-        Write-Host "      SHA-256 terverifikasi: $assetName" -ForegroundColor Green
+    if (-not $expected) {
+        Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+        throw "Checksum SHA-256 untuk $assetName tidak ditemukan di checksums.txt"
     }
+    $got = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLower()
+    if ($got -ne $expected) {
+        Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+        throw "SHA-256 mismatch untuk $assetName! (expected $expected, got $got)"
+    }
+    Write-Host "      SHA-256 terverifikasi: $assetName" -ForegroundColor Green
     if (Test-Path $dest) {
         $old = "$dest.old"
         Remove-Item -Force $old -ErrorAction SilentlyContinue

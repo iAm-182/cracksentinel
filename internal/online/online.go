@@ -251,9 +251,18 @@ func IsHighRiskFamilyLabel(label string) bool {
 		"mystic", "medusa", "asyncrat", "remcos", "xworm", "njrat", "dcrat",
 		"xmrig", "coinminer", "miner", "ransom", "stealer", "infostealer",
 		"keylogger", "spyware", "backdoor", "clipper", "banker", "rootkit",
-		"botnet", "dropper", "loader", "trojan", "worm", "rat",
+		"botnet", "dropper", "loader", "trojan",
 	} {
 		if strings.Contains(l, kw) {
+			return true
+		}
+	}
+	// Short class names ("rat", "worm") must match as standalone tokens so words
+	// like "pirate", "generator", or "migrator" never false-match "rat".
+	for _, tok := range strings.FieldsFunc(l, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		if tok == "rat" || tok == "worm" {
 			return true
 		}
 	}

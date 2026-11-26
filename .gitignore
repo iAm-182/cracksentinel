@@ -46,6 +46,7 @@ quarantine/
 tools/
 *.old
 *.new
+*~
 release-dist/
 release-bundle/
 .env

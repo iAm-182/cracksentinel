@@ -51,6 +51,14 @@ func TestVTThreeEngineNoiseDoesNotForceMalicious(t *testing.T) {
 	if !ForceMalicious(mb, true) || ScoreDelta(mb) != 70 {
 		t.Fatalf("MalwareBazaar hit must force MALICIOUS with +70")
 	}
+
+	// Short token guard: "pirate" / "generator" must NOT false-match "rat", while "trojan.rat/async" MUST match.
+	if IsHighRiskFamilyLabel("generic.pirate/generator") {
+		t.Fatalf("'pirate/generator' must not match 'rat' substring")
+	}
+	if !IsHighRiskFamilyLabel("win32.rat/agent") {
+		t.Fatalf("'win32.rat/agent' should match standalone 'rat' token")
+	}
 }
 
 func TestPUACapped(t *testing.T) {

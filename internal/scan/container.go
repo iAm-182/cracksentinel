@@ -32,6 +32,7 @@ import (
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/model"
 	"gamecrack-scanner/internal/procutil"
+	"gamecrack-scanner/internal/unpack"
 )
 
 const (
@@ -84,6 +85,11 @@ func (s *Scanner) planArchive(path string) (entries []archiveEntry, total int64,
 func (s *Scanner) planArchiveFull(path string) archivePlan {
 	ext := strings.ToLower(filepath.Ext(path))
 	fmtMagic := filetype.ArchiveFormat(path)
+	if ext == ".asar" || fmtMagic == "asar" {
+		if p := s.planAsar(path); p.ok {
+			return p
+		}
+	}
 	if ext == ".zip" || fmtMagic == "zip" {
 		if p := s.planZip(path); p.ok {
 			return p
@@ -122,6 +128,24 @@ func (s *Scanner) planZip(path string) archivePlan {
 		}
 		p.entries = append(p.entries, ae)
 		p.total += sz
+	}
+	sort.Slice(p.entries, func(a, b int) bool { return p.entries[a].rel < p.entries[b].rel })
+	return p
+}
+
+func (s *Scanner) planAsar(path string) archivePlan {
+	all, ext, total, err := unpack.ListAsar(path)
+	if err != nil {
+		return archivePlan{}
+	}
+	var p archivePlan
+	p.ok = true
+	p.total = total
+	for _, a := range all {
+		p.allEntries = append(p.allEntries, archiveEntry{rel: a.RelPath, size: a.Size})
+	}
+	for _, e := range ext {
+		p.entries = append(p.entries, archiveEntry{rel: e.RelPath, size: e.Size})
 	}
 	sort.Slice(p.entries, func(a, b int) bool { return p.entries[a].rel < p.entries[b].rel })
 	return p
@@ -390,7 +414,7 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 		out.Reason = "FreeArc container (repack installer data) — install FreeArc CLI (Arc.exe) to inspect inside, or scan the sibling setup.exe separately"
 		return out
 	}
-	if !filetype.IsExpandableContainer(path) {
+	if !filetype.IsExpandableContainer(path) && !filetype.HasValidPEHeader(path) {
 		out.Reason = "not a recognised container format"
 		return out
 	}
@@ -499,6 +523,14 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 func (s *Scanner) extractTo(path, dest string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 	fmtMagic := filetype.ArchiveFormat(path)
+	if ext == ".asar" || fmtMagic == "asar" {
+		limit := s.cfg.ExtractMaxMB * 1024 * 1024
+		if _, _, err := unpack.ExtractAsar(path, dest, limit); err == nil {
+			return "asar", nil
+		} else {
+			return "asar", err
+		}
+	}
 	if ext == ".zip" || fmtMagic == "zip" {
 		if err := extractZip(path, dest); err == nil {
 			return "zip", nil

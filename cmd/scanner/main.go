@@ -16,6 +16,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/telemetry"
 	"gamecrack-scanner/internal/ui"
 	"gamecrack-scanner/internal/version"
@@ -79,6 +80,9 @@ func escalate(sum *model.Summary, threshold, maxN, budgetSec int) {
 }
 
 func main() {
+	if exe, err := os.Executable(); err == nil {
+		_ = sigfeed.Global().LoadLocal(filepath.Join(filepath.Dir(exe), "data", "live-signatures.json"))
+	}
 	for _, a := range os.Args[1:] {
 		switch a {
 		case "-version", "--version", "-v":

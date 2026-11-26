@@ -1,0 +1,35 @@
+{
+  "version": "2026.11.26.1",
+  "updated_at": "2026-11-26T22:30:00Z",
+  "description": "CrackSentinel Hot-Reloadable Threat Intelligence Database (SHA-256 IOCs & Live Signatures)",
+  "hashes": [
+    {
+      "sha256": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+      "family": "EICAR-Standard-Test",
+      "severity": 100
+    }
+  ],
+  "patterns": [
+    {
+      "id": "acr_stealer_marker",
+      "category": "stealer",
+      "severity": 65,
+      "pattern": "(?i)(acrstealer|meduza\\s*stealer|vidar\\s*stealer|blank[\\s_-]*grabber|umbral[\\s_-]*stealer|creal[\\s_-]*stealer)",
+      "description": "Known fake-crack infostealer family marker (ACR / Meduza / Vidar / BlankGrabber / Umbral)"
+    },
+    {
+      "id": "gofile_pixeldrain_c2_exfil",
+      "category": "stealer",
+      "severity": 45,
+      "pattern": "(?i)https?://(store[0-9]*\\.gofile\\.io/uploadFile|pixeldrain\\.com/api/file|transfer\\.sh/)[A-Za-z0-9/_-]*",
+      "description": "Automated stolen-archive upload endpoint (GoFile / Pixeldrain / Transfer.sh exfiltration)"
+    },
+    {
+      "id": "steam_token_session_theft",
+      "category": "stealer",
+      "severity": 50,
+      "pattern": "(?i)(config\\\\loginusers\\.vdf|ssfn[0-9]{15,}|steam\\\\config\\\\config\\.vdf).*?(zip|upload|webhook|telegram|appdata)",
+      "description": "Steam session / loginusers.vdf credential theft pattern"
+    }
+  ]
+}

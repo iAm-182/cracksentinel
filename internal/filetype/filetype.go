@@ -35,8 +35,9 @@ var textExt = map[string]bool{
 
 var scriptExt = map[string]bool{
 	".bat": true, ".cmd": true, ".ps1": true, ".psm1": true, ".psd1": true,
-	".vbs": true, ".vbe": true, ".js": true, ".jse": true, ".wsf": true,
-	".hta": true, ".py": true, ".pyw": true, ".rpy": true, ".reg": true,
+	".vbs": true, ".vbe": true, ".js": true, ".mjs": true, ".cjs": true,
+	".jse": true, ".wsf": true, ".hta": true, ".py": true, ".pyw": true,
+	".rpy": true, ".reg": true, ".nsi": true, ".nsh": true, ".iss": true,
 }
 
 var assetExt = map[string]bool{
@@ -55,7 +56,7 @@ var docExt = map[string]bool{
 var containerExt = map[string]bool{
 	".zip": true, ".7z": true, ".rar": true, ".iso": true, ".cab": true,
 	".arj": true, ".tgz": true, ".tar": true, ".gz": true, ".xz": true,
-	".bz2": true, ".msi": true, ".img": true,
+	".bz2": true, ".msi": true, ".img": true, ".asar": true,
 }
 
 var peNormalExt = map[string]bool{
@@ -150,8 +151,17 @@ func ArchiveFormat(path string) string {
 		return ""
 	}
 	defer f.Close()
-	var head [8]byte
+	var head [32]byte
 	n, _ := f.Read(head[:])
+	if n >= 24 && binary.LittleEndian.Uint32(head[0:4]) == 4 {
+		jLen := binary.LittleEndian.Uint32(head[12:16])
+		if jLen >= 10 && jLen <= 64<<20 {
+			rest := bytes.TrimLeft(head[16:n], " \t\r\n")
+			if bytes.HasPrefix(rest, []byte(`{"files"`)) || bytes.HasPrefix(rest, []byte(`{"integrity"`)) {
+				return "asar"
+			}
+		}
+	}
 	if n >= 4 {
 		if head[0] == 'P' && head[1] == 'K' && (head[2] == 0x03 && head[3] == 0x04 || head[2] == 0x05 && head[3] == 0x06) {
 			return "zip"

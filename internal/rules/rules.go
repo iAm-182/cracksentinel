@@ -96,6 +96,8 @@ var reCryptoMiner = regexp.MustCompile(obf.S("cmUzc3IpLig7Li83BnFyLjkqJikpNnNgdX
 var reLSASSDump = regexp.MustCompile(obf.S("cmUzc3I5NTcpLDkpBnQ+NjZ0IWp2bmonNzM0Mz4vNyomBjgpPzEvKDYpOwY4JjczNDM+LzcqLSgzLj8+LzcqdCFqdm9qJzYpOykpJjYpOykpBnQ/Ij90IWp2b2onNzM0Mz4vNypz"))
 var reClickFixDropper = regexp.MustCompile(obf.S("cmUzc3I3KTIuO3IGdD8iP3NlBilxMi4uKillYHV1Jjk/KC4vLjM2cgZ0PyI/c2UGKXF0cHcvKDY5OzkyPyY4My4pOz43MzRyBnQ/Ij9zZQYpcXUuKDs0KTw/KCYoPz0pLChpaHIGdD8iP3NlBilxdHBydTNgJnUvc3RwMi4uKillYHV1JigvND42NmlocgZ0PyI/c2UGKXEwOyw7KTkoMyouYCZyMyg3JjMtKCYzNCw1MT93KD8pLjc/LjI1PiYzNCw1MT93LT84KD8rLz8pLnMGKXEBfXgHZTIuLiopZWB1dQEEJgchbnZrYmonBiYGKXByMz8iJjM0LDUxP3c/IiooPykpMzU0c3M="))
 var reClipperPattern = regexp.MustCompile(obf.S("cgYEZXI4OWsGJgYBa2kGByYGAWtpBgcGATt3MTd3IBt3EhB3FAp3AGt3YwYHBiFob3ZpbgYnJmoiBgE7dzwbdxxqd2MGBwYhbmoGJyYOBgEbdwA7dyBrd2MGBwYhaWkGJyYGARYXaQYHBgE7dzE3dyAbdxIQdxQKdwBrd2MGBwYhaGx2aWkGJyZuBgFqd2MbGAYHBgFrd2MbdxIQdxQKdwA7dzE3dyAGBwYhY2kGJ3Nz"))
+var reNtdllUnhook = regexp.MustCompile(obf.S("cmUzc3IGBjE0NS00PjY2KQYGNC4+NjYGdD42NiYGOCkjKS0yMykqPygpAWhpbgdlBjgmBjgyPzY2KT07Lj8GOCYGODI7NjUpPTsuPwY4JgY4LjsoLjsoLyk9Oy4/BjgmBjg8KD8pMiM5OzY2KQY4cw=="))
+var reInstallerCradle = regexp.MustCompile(obf.S("cmUzc3I/Ij85LTszLiY/Ij85KTI/NjYmNCk/Ij85YGA/Ij85cmVgLjU2NT0mLjUpLjs5MXNlJikyPzY2PyI/OSYGASgvNAYHcwEEBigGNAchanZrbGoncio1LT8oKTI/NjYmKi0pMiY3KTIuOyY5PyguLy4zNiY4My4pOz43MzQmKD89KSwoaWgmKC80PjY2aWgmLSk5KDMqLiY5KTkoMyouJnc/NDkmdy0GKXEyMz4+PzQmOz4+dzcqKig/PD8oPzQ5PyY/Ijk2LykzNTQqOy4ycw=="))
 
 // scriptRules are kind-specific indicators for script payloads (.bat/.cmd/
 // .ps1/.vbs/.js/.hta). A script has no import table, so its behaviour is
@@ -280,6 +282,8 @@ var strongStringIOCs = map[string]bool{
 	obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"): true, obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="): true, obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"): true,
 	obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="): true, obf.S("OSgjKi41BTczND8oBTM1OQ=="): true, obf.S("Nik7KSkFOSg/PgU+Lzcq"): true,
 	obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="): true, obf.S("OSgjKi41BTk2MyoqPygFMzU5"): true,
+	obf.S("PjY2BSkzPj82NTs+BSooNSIj"): true, obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="): true, obf.S("Kj84BTY+KAUpMj82Njk1Pj8="): true,
+	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="): true, obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="): true, obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"): true,
 }
 
 // actionCategories are the finding categories that describe
@@ -311,7 +315,7 @@ func IsCapability(rule string) bool {
 	if strings.HasPrefix(rule, obf.S("MzcqBQ==")) {
 		return true
 	}
-	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg==")} {
+	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM="), obf.S("Kj8FOyozBTI7KTIzND0FNjU7Pj8o")} {
 		if rule == r {
 			return true
 		}
@@ -344,7 +348,7 @@ func YaraCategory(rule string) string {
 		return obf.S("Lj8pLjwzNj8=")
 	case strings.Contains(r, obf.S("PjMpOTUoPg==")), strings.Contains(r, obf.S("Lj82Pz0oOzc=")), strings.Contains(r, obf.S("OWg=")):
 		return obf.S("OWg=")
-	case strings.Contains(r, obf.S("KjUtPygpMj82Ng==")), strings.Contains(r, obf.S("PzQ5NT4/Pg==")), strings.Contains(r, obf.S("NTg8Lyk=")), strings.Contains(r, obf.S("KTs0Pjg1Ig==")), strings.Contains(r, obf.S("Pj88PzQ+Pyg=")), strings.Contains(r, obf.S("Lzs5")):
+	case strings.Contains(r, obf.S("KjUtPygpMj82Ng==")), strings.Contains(r, obf.S("PzQ5NT4/Pg==")), strings.Contains(r, obf.S("NTg8Lyk=")), strings.Contains(r, obf.S("KTs0Pjg1Ig==")), strings.Contains(r, obf.S("Pj88PzQ+Pyg=")), strings.Contains(r, obf.S("Lzs5")), strings.Contains(r, obf.S("KSMpOTs2Ng==")), strings.Contains(r, obf.S("LzQyNTUx")):
 		return obf.S("Pyw7KTM1NA==")
 	case strings.Contains(r, obf.S("MT8jNjU9")):
 		return obf.S("MT8jNjU9PT8o")
@@ -412,6 +416,17 @@ func matchKind(kind filetype.Kind, strs []string, path string) []model.Finding {
 	switch kind {
 	case filetype.KindScript:
 		out = append(out, matchKeywords(strs, scriptRules)...)
+		for _, s := range strs {
+			if reInstallerCradle.MatchString(s) {
+				out = append(out, model.Finding{
+					Rule:     obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="),
+					Category: obf.S("Pig1Kio/KA=="),
+					Severity: 45,
+					Detail:   obf.S("FAkTCXp1ehM0NDV6CT8uLyp6MzQpLjs2Nj8oeik5KDMqLno/Ij85Ly4/KXoyMz4+PzR6KTI/NjZ1FhUWGDM0eio7IzY1Oz5geg==") + trunc(s, 90),
+				})
+				break
+			}
+		}
 	case filetype.KindShortcut:
 		out = append(out, matchKeywords(strs, shortcutRules)...)
 	case filetype.KindDoc:
@@ -639,6 +654,9 @@ func matchStrings(strs []string) []model.Finding {
 		}
 		if reClickFixDropper.MatchString(s) {
 			add(&out, seen, obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="), obf.S("Pig1Kio/KA=="), 45, obf.S("FhUWGDM0enV6GTYzOTEcMyJ6KD83NS4/eio7IzY1Oz56OSg7PjY/YHo=")+trunc(s, 90))
+		}
+		if reNtdllUnhook.MatchString(s) {
+			add(&out, seen, obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="), obf.S("Pyw7KTM1NA=="), 45, obf.S("NC4+NjZ0PjY2ei80MjU1MTM0PXp1ej4zKD85LnopIyk5OzY2ejwoOzc/LTUoMXozND4zOTsuNShgeg==")+trunc(s, 80))
 		}
 		if strings.Contains(l, obf.S("OTYzKjg1Oyg+")) {
 			hasClipboardStr = true

@@ -288,8 +288,9 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
     </button>
 
     <div class="side-footer">
+      <div class="diag-row"><span><span class="dot ok" id="dotSigDB"></span>Database Virus</span><span class="mono" id="lblSigDB">-</span></div>
       <div class="diag-row"><span><span class="dot" id="dotYara"></span>YARA Engine</span><span class="mono" id="lblYara">-</span></div>
-      <div class="diag-row"><span><span class="dot" id="dot7z"></span>Arsip (7z/RAR)</span><span class="mono" id="lbl7z">-</span></div>
+      <div class="diag-row"><span><span class="dot" id="dot7z"></span>Arsip (7z/RAR/ASAR)</span><span class="mono" id="lbl7z">-</span></div>
       <div class="diag-row"><span><span class="dot ok"></span>Hash Cache</span><span class="mono" id="lblCache">0</span></div>
       <button class="btn ghost sm desktop-only" id="btnAppQuit" style="display:none;margin-top:4px;width:100%" type="button">Tutup Aplikasi</button>
     </div>
@@ -418,10 +419,10 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
                 <button class="btn ghost sm local-only" onclick="switchView('settings')" type="button">Atur</button>
               </div>
               <div class="mod-grid" id="modGrid">
-                <div class="mod-item"><span>Static Heuristic + PE</span><span class="badge CLEAN">AKTIF</span></div>
+                <div class="mod-item"><span>PE + Syscall + Sideload</span><span class="badge CLEAN">AKTIF</span></div>
+                <div class="mod-item"><span>Database Virus Live</span><span class="badge CLEAN" id="modSigDB">AKTIF</span></div>
                 <div class="mod-item"><span>YARA Signatures</span><span class="badge INFO" id="modYara">-</span></div>
-                <div class="mod-item"><span>7-Zip / UnRAR</span><span class="badge INFO" id="mod7z">-</span></div>
-                <div class="mod-item"><span>Online Reputation</span><span class="badge INFO" id="modOnline">-</span></div>
+                <div class="mod-item"><span>7z / ASAR / PyInst</span><span class="badge INFO" id="mod7z">-</span></div>
               </div>
             </div>
           </div>
@@ -750,6 +751,16 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         <div class="card">
           <div class="card-head">
             <div>
+              <h3>Update Database Virus (Hot-Reload Tanpa Restart)</h3>
+              <div class="muted" id="sigSettingsStatus">Memuat versi database signature...</div>
+            </div>
+            <button class="btn sm primary" id="btnSyncSignatures" type="button">Update Database Virus</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
               <h3>Auto-Update &amp; Versi Aplikasi</h3>
               <div class="muted" id="updSettingsStatus">Memeriksa versi terbaru di GitHub Releases...</div>
             </div>
@@ -957,8 +968,12 @@ async function loadDashboard(){
     $('#mod7z').className = 'badge ' + (hasArc ? 'CLEAN' : 'SUSPICIOUS');
 
     $('#lblCache').textContent = (d.cache_entries||0).toLocaleString();
-    $('#modOnline').textContent = d.online_enabled ? 'VT / MB ON' : 'OFFLINE';
-    $('#modOnline').className = 'badge ' + (d.online_enabled ? 'CLEAN' : 'INFO');
+    if(d.sig_status && d.sig_status.version){
+      $('#lblSigDB').textContent = d.sig_status.version;
+      $('#modSigDB').textContent = 'DB ' + d.sig_status.version;
+      const sigEl = $('#sigSettingsStatus');
+      if(sigEl) sigEl.textContent = `Versi DB: ${d.sig_status.version} (${d.sig_status.pattern_count||0} pola live + ${d.sig_status.hash_count||0} SHA-256 blacklist · sumber: ${d.sig_status.source||'embedded'})`;
+    }
     $('#cacheInfoText').textContent = `Hash cache: ${(d.cache_entries||0).toLocaleString()} entri (${fmtBytes(d.cache_bytes||0)})`;
 
     // Quick scan targets
@@ -1316,7 +1331,8 @@ function explainFinding(f){
 
   if(r === 'emu_steamapi') return {kind:'info', label:'Emulator Game', text:'Emulator Steam dikenali (TENOKE/Goldberg/RUNE) — hooking memori normal pada crack.'};
   if(r === 'crack_whitelist' || r === 'yara:gc_crack_emu_info') return {kind:'info', label:'Crack Dikenali', text:'Tanda crack/emulator game standar yang umum dipakai.'};
-  if(r === 'known_runtime_dll') return {kind:'info', label:' Terverifikasi', text:'Library runtime game / utility installer resmi tanpa indikasi payload berbahaya.'};
+  if(r === 'known_runtime_dll') return {kind:'info', label:'Terverifikasi', text:'Library runtime game / utility installer resmi tanpa indikasi payload berbahaya.'};
+  if(r === 'pyinstaller_unpacked' || r === 'installer_unpacked' || r === 'auto_unpacked' || r === 'container_expanded') return {kind:'info', label:'Dibongkar Otomatis', text:'Isi terkompresi (PyInstaller / NSIS / ASAR / UPX / Arsip) berhasil dibongkar & diperiksa ke dalamnya.'};
   if(r.startsWith('online_') && sev < 0) return {kind:'info', label:'Reputasi Bersih', text:'Mayoritas puluhan antivirus di VirusTotal menyatakan file ini bersih.'};
   if(r === 'web_size_skipped' || r === 'carved') return {kind:'info', label:'Info Scan', text:'Pemeriksaan selesai tanpa menemukan executable berbahaya tersembunyi.'};
 
@@ -1328,7 +1344,9 @@ function explainFinding(f){
   if(r === 'imp_destructive') return {kind:'tech', label:'Teknis File', text:'Akses baca/pindah/hapus file standar — normal pada installer & tool cek file.'};
   if(r === 'imp_clipboard') return {kind:'tech', label:'Teknis Utility', text:'Akses copy-paste clipboard standar.'};
   if(r === 'imp_exfil') return {kind:'tech', label:'Teknis Jaringan', text:'Memiliki fungsi koneksi internet standar (HTTP/socket).'};
-  if(r === 'packed' || r === 'pe_packed') return {kind:'tech', label:'Teknis Packer', text:'File dikompresi/dipack — sering dipakai crack/installer untuk mengecilkan ukuran.'};
+  if(r === 'packed' || r === 'pe_packed' || r === 'pe_rwx_section' || r === 'pe_abnormal_ep' || r === 'pe_tls_suspicious' || r === 'pe_encrypted_overlay' || r === 'pe_api_hashing_loader') {
+    return {kind:'tech', label:'Struktur Packer/PE', text:'Struktur PE/memori tidak standar (packer/proteksi DRM/overlay) — aman pada crack murni, waspada jika disertai indikator C2/stealer.'};
+  }
   if(r === 'dotnet') return {kind:'tech', label:'Info Runtime', text:'Program dibuat menggunakan Microsoft .NET.'};
   if(r === 'base64_blob') return {kind:'tech', label:'Data Base64', text:'Teks Base64 panjang (umumnya ikon/konfigurasi jika di dalam game, waspada jika di script).'};
   if(r === 'sandbox_check') return {kind:'tech', label:'Cek VM', text:'Mengecek apakah berjalan di Virtual Machine / Wine.'};
@@ -1361,6 +1379,11 @@ function explainFinding(f){
   if(r === 'lsass_cred_dump' || r.includes('lsass_dumper')) {
     return {kind:'danger', label:'BAHAYA: Curi Memori OS', text:'Mencoba menyedot password Windows langsung dari memori sistem (LSASS)!'};
   }
+  if(r === 'dll_sideload_proxy') return {kind:'danger', label:'BAHAYA: DLL Sideloading', text:'Teknik "White+Black" (AheadLib Proxy): menyamar sebagai DLL sistem Windows untuk membajak program resmi!'};
+  if(r === 'direct_syscall_stubs' || r === 'ntdll_unhook_evasion' || r.includes('syscall_evasion')) return {kind:'danger', label:'BAHAYA: Bypass Antivirus', text:'Memakai Direct Syscall / Unhooking ntdll.dll (teknik loader FUD) untuk bersembunyi dari Antivirus/EDR!'};
+  if(r === 'peb_ldr_shellcode') return {kind:'danger', label:'BAHAYA: Shellcode Loader', text:'Menelusuri memori PEB->LDR secara langsung seperti shellcode trojan tersembunyi!'};
+  if(r === 'installer_malicious_script') return {kind:'danger', label:'BAHAYA: Setup Beracun', text:'Script installer (NSIS/Inno) diam-diam menjalankan PowerShell/LOLBin berbahaya saat instalasi!'};
+  if(r === 'live_sha256_blacklist' || r.startsWith('live_')) return {kind:'danger', label:'BAHAYA: Database Virus Live', text:'Cocok dengan database tanda ancaman malware terbaru (Live Threat Feed)!'};
   if(r === 'decoy_renpy_dropper') return {kind:'danger', label:'BAHAYA: Game Palsu (Decoy)', text:'Struktur folder/arsip game jebakan yang menyembunyikan file malware terenkripsi!'};
   if(r === 'masquerading_pe' || r.includes('double_ext')) return {kind:'danger', label:'BAHAYA: File Menyamar', text:'Program executable (.exe) menyamar menggunakan ekstensi dokumen/gambar/data palsu!'};
   if(r === 'embedded_pe') return {kind:'danger', label:'Waspada: EXE Tersembunyi', text:'Ditemukan program .exe/.dll diselipkan di dalam bongkahan file data besar.'};
@@ -1894,6 +1917,26 @@ $('#btnCheckUpdate').addEventListener('click', ()=>checkUpdate(true));
 $('#btnApplyUpdate').addEventListener('click', applyUpdate);
 $('#btnApplyUpdateTop').addEventListener('click', applyUpdate);
 $('#btnDismissUpd').addEventListener('click', ()=>$('#updateBanner').style.display='none');
+$('#btnSyncSignatures').addEventListener('click', async ()=>{
+  const btn = $('#btnSyncSignatures');
+  btn.disabled = true;
+  $('#sigSettingsStatus').textContent = 'Mengunduh database signature terbaru dari GitHub...';
+  try{
+    const r = await apiFetch('/api/signatures/sync', {method:'POST'});
+    const d = await parseJSONSafe(r);
+    if(!r.ok) throw new Error(d.error || 'Gagal sync database');
+    const st = d.status || {};
+    $('#lblSigDB').textContent = st.version || '-';
+    $('#modSigDB').textContent = 'DB ' + (st.version || '-');
+    $('#sigSettingsStatus').textContent = `Terbaru! Versi DB: ${st.version} (${st.pattern_count||0} pola live + ${st.hash_count||0} SHA-256 · disinkronkan ${st.synced_at||'baru saja'})`;
+    toast(d.changed ? `Database virus diperbarui ke v${st.version}!` : `Database virus sudah versi terbaru (v${st.version}).`);
+  }catch(e){
+    $('#sigSettingsStatus').textContent = 'Gagal sync: ' + e.message;
+    toast('Gagal update database: ' + e.message);
+  }finally{
+    btn.disabled = false;
+  }
+});
 
 // Boot + Persistent SSE Window Lifecycle + Auto-scan dropped args onto CrackSentinel.exe
 let appStream = null;

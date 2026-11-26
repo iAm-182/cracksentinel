@@ -24,12 +24,12 @@ const (
 // ClassifyEvidence reports how a finding should be presented to the
 // adjudicator.
 func ClassifyEvidence(rule string) EvidenceClass {
-	for _, r := range []string{obf.S("MzcqBTE/IzY1PT0/KA=="), obf.S("MzcqBTM0MD85LjM1NA=="), obf.S("MzcqBTM0Ki8u"), obf.S("MzcqBT8iPDM2"), obf.S("MzcqBTk2Myo4NTsoPg=="), obf.S("MzcqBT4/KS4oLzkuMyw/"), obf.S("MzcqBSo/KCkzKS4/NDk/"), obf.S("OSg7OTEFLTIzLj82Myku"), obf.S("PzcvBSkuPzs3Oyoz"), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("MT8jNjU9BS01KD4="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("MTQ1LTQFKC80LjM3PwU+NjY=")} {
+	for _, r := range []string{obf.S("MzcqBTE/IzY1PT0/KA=="), obf.S("MzcqBTM0MD85LjM1NA=="), obf.S("MzcqBTM0Ki8u"), obf.S("MzcqBT8iPDM2"), obf.S("MzcqBTk2Myo4NTsoPg=="), obf.S("MzcqBT4/KS4oLzkuMyw/"), obf.S("MzcqBSo/KCkzKS4/NDk/"), obf.S("OSg7OTEFLTIzLj82Myku"), obf.S("PzcvBSkuPzs3Oyoz"), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("MT8jNjU9BS01KD4="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("MTQ1LTQFKC80LjM3PwU+NjY="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM=")} {
 		if rule == r {
 			return EvidenceCrackExpected
 		}
 	}
-	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky"), obf.S("NzspKy8/KDs+MzQ9BSo/"), obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="), obf.S("Oyg5MjMsPwU/NDkoIyouPz4="), obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"), obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="), obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"), obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="), obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"), obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="), obf.S("OSgjKi41BTczND8oBTM1OQ=="), obf.S("Nik7KSkFOSg/PgU+Lzcq"), obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="), obf.S("OSgjKi41BTk2MyoqPygFMzU5")} {
+	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky"), obf.S("NzspKy8/KDs+MzQ9BSo/"), obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="), obf.S("Oyg5MjMsPwU/NDkoIyouPz4="), obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"), obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="), obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"), obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="), obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"), obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="), obf.S("OSgjKi41BTczND8oBTM1OQ=="), obf.S("Nik7KSkFOSg/PgU+Lzcq"), obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="), obf.S("OSgjKi41BTk2MyoqPygFMzU5"), obf.S("PjY2BSkzPj82NTs+BSooNSIj"), obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="), obf.S("Kj84BTY+KAUpMj82Njk1Pj8="), obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="), obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="), obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku")} {
 		if rule == r {
 			return EvidencePayload
 		}
@@ -151,6 +151,12 @@ var payloadRules = map[string]bool{
 	obf.S("Nik7KSkFOSg/PgU+Lzcq"):                 true,
 	obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="):     true,
 	obf.S("OSgjKi41BTk2MyoqPygFMzU5"):             true,
+	obf.S("PjY2BSkzPj82NTs+BSooNSIj"):             true,
+	obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="):         true,
+	obf.S("Kj84BTY+KAUpMj82Njk1Pj8="):             true,
+	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="):         true,
+	obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="): true,
+	obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"):         true,
 }
 
 // ClassifyRule reports how strongly a rule argues for a malicious payload.

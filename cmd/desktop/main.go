@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"gamecrack-scanner/internal/online"
+	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/ui"
 	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/yara"
@@ -37,6 +39,12 @@ func main() {
 	_ = os.MkdirAll(dataDir, 0o755)
 	_ = os.MkdirAll(tmpDir, 0o755)
 	_ = os.MkdirAll(quarDir, 0o755)
+	_ = sigfeed.Global().LoadLocal(filepath.Join(dataDir, "live-signatures.json"))
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		_, _, _ = sigfeed.Global().Sync(ctx, "")
+	}()
 
 	// Collect any paths dragged onto CrackSentinel.exe.
 	var dropArgs []string

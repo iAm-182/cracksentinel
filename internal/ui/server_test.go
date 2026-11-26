@@ -123,7 +123,7 @@ func TestUIPublicModeAndAccessKeyHardening(t *testing.T) {
 		"/api/scan-paths", "/api/jobs/scan-paths", "/api/pick",
 		"/api/quarantine", "/api/quarantine/list", "/api/quarantine/restore", "/api/quarantine/delete",
 		"/api/watch/start", "/api/corpus/label", "/api/settings", "/api/cache/clear",
-		"/api/history/clear", "/api/open-explorer", "/api/desktop/shortcut", "/api/app/quit", "/api/update/apply",
+		"/api/history/clear", "/api/open-explorer", "/api/desktop/shortcut", "/api/app/quit", "/api/update/apply", "/api/signatures/sync",
 	} {
 		req := httptest.NewRequest(http.MethodPost, ep, strings.NewReader(`{}`))
 		req.Header.Set("X-Access-Key", "top-secret-key")

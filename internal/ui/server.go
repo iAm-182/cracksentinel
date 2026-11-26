@@ -25,6 +25,7 @@ import (
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
@@ -188,6 +189,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/app/quit", s.handleAppQuit)
 	mux.HandleFunc("/api/update/check", s.handleUpdateCheck)
 	mux.HandleFunc("/api/update/apply", s.handleUpdateApply)
+	mux.HandleFunc("/api/signatures/status", s.handleSignaturesStatus)
+	mux.HandleFunc("/api/signatures/sync", s.handleSignaturesSync)
 	return s.originGuard(mux)
 }
 
@@ -354,6 +357,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":        "ok",
 		"version":       version.Short(),
+		"sig_db":        sigfeed.Global().Status().Version,
 		"workers":       workers,
 		"public_mode":   s.opts.PublicMode,
 		"desktop_mode":  s.opts.DesktopMode,

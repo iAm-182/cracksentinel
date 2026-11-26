@@ -30,8 +30,10 @@ import (
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/rules"
 	"gamecrack-scanner/internal/sandbox"
+	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/telemetry"
 	"gamecrack-scanner/internal/text"
+	"gamecrack-scanner/internal/unpack"
 	"gamecrack-scanner/internal/yara"
 )
 
@@ -977,6 +979,9 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path, Signed: res.Signed})
 		findings = append(findings, f2...)
 	}
+	if liveHits := sigfeed.Global().Match(sha, strs); len(liveHits) > 0 {
+		findings = append(findings, liveHits...)
+	}
 	if peErr != "" {
 		findings = append(findings, model.Finding{Rule: "pe_parse", Category: "info", Severity: 1, Detail: "PE parse failed: " + peErr})
 	}
@@ -1043,6 +1048,32 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 				Rule: "nonstandard_sections", Category: "packing", Severity: 10,
 				Detail: "non-standard section names: " + strings.Join(peInfo.OddSections, ", "),
 			})
+		}
+		findings = append(findings, evaluateDeepPEHeuristics(path, info.Size(), peInfo, res)...)
+		// Pure-Go PyInstaller CArchive unpacker: inspect embedded Python scripts & bytecode in memory.
+		if !sub && !s.cfg.NoUnpack && peInfo.HasPyInstaller {
+			if pyScripts, pyStrs, pyOK := unpack.ExtractPyInstallerStrings(path, 24<<20); pyOK {
+				findings = append(findings, model.Finding{
+					Rule:     "pyinstaller_unpacked",
+					Category: "packing",
+					Severity: 0,
+					Detail:   fmt.Sprintf("PyInstaller CArchive unpacked in memory: %d entry script(s) (%s), %d strings analysed", len(pyScripts), strings.Join(pyScripts, ", "), len(pyStrs)),
+				})
+				pyFinds, _ := rules.Match(rules.MatchInput{
+					Kind:   filetype.KindScript,
+					Strs:   pyStrs,
+					Path:   path + ":pyinstaller",
+					Signed: res.Signed,
+				})
+				pyFinds = append(pyFinds, sigfeed.Global().Match("", pyStrs)...)
+				for _, pf := range pyFinds {
+					if pf.Severity <= 0 {
+						continue
+					}
+					pf.Detail = "[pyinstaller] " + pf.Detail
+					findings = append(findings, pf)
+				}
+			}
 		}
 	}
 	// A multi-megabyte binary with no readable strings at all is
@@ -1229,10 +1260,10 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 
 	// Known benign runtime DLL or structurally verified repack utility
 	// allowlist (strictly vetoed by any intent/payload finding, signature
-	// mismatch, crypter structure, or VT multi-engine malware consensus).
+	// mismatch, crypter structure, sideload proxy, syscall stubs, or VT consensus).
 	if kind == filetype.KindPE &&
 		res.SignatureStatus != "mismatch" &&
-		(peInfo == nil || peInfo.NoRawSections < 2) &&
+		(peInfo == nil || (peInfo.NoRawSections < 2 && peInfo.DirectSyscallStubs < 2 && !peInfo.PEBLDRWalk)) &&
 		(onlineRes == nil || onlineRes.Malicious < 5) &&
 		!hasIntentFindings(findings) {
 		if label := known.RuntimeLabel(path); label != "" {
@@ -1276,6 +1307,8 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	}
 	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsExpandableContainer(path)) {
 		s.expandContainer(path, depth, &res)
+	} else if !sub && depth < s.cfg.ExtractDepth && kind == filetype.KindPE && isExpandableInstallerPE(peInfo, strs, info.Size()) {
+		s.expandInstallerPE(path, depth, &res)
 	}
 	// The semantic adjudication runs last, so it sees every finding the
 	// file produced, including the ones that came out of a container.
@@ -1432,7 +1465,175 @@ const (
 
 var containerSeq int64
 
-var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg"}
+var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "mjs", "cjs", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg", "asar", "nsi", "nsh", "iss"}
+
+func isMicrosoftSigned(res model.FileResult) bool {
+	if !res.Signed {
+		return false
+	}
+	low := strings.ToLower(res.Signer)
+	return strings.Contains(low, "microsoft")
+}
+
+// evaluateDeepPEHeuristics emits structural & anti-evasion findings (DosX /
+// white_patch_detect / AheadLib DLL sideloading / SysWhispers syscall stubs).
+func evaluateDeepPEHeuristics(path string, fileSize int64, pi *pe.Info, res model.FileResult) []model.Finding {
+	if pi == nil {
+		return nil
+	}
+	var out []model.Finding
+	base := strings.ToLower(filepath.Base(strings.ReplaceAll(path, "\\", "/")))
+	msSigned := isMicrosoftSigned(res)
+
+	// 1. "白加黑" (White+Black / AheadLib) Hijackable System DLL Sideloading Proxy
+	if pi.IsDLL && known.IsHijackableSystemDLL(path) && !msSigned {
+		var reasons []string
+		if pi.ForwardedExports >= 2 {
+			tgt := strings.Join(pi.ForwardTargets, ",")
+			if tgt != "" {
+				reasons = append(reasons, fmt.Sprintf("%d forwarded exports -> %s (AheadLib proxy)", pi.ForwardedExports, tgt))
+			} else {
+				reasons = append(reasons, fmt.Sprintf("%d forwarded exports (AheadLib proxy)", pi.ForwardedExports))
+			}
+		}
+		if pi.PEBLDRWalk {
+			reasons = append(reasons, "PEB->LDR shellcode module walk")
+		}
+		if pi.DirectSyscallStubs >= 2 {
+			reasons = append(reasons, fmt.Sprintf("%d direct syscall stubs", pi.DirectSyscallStubs))
+		}
+		if len(pi.RWXSections) > 0 {
+			reasons = append(reasons, "RWX section "+strings.Join(pi.RWXSections, ","))
+		}
+		if pi.ImportN > 0 && pi.ImportN <= 5 && pi.EncryptedSize > 32*1024 && !res.Signed {
+			reasons = append(reasons, "minimal imports + encrypted payload")
+		}
+		if len(reasons) > 0 {
+			out = append(out, model.Finding{
+				Rule:     "dll_sideload_proxy",
+				Category: "evasion",
+				Severity: 45,
+				Detail:   fmt.Sprintf("unsigned system-named DLL %q exhibits sideloading/proxy traits: %s", base, strings.Join(reasons, "; ")),
+			})
+		}
+	}
+
+	// 2. Direct Syscall Stubs (SysWhispers / Hell's Gate / Halo's Gate)
+	if pi.DirectSyscallStubs >= 2 && !msSigned && base != "ntdll.dll" && base != "win32u.dll" && base != "wow64cpu.dll" {
+		out = append(out, model.Finding{
+			Rule:     "direct_syscall_stubs",
+			Category: "evasion",
+			Severity: 40,
+			Detail:   fmt.Sprintf("%d direct x64 NT syscall stub(s) (mov r10,rcx; mov eax,SSN; syscall) — AV/EDR userland hook bypass", pi.DirectSyscallStubs),
+		})
+	}
+
+	// 3. Shellcode-style PEB->LDR Module List Walk inside PE code section
+	if pi.PEBLDRWalk && !res.Signed && (pi.ImportN < 15 || len(pi.RWXSections) > 0 || pi.AbnormalEPSection != "") {
+		out = append(out, model.Finding{
+			Rule:     "peb_ldr_shellcode",
+			Category: "evasion",
+			Severity: 35,
+			Detail:   "executable code walks PEB->Ldr module list directly (shellcode / reflective API resolution)",
+		})
+	}
+
+	// 4. DosX / Detect-It-Easy Deep Structural Heuristics (unsigned binaries only)
+	if !res.Signed {
+		if len(pi.RWXSections) > 0 {
+			out = append(out, model.Finding{
+				Rule:     "pe_rwx_section",
+				Category: "packing",
+				Severity: 18,
+				Detail:   "writable + executable (RWX) PE section(s): " + strings.Join(pi.RWXSections, ", "),
+			})
+		}
+		if pi.AbnormalEPSection != "" {
+			out = append(out, model.Finding{
+				Rule:     "pe_abnormal_ep",
+				Category: "packing",
+				Severity: 18,
+				Detail:   fmt.Sprintf("PE entry point resides in non-standard section %q", pi.AbnormalEPSection),
+			})
+		}
+		if pi.TLSSuspicious {
+			out = append(out, model.Finding{
+				Rule:     "pe_tls_suspicious",
+				Category: "evasion",
+				Severity: 20,
+				Detail:   fmt.Sprintf("%d TLS callback(s) pointing outside standard .text code section (pre-main execution)", pi.TLSCallbacks),
+			})
+		}
+		if pi.OverlaySize >= 64*1024 && pi.OverlayEntropy >= 7.55 && pi.OverlayFormat == "" && !pi.HasPyInstaller {
+			out = append(out, model.Finding{
+				Rule:     "pe_encrypted_overlay",
+				Category: "packing",
+				Severity: 20,
+				Detail:   fmt.Sprintf("unexplained high-entropy PE overlay (%s, entropy %.2f) — hidden encrypted payload candidate", humanMB(pi.OverlaySize), pi.OverlayEntropy),
+			})
+		}
+		if !pi.Dotnet && fileSize > 50*1024 && pi.ImportN > 0 && pi.ImportN <= 4 && pi.EncryptedSize > 16*1024 {
+			out = append(out, model.Finding{
+				Rule:     "pe_api_hashing_loader",
+				Category: "evasion",
+				Severity: 22,
+				Detail:   fmt.Sprintf("tiny import table (%d import(s)) with encrypted section data — dynamic API-hashing loader pattern", pi.ImportN),
+			})
+		}
+	}
+	return out
+}
+
+func isExpandableInstallerPE(pi *pe.Info, strs []string, size int64) bool {
+	if size <= 16*1024 || size > 256*1024*1024 || find7z() == "" {
+		return false
+	}
+	if pi != nil {
+		switch pi.OverlayFormat {
+		case "nsis", "7z", "rar", "zip", "cab":
+			return true
+		}
+	}
+	for _, s := range strs {
+		if strings.Contains(s, "NullsoftInst") || strings.Contains(s, "Nullsoft.NSIS") || strings.Contains(s, "7z SFX") || strings.Contains(s, ";!@Install@!UTF-8!") {
+			return true
+		}
+	}
+	return false
+}
+
+// expandInstallerPE silently unpacks NSIS / 7z-SFX / RAR-SFX setup executables
+// via 7z to inspect embedded scripts (.nsi, .bat, .ps1, .vbs) and dropped payloads
+// BEFORE the user runs setup.exe. Legitimate installers that 7z cannot unpack do
+// NOT receive any penalty.
+func (s *Scanner) expandInstallerPE(path string, depth int, res *model.FileResult) {
+	out := s.expandContainerInner(path, depth)
+	if !out.Expanded {
+		return
+	}
+	res.Findings = append(res.Findings, model.Finding{
+		Rule:     "installer_unpacked",
+		Category: "container",
+		Severity: 0,
+		Detail:   fmt.Sprintf("SFX/NSIS installer unpacked (%s): inspected %d inner file(s) (%s)", out.Method, out.FileCount, humanMB(out.TotalBytes)),
+	})
+	if len(out.Extra) > 0 {
+		res.Findings = append(res.Findings, out.Extra...)
+	}
+	res.Findings = append(res.Findings, out.Nested...)
+	if out.MaxScore > 0 {
+		res.Findings = append(res.Findings, model.Finding{
+			Rule:     "nested_worst",
+			Category: "container",
+			Severity: 0,
+			Detail:   "worst member inside installer: " + out.TopPath + " -> " + out.MaxVerdict.String() + " (" + strconv.Itoa(out.MaxScore) + ")",
+		})
+		if out.MaxVerdict > res.Verdict || (out.MaxScore > res.Score && out.MaxVerdict == res.Verdict) {
+			res.Score = out.MaxScore
+			res.Verdict = out.MaxVerdict
+		}
+	}
+}
 
 // applyFolderHeuristics detects folder-wide decoy malware templates (such as
 // fake Ren'Py game folders from decoy download sites: renpy/ + setup.py with

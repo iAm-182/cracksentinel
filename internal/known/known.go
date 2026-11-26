@@ -118,6 +118,38 @@ func IsRuntimeDLL(path string) bool {
 	return RuntimeLabel(path) != ""
 }
 
+// IsHijackableSystemDLL reports whether path's filename matches a classic
+// Windows system DLL abused in "白加黑" (White+Black / AheadLib) DLL sideloading
+// attacks when dropped next to a signed third-party executable.
+// Game-modding hooks (dinput8.dll, xinput*, dxgi.dll) are intentionally excluded
+// here so legitimate ReShade / mod loaders are only flagged if they carry real payloads.
+var hijackableSystemDLLs = map[string]bool{
+	"version.dll":   true,
+	"winmm.dll":     true,
+	"winhttp.dll":   true,
+	"wtsapi32.dll":  true,
+	"dwmapi.dll":    true,
+	"uxtheme.dll":   true,
+	"propsys.dll":   true,
+	"ntmarta.dll":   true,
+	"cryptbase.dll": true,
+	"profapi.dll":   true,
+	"secur32.dll":   true,
+	"dbghelp.dll":   true,
+	"wer.dll":       true,
+	"iphlpapi.dll":  true,
+	"msimg32.dll":   true,
+	"hid.dll":       true,
+	"oleacc.dll":    true,
+	"userenv.dll":   true,
+	"netapi32.dll":  true,
+	"cscapi.dll":    true,
+}
+
+func IsHijackableSystemDLL(path string) bool {
+	return hijackableSystemDLLs[crossBase(path)]
+}
+
 // UtilityLabel identifies structurally verified benign game-repack utilities
 // (Inno Setup uninstallers, FitGirl QuickSFV checksum verifiers) by requiring
 // BOTH the expected filename AND genuine internal structural strings.

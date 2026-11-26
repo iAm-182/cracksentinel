@@ -258,3 +258,16 @@ rule gc_crack_emu_info
     condition:
         any of them
 }
+
+rule gc_syscall_evasion_stubs
+{
+    meta:
+        description = "Direct syscall stubs (SysWhispers / Hell's Gate) or ntdll KnownDlls unhooking"
+        severity = "high"
+    strings:
+        $stub = { 4C 8B D1 B8 ?? ?? 00 00 0F 05 C3 }
+        $kd = "\\KnownDlls\\ntdll.dll" ascii wide nocase
+        $sw = "SysWhispers" ascii wide nocase
+    condition:
+        (#stub >= 3) or $kd or $sw
+}

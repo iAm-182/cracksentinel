@@ -22,6 +22,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
@@ -143,6 +144,7 @@ func (s *Server) initDesktopState() {
 		return
 	}
 	_ = os.MkdirAll(s.opts.DataDir, 0o755)
+	_ = sigfeed.Global().LoadLocal(filepath.Join(s.opts.DataDir, "live-signatures.json"))
 	s.loadSettings()
 	s.loadHistory()
 }
@@ -495,6 +497,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"active_jobs":       activeJobs,
 		"yara":              yaraOn,
 		"yara_rules":        yaraRules,
+		"sig_status":        sigfeed.Global().Status(),
 		"extractor_7z":      has7z,
 		"extractor_unrar":   hasUnrar,
 		"extractor_freearc": hasFreeArc,
@@ -1299,4 +1302,34 @@ func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
 			s.opts.OnQuit()
 		}
 	}()
+}
+
+func (s *Server) handleSignaturesStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, sigfeed.Global().Status())
+}
+
+func (s *Server) handleSignaturesSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "signature sync is automatic in public web mode"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	st, changed, err := sigfeed.Global().Sync(ctx, "")
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"error":  err.Error(),
+			"status": st,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"synced":  true,
+		"changed": changed,
+		"status":  st,
+	})
 }

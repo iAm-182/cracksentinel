@@ -31,8 +31,24 @@ type Info struct {
 	// EncryptedSize is the number of bytes in sections whose entropy is
 	// high enough to be encrypted or compressed.
 	EncryptedSize int64
-	// FileSize is the size of the file on disk.
+	// FileSize is the size of the file on disk (end of last section).
 	FileSize int64
+
+	// Deep structural & opcode heuristics (v2.1.0 — DosX / white_patch_detect / AheadLib):
+	IsDLL              bool
+	RWXSections        []string
+	AbnormalEPSection  string
+	TLSCallbacks       int
+	TLSSuspicious      bool
+	ExportCount        int
+	ForwardedExports   int
+	ForwardTargets     []string
+	OverlaySize        int64
+	OverlayEntropy     float64
+	OverlayFormat      string
+	HasPyInstaller     bool
+	DirectSyscallStubs int
+	PEBLDRWalk         bool
 }
 
 type Section struct {
@@ -75,10 +91,15 @@ func Analyze(path string) (*Info, error) {
 		return nil, err
 	}
 	defer r.Close()
-	return analyze(f, r)
+	st, err := r.Stat()
+	var actualSz int64
+	if err == nil {
+		actualSz = st.Size()
+	}
+	return analyze(f, r, actualSz)
 }
 
-func analyze(f *pe.File, r io.ReaderAt) (*Info, error) {
+func analyze(f *pe.File, r io.ReaderAt, actualSize int64) (*Info, error) {
 	info := &Info{Imports: map[string][]string{}}
 	info.Machine = machineNames[f.FileHeader.Machine]
 	if info.Machine == "" {
@@ -152,6 +173,7 @@ func analyze(f *pe.File, r io.ReaderAt) (*Info, error) {
 	if info.Packer == "" && info.NoRawSections >= 2 {
 		info.Packer = "crypter(sections without raw data)"
 	}
+	analyzeHeuristics(f, r, actualSize, info)
 	return info, nil
 }
 

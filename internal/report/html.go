@@ -123,6 +123,17 @@ footer{padding:16px 26px;color:var(--mut);font-size:11px;border-top:1px solid va
 	fmt.Fprintf(&b, "<div class=\"card\"><div class=\"n acc\">%d</div><div class=\"l\">ms</div></div>", sum.DurationMs)
 	b.WriteString("</div></header>")
 
+	// Human-readable Indonesian verdict summary banner for offline exported HTML reports.
+	b.WriteString(`<section style="margin:18px 26px 0;padding:14px 18px;border-radius:10px;border:1px solid var(--line);background:var(--panel)">`)
+	if sum.Malicious > 0 {
+		fmt.Fprintf(&b, `<div class="mal" style="font-weight:700;font-size:14px">KESIMPULAN: TIDAK AMAN (%d File MALICIOUS) — JANGAN DIJALANKAN!</div><div class="sub" style="margin-top:4px;color:var(--fg)">Ditemukan indikasi malware kuat (stealer, koneksi webhook Discord/Telegram, perusak Defender, miner, atau dropper). Segera karantina atau hapus file merah di bawah.</div>`, sum.Malicious)
+	} else if sum.Suspicious > 0 {
+		fmt.Fprintf(&b, `<div class="sus" style="font-weight:700;font-size:14px">KESIMPULAN: PERIKSA DETAIL (%d File SUSPICIOUS, 0 MALICIOUS)</div><div class="sub" style="margin-top:4px;color:var(--fg)">Jika temuan pada file crack (misal <code>steam_api64.dll</code>) hanya berupa kemampuan teknis crack (<code>imp_injection</code>, <code>imp_keylogger</code>, <code>packed</code>, <code>emu_steamapi</code>) tanpa indikasi curi password/webhook/script rahasia, game cenderung aman. Waspada bila ada <code>stealer</code>, <code>webhook</code>, <code>ps_encoded</code>, <code>archive_encrypted</code>, atau <code>masquerading_pe</code>.</div>`, sum.Suspicious)
+	} else {
+		fmt.Fprintf(&b, `<div class="cln" style="font-weight:700;font-size:14px">KESIMPULAN: AMAN DIMAINKAN (%d File Bersih)</div><div class="sub" style="margin-top:4px;color:var(--fg)">Seluruh file telah diperiksa dan tidak ditemukan indikator virus, stealer, miner, script tersembunyi, maupun penyamaran executable.</div>`, clean)
+	}
+	b.WriteString(`</section>`)
+
 	b.WriteString(`<main>
 <div class="bar">
 <button class="on" data-f="all">All</button>

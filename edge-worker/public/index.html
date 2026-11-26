@@ -191,8 +191,21 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{text-align:left;padding:9px 10px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid #162135;vertical-align:top}
 tr:hover td{background:rgba(255,255,255,.02)}
-.finding-item{display:grid;grid-template-columns:36px 155px 1fr;gap:8px;padding:4px 0;border-bottom:1px dotted #1e2d45;font-size:11.5px}
+.finding-item{display:grid;grid-template-columns:36px 155px 1fr;gap:8px;padding:6px 0;border-bottom:1px dotted #1e2d45;font-size:11.5px}
 .finding-item .sv{text-align:right;font-weight:700}
+.explain-banner{border-radius:13px;padding:15px 18px;margin:14px 0;border:1px solid var(--line2);background:var(--bg2)}
+.explain-banner.safe{background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(6,182,212,.05)),var(--bg2);border-color:rgba(16,185,129,.42)}
+.explain-banner.crack{background:linear-gradient(135deg,rgba(59,130,246,.14),rgba(245,158,11,.06)),var(--bg2);border-color:rgba(96,165,250,.42)}
+.explain-banner.warn{background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(244,63,94,.05)),var(--bg2);border-color:rgba(245,158,11,.48)}
+.explain-banner.danger{background:linear-gradient(135deg,rgba(244,63,94,.18),rgba(245,158,11,.06)),var(--bg2);border-color:rgba(244,63,94,.52)}
+.explain-title{font-size:14.5px;font-weight:800;margin:0 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.explain-desc{font-size:12.5px;color:var(--fg);opacity:.92;margin:0}
+.explain-guide{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--mut)}
+.ftag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:10.5px;font-weight:700;margin-right:6px}
+.ftag.tech{background:rgba(59,130,246,.15);color:var(--acc2);border:1px solid rgba(59,130,246,.3)}
+.ftag.danger{background:rgba(244,63,94,.16);color:var(--mal);border:1px solid rgba(244,63,94,.36)}
+.ftag.info{background:rgba(16,185,129,.14);color:var(--cln);border:1px solid rgba(16,185,129,.3)}
+.file-note{font-size:11.5px;margin-bottom:5px;font-weight:600}
 details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
 
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
@@ -512,6 +525,8 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
           </div>
 
           <div class="metrics" id="resMetrics"></div>
+
+          <div id="resExplainBox"></div>
 
           <div class="row" style="margin:12px 0">
             <button class="btn sm primary" data-vf="all" type="button">Semua</button>
@@ -1294,6 +1309,158 @@ async function uploadAndScan(files){
   }
 }
 
+// Human-Readable Indonesian Verdict & Finding Explainer
+function explainFinding(f){
+  const r = String(f.rule || '').toLowerCase();
+  const sev = f.severity || 0;
+
+  if(r === 'emu_steamapi') return {kind:'info', label:'Emulator Game', text:'Emulator Steam dikenali (TENOKE/Goldberg/RUNE) — hooking memori normal pada crack.'};
+  if(r === 'crack_whitelist' || r === 'yara:gc_crack_emu_info') return {kind:'info', label:'Crack Dikenali', text:'Tanda crack/emulator game standar yang umum dipakai.'};
+  if(r === 'known_runtime_dll') return {kind:'info', label:' Terverifikasi', text:'Library runtime game / utility installer resmi tanpa indikasi payload berbahaya.'};
+  if(r.startsWith('online_') && sev < 0) return {kind:'info', label:'Reputasi Bersih', text:'Mayoritas puluhan antivirus di VirusTotal menyatakan file ini bersih.'};
+  if(r === 'web_size_skipped' || r === 'carved') return {kind:'info', label:'Info Scan', text:'Pemeriksaan selesai tanpa menemukan executable berbahaya tersembunyi.'};
+
+  // Kemampuan teknis wajar pada crack / installer / game engine
+  if(r === 'imp_injection' || r === 'yara:gc_injection_apis') return {kind:'tech', label:'Teknis Crack', text:'Kemampuan mem-patch memori proses — normal pada crack/emulator game untuk bypass DRM.'};
+  if(r === 'imp_keylogger' || r === 'keylog_word' || r === 'keylog_word2' || r === 'yara:gc_keylogger_strings' || r === 'combo_keylog_exfil') return {kind:'tech', label:'Teknis Crack/Input', text:'Kemampuan membaca tombol/hook keyboard — wajar pada crack overlay & game selama tidak ada pencuri data/C2.'};
+  if(r === 'imp_input') return {kind:'tech', label:'Teknis Game', text:'Membaca kontrol input keyboard/mouse standar.'};
+  if(r === 'imp_persistence') return {kind:'tech', label:'Teknis Installer', text:'Akses tulis Registry Windows — wajar pada installer/uninstaller (misal unins000.exe).'};
+  if(r === 'imp_destructive') return {kind:'tech', label:'Teknis File', text:'Akses baca/pindah/hapus file standar — normal pada installer & tool cek file.'};
+  if(r === 'imp_clipboard') return {kind:'tech', label:'Teknis Utility', text:'Akses copy-paste clipboard standar.'};
+  if(r === 'imp_exfil') return {kind:'tech', label:'Teknis Jaringan', text:'Memiliki fungsi koneksi internet standar (HTTP/socket).'};
+  if(r === 'packed' || r === 'pe_packed') return {kind:'tech', label:'Teknis Packer', text:'File dikompresi/dipack — sering dipakai crack/installer untuk mengecilkan ukuran.'};
+  if(r === 'dotnet') return {kind:'tech', label:'Info Runtime', text:'Program dibuat menggunakan Microsoft .NET.'};
+  if(r === 'base64_blob') return {kind:'tech', label:'Data Base64', text:'Teks Base64 panjang (umumnya ikon/konfigurasi jika di dalam game, waspada jika di script).'};
+  if(r === 'sandbox_check') return {kind:'tech', label:'Cek VM', text:'Mengecek apakah berjalan di Virtual Machine / Wine.'};
+  if(r === 'expired_certificate') return {kind:'info', label:'Sertifikat Lama', text:'Tanda tangan digital asli (misal Microsoft), hanya masa berlaku sertifikatnya sudah lama.'};
+  if(r.startsWith('online_virustotal') && sev > 0 && sev <= 15) return {kind:'tech', label:'VT Ringan', text:'Hanya 1–4 dari ~70 antivirus yang menandai — sangat umum sebagai false-positive HackTool/Crack.'};
+
+  // Red Flags / Indikasi Bahaya Nyata!
+  if(r.includes('discord_webhook')) return {kind:'danger', label:'BAHAYA: C2 Discord', text:'Mengirim data curian ke Discord Webhook milik pembuat malware! Crack game tidak pernah butuh ini.'};
+  if(r.includes('telegram')) return {kind:'danger', label:'BAHAYA: Bot Telegram', text:'Terhubung ke Bot Telegram untuk mengirim data curian / kontrol jarak jauh!'};
+  if(r === 'stealer_app_bound_enc' || r.includes('infostealer_abe')) return {kind:'danger', label:'BAHAYA: Stealer Chrome', text:'Mencoba membobol enkripsi App-Bound Chrome/Edge/Brave untuk mencuri cookie & password!'};
+  if(r === 'stealer_wallet_session' || r === 'wallet_browser_target' || r === 'imp_credential' || r === 'combo_stealer_stack' || r === 'script_cred_paths' || r.includes('stealer') || r.includes('wallets_sessions')) {
+    return {kind:'danger', label:'BAHAYA: Pencuri Data', text:'Mengincar password browser, wallet kripto (MetaMask/Exodus), atau akun Discord/Telegram/Steam!'};
+  }
+  if(r === 'malware_family_ioc' || r.includes('gc_family_')) return {kind:'danger', label:'BAHAYA: Malware Dikenali', text:'Cocok langsung dengan tanda keluarga malware berbahaya (LummaC2 / StealC / RedLine / RAT)!'};
+  if(r === 'defense_uac_evasion' || r === 'script_defender_tamper' || r === 'script_amsi_bypass' || r.includes('defender_uac')) {
+    return {kind:'danger', label:'BAHAYA: Matikan Antivirus', text:'Mencoba mematikan/mengecualikan Windows Defender secara diam-diam atau membobol izin Admin (UAC)!'};
+  }
+  if(r === 'lolbin_clickfix_dropper' || r === 'download_cradle' || r === 'script_downloader' || r === 'shortcut_exec' || r === 'shortcut_remote' || r.includes('lolbin_dropper')) {
+    return {kind:'danger', label:'BAHAYA: Dropper Virus', text:'Mengunduh dan mengeksekusi payload berbahaya dari internet secara tersembunyi!'};
+  }
+  if(r === 'ps_encoded' || r === 'script_hidden_exec' || r === 'script_obfuscation' || r === 'script_reverse_shell' || r.includes('powershell_encoded')) {
+    return {kind:'danger', label:'BAHAYA: Script Rahasia', text:'Menjalankan perintah PowerShell/script tersembunyi yang disamarkan (encoded/obfuscated)!'};
+  }
+  if(r === 'crypto_miner_ioc' || r === 'script_crypto_miner' || r.includes('xmrig')) {
+    return {kind:'danger', label:'BAHAYA: Crypto Miner', text:'Menambang kripto diam-diam di background (membuat CPU/GPU panas & performa game anjlok)!'};
+  }
+  if(r === 'crypto_clipper_ioc' || r.includes('crypto_clipper')) {
+    return {kind:'danger', label:'BAHAYA: Crypto Clipper', text:'Membajak copy-paste clipboard untuk menukar alamat wallet kripto ke milik pelaku!'};
+  }
+  if(r === 'lsass_cred_dump' || r.includes('lsass_dumper')) {
+    return {kind:'danger', label:'BAHAYA: Curi Memori OS', text:'Mencoba menyedot password Windows langsung dari memori sistem (LSASS)!'};
+  }
+  if(r === 'decoy_renpy_dropper') return {kind:'danger', label:'BAHAYA: Game Palsu (Decoy)', text:'Struktur folder/arsip game jebakan yang menyembunyikan file malware terenkripsi!'};
+  if(r === 'masquerading_pe' || r.includes('double_ext')) return {kind:'danger', label:'BAHAYA: File Menyamar', text:'Program executable (.exe) menyamar menggunakan ekstensi dokumen/gambar/data palsu!'};
+  if(r === 'embedded_pe') return {kind:'danger', label:'Waspada: EXE Tersembunyi', text:'Ditemukan program .exe/.dll diselipkan di dalam bongkahan file data besar.'};
+  if(r === 'signature_mismatch') return {kind:'danger', label:'BAHAYA: File Dimodifikasi', text:'Tanda tangan digital resmi rusak/palsu — isi file telah disuntik atau diubah!'};
+  if(r === 'archive_encrypted') return {kind:'danger', label:'Waspada: Arsip Dikunci', text:'Arsip dikunci password sehingga isinya tidak bisa diperiksa (trik umum penyebar virus web).'};
+  if(r.startsWith('online_') && sev >= 25) return {kind:'danger', label:'BAHAYA: VirusTotal Merah', text:'Banyak antivirus internasional mengonfirmasi file ini sebagai malware berbahaya!'};
+  if(r.includes('eicar')) return {kind:'danger', label:'File Tes EICAR', text:'File uji standar deteksi antivirus (EICAR).'};
+
+  if(sev >= 25) return {kind:'danger', label:'Indikator Berisiko', text:'Pola perilaku berisiko tinggi — periksa detail sebelum menjalankan file ini.'};
+  if(sev > 0) return {kind:'tech', label:'Indikator Teknis', text:'Sinyal heuristik ringan; aman bila tidak disertai indikator pencuri data/C2.'};
+  return {kind:'info', label:'Info', text:'Catatan informasi analisa.'};
+}
+
+function summarizeFileSafety(r){
+  const fs = r.findings || [];
+  const explained = fs.map(f => ({f, ex: explainFinding(f)}));
+  const dangers = explained.filter(x => x.ex.kind === 'danger' && (x.f.severity > 0 || x.f.rule === 'eicar'));
+  const techs = explained.filter(x => x.ex.kind === 'tech' && x.f.severity > 0);
+  const hasVerified = fs.some(f => f.rule === 'known_runtime_dll');
+  const hasEmu = fs.some(f => f.rule === 'emu_steamapi' || f.rule === 'crack_whitelist');
+
+  if(r.verdict === 'MALICIOUS'){
+    const why = dangers[0] ? dangers[0].ex.text : 'Skor risiko melewati batas aman (>= 70). Jangan jalankan file ini!';
+    return {cls:'mal', badge:'TIDAK AMAN — Jangan Dijalankan!', note: why, dangers, techs, explained};
+  }
+  if(r.verdict === 'SUSPICIOUS'){
+    if(dangers.length === 0){
+      return {
+        cls:'acc',
+        badge:'Cenderung Aman — Kemampuan Teknis Crack/Tool',
+        note:'Hanya terdeteksi kemampuan teknis crack/installer biasa (tanpa pencuri data, tanpa webhook/C2, tanpa script tersembunyi).',
+        dangers, techs, explained
+      };
+    }
+    return {
+      cls:'sus',
+      badge:'Waspada — Ada Indikator Berisiko',
+      note: dangers[0].ex.text,
+      dangers, techs, explained
+    };
+  }
+  if(hasVerified) return {cls:'cln', badge:'Aman — Runtime/Utility Terverifikasi', note:'', dangers, techs, explained};
+  if(hasEmu) return {cls:'cln', badge:'Aman — Emulator/Crack Dikenali', note:'', dangers, techs, explained};
+  return {cls:'cln', badge:'Aman — Bersih', note:'', dangers, techs, explained};
+}
+
+function renderExplainBanner(sum){
+  const active = (sum.results||[]).filter(r => !r.skipped);
+  let malFiles = [], dangerSusFiles = [], techSusFiles = [], firstDangerReason = '';
+  for(const r of active){
+    const sf = summarizeFileSafety(r);
+    if(r.verdict === 'MALICIOUS'){
+      malFiles.push(r);
+      if(!firstDangerReason && sf.dangers[0]) firstDangerReason = sf.dangers[0].ex.text;
+    }else if(r.verdict === 'SUSPICIOUS'){
+      if(sf.dangers.length > 0){
+        dangerSusFiles.push(r);
+        if(!firstDangerReason) firstDangerReason = sf.dangers[0].ex.text;
+      }else{
+        techSusFiles.push(r);
+      }
+    }
+  }
+
+  let cls = 'safe', badge = 'CLEAN', title = 'KESIMPULAN: GAME / FOLDER AMAN DIMAINKAN', desc = '';
+  if(malFiles.length > 0){
+    cls = 'danger';
+    badge = 'MALICIOUS';
+    title = `KESIMPULAN: TIDAK AMAN (${malFiles.length} File Berbahaya Terdeteksi) — JANGAN DIJALANKAN!`;
+    const names = malFiles.slice(0,3).map(f => f.path.split(/[\\/]/).pop()).join(', ');
+    desc = `Terdeteksi ancaman serius pada <b>${esc(names)}</b>. ${esc(firstDangerReason || 'Ditemukan pola malware/trojan kuat.')} Segera klik tombol <b>Karantina</b> pada baris merah di bawah atau hapus folder ini.`;
+  }else if(dangerSusFiles.length > 0){
+    cls = 'warn';
+    badge = 'SUSPICIOUS';
+    title = `KESIMPULAN: WASPADA — Ada ${dangerSusFiles.length} File dengan Indikator Berisiko`;
+    const names = dangerSusFiles.slice(0,3).map(f => f.path.split(/[\\/]/).pop()).join(', ');
+    desc = `Belum mencapai skor MALICIOUS, tetapi <b>${esc(names)}</b> memiliki tanda yang tidak biasa untuk crack game: ${esc(firstDangerReason)} Periksa detail temuan atau aktifkan cek VirusTotal sebelum menjalankan.`;
+  }else if(techSusFiles.length > 0){
+    cls = 'crack';
+    badge = 'INFO';
+    title = `KESIMPULAN: CENDERUNG AMAN (Hanya Kemampuan Teknis Crack / Installer)`;
+    const names = techSusFiles.slice(0,3).map(f => f.path.split(/[\\/]/).pop()).join(', ');
+    desc = `Tidak ada file MALICIOUS dan <b>tidak ditemukan pencuri data (stealer), webhook Discord/Telegram, miner, maupun perusak Defender</b>. File kuning (<b>${esc(names)}</b>) hanya memiliki <i>kemampuan teknis crack/emulator biasa</i> (seperti mem-patch memori DRM atau hooking tombol overlay).`;
+  }else{
+    desc = `Seluruh <b>${sum.files_scanned} file</b> yang diperiksa bersih dari indikator stealer, trojan, ransomware, miner, script tersembunyi, maupun penyamaran ekstensi. Aman untuk dimainkan!`;
+  }
+
+  return `<div class="explain-banner ${cls}">
+    <div class="explain-title"><span class="badge ${badge}">${cls==='safe'?'AMAN':cls==='crack'?'TEKNIS CRACK':cls==='warn'?'WASPADA':'BAHAYA'}</span> ${title}</div>
+    <p class="explain-desc">${desc}</p>
+    <details class="explain-guide">
+      <summary>Cara membedakan Crack Aman vs Virus Berbahaya (klik untuk baca)</summary>
+      <div style="margin-top:7px;display:grid;gap:5px;line-height:1.55">
+        <div><span class="ftag tech">Teknis Crack</span> <b>Wajar / Aman di Game Bajakan:</b> kemampuan seperti <code>imp_injection</code> (patch memori DRM), <code>imp_keylogger</code> (hook tombol Steam overlay), <code>imp_persistence</code> (uninstaller), atau <code>packed</code> pada file crack (<code>steam_api64.dll</code>, <code>emp.dll</code>) <b>selama tidak ada koneksi curi data</b>.</div>
+        <div><span class="ftag danger">Indikasi Bahaya</span> <b>TIDAK AMAN (Jangan Dijalankan!):</b> muncul pencuri password/cookie/wallet (<code>stealer_*</code>), kirim data ke <code>discord_webhook</code> / <code>telegram_token</code>, mematikan Defender (<code>Add-MpPreference</code>), script rahasia (<code>ps_encoded</code> / <code>mshta</code>), <code>crypto_miner</code>, <code>decoy_renpy_dropper</code>, atau file <code>.dat/.png</code> yang menyamar jadi <code>.exe</code>.</div>
+      </div>
+    </details>
+  </div>`;
+}
+
 // Render Scan Result Table
 function renderResult(item){
   currentItem = item;
@@ -1312,6 +1479,7 @@ function renderResult(item){
     <div class="metric"><div class="n acc">${sum.files_scanned}</div><div class="l">Scanned</div></div>
     <div class="metric"><div class="n">${sum.files_skipped}</div><div class="l">Skipped</div></div>
   `;
+  $('#resExplainBox').innerHTML = renderExplainBanner(sum);
   drawResultRows();
   $('#resultBox').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -1342,11 +1510,20 @@ function drawResultRows(){
     if(r.cached) infoBits.push('cached');
     if(r.download_source && r.download_source.host_domain) infoBits.push('web:' + r.download_source.host_domain);
 
-    let findHTML = '<span class="muted">bersih</span>';
+    const sf = summarizeFileSafety(r);
+    let findHTML = `<span class="cln" style="font-size:12px;font-weight:600">${esc(sf.badge)}</span>`;
     if(fs.length){
       const top = fs.filter(f=>f.severity>0).slice(0,3).map(f=>f.rule).join(', ') || fs[0].rule;
-      findHTML = `<details ${r.verdict!=='CLEAN'?'open':''}><summary>${sevCount} temuan · ${esc(top)}</summary>` +
-        fs.map(f=>`<div class="finding-item"><div class="sv ${f.severity>=70?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div><div class="mono acc">${esc(f.rule)}</div><div>${esc(f.detail)}</div></div>`).join('') +
+      const noteLine = sf.note ? `<div class="file-note ${sf.cls}">${esc(sf.badge)} — <span style="font-weight:400;color:var(--fg)">${esc(sf.note)}</span></div>` : `<div class="file-note ${sf.cls}">${esc(sf.badge)}</div>`;
+      findHTML = noteLine + `<details ${r.verdict!=='CLEAN'?'open':''}><summary>${sevCount} temuan skor · ${esc(top)}</summary>` +
+        sf.explained.map(({f, ex})=>`<div class="finding-item">
+          <div class="sv ${f.severity>=70?'mal':f.severity>0?'sus':'cln'}">${f.severity}</div>
+          <div class="mono acc">${esc(f.rule)}</div>
+          <div>
+            <div><span class="ftag ${ex.kind}">${esc(ex.label)}</span><b>${esc(ex.text)}</b></div>
+            <div class="muted" style="margin-top:2px">${esc(f.detail)}</div>
+          </div>
+        </div>`).join('') +
         '</details>';
     }
     const acts = [];

@@ -13,18 +13,34 @@
 
 ---
 
-## Quick Start — 4 Easy Ways to Use
+## Quick Start — Install & Run
 
-### 1. Windows Desktop App — `CrackSentinel.exe` (Recommended — Handles 20–100+ GB Games)
+### 1. 1-Click Windows Install (No Go / Git / Python Required!)
+Paste this one-liner in PowerShell — automatically downloads the verified latest **`CrackSentinel.exe`**, installs **7-Zip** + portable **YARA**, and creates a Desktop shortcut:
+```powershell
+irm https://raw.githubusercontent.com/iAm-182/cracksentinel/main/install.ps1 | iex
+```
+*(Custom folder, e.g. drive `E:`: `$env:CRACKSENTINEL_DIR="E:\CrackSentinel"; irm https://raw.githubusercontent.com/iAm-182/cracksentinel/main/install.ps1 | iex`)*
+
+### 2. Git Clone + Automatic Setup (`setup.bat`)
+```powershell
+git clone https://github.com/iAm-182/cracksentinel.git
+cd cracksentinel
+.\setup.bat
+```
+`setup.bat` automatically installs missing dependencies (`7-Zip`, portable `yara64.exe` in `tools\`), compiles `CrackSentinel.exe` & `scanner.exe` (or fetches verified release binaries if Go isn't installed), and creates the Desktop shortcut.
+
+### 3. Windows Desktop App — `CrackSentinel.exe` (Best for 20–100+ GB Games)
 Double-click **`CrackSentinel.exe`** (or drag & drop a game folder / `.zip` directly onto its icon) to open the standalone CrackSentinel desktop dashboard:
-- **Dashboard & Quick Scan:** KPI overview, engine health (`YARA`, `7-Zip/UnRAR`, `Hash Cache`), and 1-click Quick Scan cards for detected folders (`Downloads`, `Desktop`, `E:\Games`).
+- **Built-in Auto-Updater:** Automatically checks GitHub Releases on startup, verifies **SHA-256** against `checksums.txt`, and performs a safe self-swap + auto-restart without losing your history, quarantine vault, or settings.
+- **Dashboard & Quick Scan:** KPI overview, engine health (`YARA 19 rules`, `7-Zip/UnRAR`, `Hash Cache`), and 1-click Quick Scan cards for detected folders (`Downloads`, `Desktop`, `E:\Games`).
 - **Live Progress Scanner (0-Copy):** Click **Pilih Folder Game (Scan Langsung)** to scan 50–100 GB game folders straight off disk with live file counter, threat feed, and Cancel button — or Drag & Drop / Mass Check multiple folders at once.
 - **Real-Time Download Guard:** Continuously monitors `Downloads`, skips partial downloads (`.crdownload`, `.part`, `.!qB`, `.aria2`, `.tmp`), reads Windows **Mark-of-the-Web** (`Zone.Identifier`) origin URLs, pops Windows desktop toast alerts, and optionally auto-quarantines `MALICIOUS` files.
 - **Quarantine Vault:** Inspect isolated threats (original path, SHA-256, score, findings) with 1-click **Restore** or **Permanent Delete**.
 - **URL Pre-Check:** Paste a download URL before clicking to trace redirect chains (safe HTTP `HEAD` only), decoy domains, double extensions, and suspiciously tiny repacks.
 - **Settings & Persistence:** Configure CPU workers, `E:` temp directory, Quarantine Vault path, VirusTotal / MalwareBazaar API keys, persistent scan history (`data/history.json`), and 1-click Desktop shortcut creation.
 
-*(Alternative CLI launcher: `CrackSentinel-UI.bat` or `scanner.exe ui -tmp-dir E:\path\to\tmp`.)*
+*(Alternative launchers: `CrackSentinel-Drop.bat` for direct Explorer drag & drop, or `scanner.exe ui -tmp-dir E:\path\to\tmp`.)*
 
 ### 2. Direct Windows Explorer Drag & Drop
 Drag **1 file, 1 folder, or multiple game folders** directly onto **`CrackSentinel-Drop.bat`** (works great as a Desktop shortcut). CrackSentinel scans all dropped targets and automatically opens the standalone HTML report.

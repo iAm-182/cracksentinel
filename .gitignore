@@ -43,6 +43,11 @@ batch-reports/
 data/
 quarantine/
 .appdata/
+tools/
+*.old
+*.new
+release-dist/
+release-bundle/
 .env
 .bridge.env
 .tunnel.env

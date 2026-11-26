@@ -220,28 +220,113 @@ func (c *Client) lookupMB(sha string) Result {
 	return r
 }
 
+// IsBenignCrackOrPUALabel reports whether a VirusTotal threat label indicates
+// a crack, hacktool, keygen, or PUA classification rather than a confirmed
+// trojan/stealer/RAT payload.
+func IsBenignCrackOrPUALabel(label string) bool {
+	l := strings.ToLower(strings.TrimSpace(label))
+	if l == "" {
+		return false
+	}
+	for _, kw := range []string{
+		"pua", "pup", "hacktool", "gamehack", "crack", "keygen",
+		"patcher", "riskware", "not-a-virus", "grayware", "unwanted", "adware",
+	} {
+		if strings.Contains(l, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsHighRiskFamilyLabel reports whether a VirusTotal threat label names a
+// high-risk malware family or payload class (stealer, RAT, ransomware, miner).
+func IsHighRiskFamilyLabel(label string) bool {
+	l := strings.ToLower(strings.TrimSpace(label))
+	if l == "" || IsBenignCrackOrPUALabel(l) {
+		return false
+	}
+	for _, kw := range []string{
+		"lumma", "redline", "stealc", "vidar", "raccoon", "rhadamanthys",
+		"mystic", "medusa", "asyncrat", "remcos", "xworm", "njrat", "dcrat",
+		"xmrig", "coinminer", "miner", "ransom", "stealer", "infostealer",
+		"keylogger", "spyware", "backdoor", "clipper", "banker", "rootkit",
+		"botnet", "dropper", "loader", "trojan", "worm", "rat",
+	} {
+		if strings.Contains(l, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// ForceMalicious reports whether online reputation consensus is strong enough
+// to independently promote a file to MALICIOUS. Calibrated for cracked-game
+// environments so 3/70 AV noise on QuickSFV or TENOKE steam_api64.dll does not
+// cause false MALICIOUS verdicts, while real MalwareBazaar hits and strong VT
+// stealer/trojan consensus still promote immediately.
+func ForceMalicious(r Result, isCrackEmu bool) bool {
+	if r.Err != "" || !r.Found {
+		return false
+	}
+	if r.Provider == "malwarebazaar" && r.Malicious >= 1 {
+		return true
+	}
+	if IsBenignCrackOrPUALabel(r.Label) {
+		// Crack/PUA labels are common on legit emulators and utilities; only
+		// escalate on overwhelming multi-vendor consensus.
+		if isCrackEmu {
+			return r.Malicious >= 25
+		}
+		return r.Malicious >= 20
+	}
+	if IsHighRiskFamilyLabel(r.Label) {
+		if isCrackEmu {
+			return r.Malicious >= 10
+		}
+		return r.Malicious >= 6
+	}
+	if isCrackEmu {
+		return r.Malicious >= 15
+	}
+	return r.Malicious >= 10
+}
+
 func ScoreDelta(r Result) int {
 	if r.Err != "" || !r.Found {
 		return 0
 	}
+	if r.Provider == "malwarebazaar" && r.Malicious >= 1 {
+		return 70
+	}
 	n := 0
 	switch {
-	case r.Malicious >= 5:
+	case r.Malicious >= 10:
 		n = 60
+	case r.Malicious >= 5:
+		n = 35
+		if IsHighRiskFamilyLabel(r.Label) {
+			n = 50
+		}
 	case r.Malicious >= 3:
-		n = 40
+		n = 15
+		if IsHighRiskFamilyLabel(r.Label) {
+			n = 25
+		}
 	case r.Malicious >= 1:
-		n = 20
+		n = 6
 	case r.Suspicious >= 2:
-		n = 10
+		n = 8
 	}
 	if n == 0 && (r.Harmless > 0 || r.Undetected > 0) {
-		n = -5
-	}
-	if strings.HasPrefix(strings.ToLower(r.Label), "pua") {
-		if n > 0 {
-			n = 10
+		if r.Harmless+r.Undetected >= 30 {
+			n = -10
+		} else {
+			n = -5
 		}
+	}
+	if IsBenignCrackOrPUALabel(r.Label) && n > 10 {
+		n = 10
 	}
 	return n
 }

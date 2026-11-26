@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
 )
@@ -1232,4 +1234,69 @@ func copySimple(src, dst string) error {
 	defer out.Close()
 	_, err = io.Copy(out, in)
 	return err
+}
+
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	force := r.URL.Query().Get("force") == "1" || r.URL.Query().Get("force") == "true"
+	s.updateMu.Lock()
+	if !force && s.cachedUpdate != nil && time.Since(s.updateAt) < 15*time.Minute {
+		cp := *s.cachedUpdate
+		s.updateMu.Unlock()
+		writeJSON(w, http.StatusOK, cp)
+		return
+	}
+	s.updateMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	info := updater.CheckLatest(ctx, version.Short(), updater.DefaultRepo)
+	s.updateMu.Lock()
+	s.cachedUpdate = &info
+	s.updateAt = time.Now()
+	s.updateMu.Unlock()
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "self-update is disabled in public web mode"})
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
+	defer cancel()
+	info := updater.CheckLatest(ctx, version.Short(), updater.DefaultRepo)
+	if info.Error != "" {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": info.Error})
+		return
+	}
+	if !info.Available {
+		writeJSON(w, http.StatusOK, map[string]any{"updated": false, "version": info.CurrentVersion, "message": "sudah menggunakan versi terbaru"})
+		return
+	}
+	if err := updater.ApplyWindowsUpdate(ctx, info, exe); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"updated":    true,
+		"restarting": true,
+		"version":    info.LatestVersion,
+	})
+	go func() {
+		time.Sleep(450 * time.Millisecond)
+		_ = updater.Relaunch(exe)
+		if s.opts.OnQuit != nil {
+			time.Sleep(250 * time.Millisecond)
+			s.opts.OnQuit()
+		}
+	}()
 }

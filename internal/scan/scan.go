@@ -1227,19 +1227,30 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		}
 	}
 
-	// Known benign runtime DLL allowlist (strictly vetoed by any intent/payload
-	// finding, signature mismatch, or crypter structure).
-	if kind == filetype.KindPE {
-		if label := known.RuntimeLabel(path); label != "" &&
-			res.SignatureStatus != "mismatch" &&
-			(peInfo == nil || peInfo.NoRawSections < 2) &&
-			!hasIntentFindings(findings) {
+	// Known benign runtime DLL or structurally verified repack utility
+	// allowlist (strictly vetoed by any intent/payload finding, signature
+	// mismatch, crypter structure, or VT multi-engine malware consensus).
+	if kind == filetype.KindPE &&
+		res.SignatureStatus != "mismatch" &&
+		(peInfo == nil || peInfo.NoRawSections < 2) &&
+		(onlineRes == nil || onlineRes.Malicious < 5) &&
+		!hasIntentFindings(findings) {
+		if label := known.RuntimeLabel(path); label != "" {
 			whitelist = append(whitelist, "RUNTIME_DLL")
 			findings = append(findings, model.Finding{
 				Rule:     "known_runtime_dll",
 				Category: "info",
 				Severity: 0,
 				Detail:   fmt.Sprintf("known runtime library (%s) — capability findings capped; no payload indicators found", label),
+			})
+			res.Findings = findings
+		} else if label := known.UtilityLabel(path, strs); label != "" {
+			whitelist = append(whitelist, "RUNTIME_DLL")
+			findings = append(findings, model.Finding{
+				Rule:     "known_runtime_dll",
+				Category: "info",
+				Severity: 0,
+				Detail:   fmt.Sprintf("verified repack utility (%s) — capability findings capped; no payload indicators found", label),
 			})
 			res.Findings = findings
 		}
@@ -1252,7 +1263,15 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	}
 	res.Score = score
 	res.Verdict = verdict
-	if onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40 {
+	isEmu := false
+	for _, w := range whitelist {
+		if w == "EMU_STEAMAPI" {
+			isEmu = true
+			break
+		}
+	}
+	forceMalicious := onlineRes != nil && online.ForceMalicious(*onlineRes, isEmu)
+	if forceMalicious {
 		res.Verdict = model.VerdictMalicious
 	}
 	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsExpandableContainer(path)) {
@@ -1261,7 +1280,6 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	// The semantic adjudication runs last, so it sees every finding the
 	// file produced, including the ones that came out of a container.
 	ev := buildEvidence(&res, strs)
-	forceMalicious := onlineRes != nil && online.ScoreDelta(*onlineRes) >= 40
 	s.judgeFile(&res, strs, whitelist, forceMalicious)
 	if s.cache != nil && sha != "" && !sub {
 		s.cache.PutFull(sha, res, onlineJSON)
@@ -1323,6 +1341,11 @@ func hasIntentFindings(findings []model.Finding) bool {
 		if f.Severity <= 0 {
 			continue
 		}
+		// Online reputation findings are evaluated separately via VT consensus
+		// threshold so 3/70 noise on QuickSFV doesn't veto verified utilities.
+		if f.Category == "reputation" {
+			continue
+		}
 		if !rules.IsCapability(f.Rule) && !isImportOnlyCombo(f.Rule) {
 			return true
 		}
@@ -1340,19 +1363,22 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 			nonRuntimeWL++
 		}
 	}
-	capScore, intentScore := 0, 0
+	capScore, intentScore, localIntentScore := 0, 0, 0
 	for _, f := range findings {
 		if rules.IsCapability(f.Rule) || (isRuntimeDLL && isImportOnlyCombo(f.Rule)) {
 			capScore += f.Severity
 		} else {
 			intentScore += f.Severity
+			if f.Category != "reputation" && f.Severity > 0 {
+				localIntentScore += f.Severity
+			}
 		}
 	}
 	cap := capabilityCap
 	if signed {
 		cap = signedCapabilityCap
 	}
-	if isRuntimeDLL && intentScore == 0 && cap > runtimeCapabilityCap {
+	if isRuntimeDLL && localIntentScore == 0 && cap > runtimeCapabilityCap {
 		cap = runtimeCapabilityCap
 	}
 	if capScore > cap {
@@ -1361,6 +1387,9 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 	score := capScore + intentScore
 	if score > 100 {
 		score = 100
+	}
+	if score < 0 {
+		score = 0
 	}
 	if nonRuntimeWL > 0 && score < 60 {
 		score -= 15
@@ -1398,7 +1427,7 @@ func computeScore(findings []model.Finding, whitelist []string, signed bool) (in
 const (
 	capabilityCap        = 35
 	signedCapabilityCap  = 15
-	runtimeCapabilityCap = 15
+	runtimeCapabilityCap = 12
 )
 
 var containerSeq int64
@@ -1547,6 +1576,15 @@ func wantExt(name string) bool {
 }
 
 func find7z() string {
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for _, rel := range []string{`tools\7z.exe`, `tools\7za.exe`, `7z.exe`, `7za.exe`} {
+			p := filepath.Join(dir, rel)
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
 	if p, err := exec.LookPath("7z"); err == nil {
 		return p
 	}

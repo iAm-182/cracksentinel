@@ -315,6 +315,23 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         </div>
       </div>
 
+      <div class="card" id="updateBanner" style="display:none;border-color:rgba(16,185,129,.5);background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(6,182,212,.06)),var(--panel)">
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+            <span class="badge CLEAN">UPDATE TERSEDIA</span>
+            <div>
+              <b id="updBannerTitle">CrackSentinel versi terbaru siap dipasang</b>
+              <div class="muted" id="updBannerSub">Verifikasi SHA-256 otomatis &amp; restart mulus tanpa menghapus riwayat/karantina.</div>
+            </div>
+          </div>
+          <div class="row">
+            <a class="btn sm ghost" id="updBannerLink" href="#" target="_blank" rel="noopener">Changelog</a>
+            <button class="btn sm primary local-only" id="btnApplyUpdateTop" type="button">Update &amp; Restart</button>
+            <button class="btn sm ghost" id="btnDismissUpd" type="button">Tutup</button>
+          </div>
+        </div>
+      </div>
+
       <!-- VIEW 1: DASHBOARD -->
       <section class="view active" id="view-dashboard">
         <div class="hero" id="dashHero">
@@ -713,6 +730,20 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Auto-Update &amp; Versi Aplikasi</h3>
+              <div class="muted" id="updSettingsStatus">Memeriksa versi terbaru di GitHub Releases...</div>
+            </div>
+            <div class="row">
+              <button class="btn sm ghost" id="btnCheckUpdate" type="button">Cek Update</button>
+              <button class="btn sm primary" id="btnApplyUpdate" type="button" disabled>Update Sekarang</button>
+            </div>
+          </div>
+          <pre id="updNotesBox" class="mono muted" style="display:none;white-space:pre-wrap;margin:10px 0 0;padding:12px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;max-height:180px;overflow:auto"></pre>
         </div>
 
         <div class="card">
@@ -1628,6 +1659,65 @@ $('#btnAppQuit').addEventListener('click', async ()=>{
   window.close();
 });
 
+// Auto-Update Check & Apply
+let lastUpdateInfo = null;
+async function checkUpdate(force=false){
+  try{
+    if(force) $('#updSettingsStatus').textContent = 'Menghubungi GitHub Releases...';
+    const r = await apiFetch('/api/update/check' + (force ? '?force=1' : ''));
+    const d = await parseJSONSafe(r);
+    if(!r.ok) return;
+    lastUpdateInfo = d;
+    if(d.error){
+      $('#updSettingsStatus').textContent = `Versi saat ini: v${d.current_version} · ${d.error}`;
+      $('#btnApplyUpdate').disabled = true;
+      if(force) toast(d.error);
+      return;
+    }
+    if(d.available){
+      $('#updBannerTitle').textContent = `CrackSentinel v${d.latest_version} tersedia (saat ini v${d.current_version})`;
+      $('#updBannerLink').href = d.release_url || 'https://github.com/iAm-182/cracksentinel/releases/latest';
+      $('#updateBanner').style.display = 'block';
+      $('#updSettingsStatus').textContent = `Update tersedia: v${d.current_version} → v${d.latest_version} (verifikasi SHA-256 otomatis)`;
+      $('#btnApplyUpdate').disabled = false;
+      if(d.notes){
+        $('#updNotesBox').textContent = d.notes;
+        $('#updNotesBox').style.display = 'block';
+      }
+      if(force) toast(`Update v${d.latest_version} tersedia!`);
+    }else{
+      $('#updateBanner').style.display = 'none';
+      $('#updSettingsStatus').textContent = `Versi terbaru terpasang (v${d.current_version} · dicek ${d.checked_at})`;
+      $('#btnApplyUpdate').disabled = true;
+      if(force) toast('CrackSentinel sudah menggunakan versi terbaru!');
+    }
+  }catch(_){}
+}
+
+async function applyUpdate(){
+  if(!lastUpdateInfo || !lastUpdateInfo.available) return;
+  if(!confirm(`Download & pasang CrackSentinel v${lastUpdateInfo.latest_version} sekarang?\n\nSHA-256 akan diverifikasi otomatis lalu aplikasi akan restart.`)) return;
+  $('#btnApplyUpdate').disabled = true;
+  $('#btnApplyUpdateTop').disabled = true;
+  toast(`Mengunduh CrackSentinel v${lastUpdateInfo.latest_version} & memverifikasi SHA-256...`);
+  try{
+    const r = await apiFetch('/api/update/apply', {method:'POST'});
+    const d = await parseJSONSafe(r);
+    if(!r.ok) throw new Error(d.error || 'Update gagal');
+    toast(`Berhasil update ke v${d.version}! Membuka ulang CrackSentinel...`);
+    setTimeout(()=>{ window.close(); }, 1800);
+  }catch(e){
+    toast('Gagal update: ' + e.message);
+    $('#btnApplyUpdate').disabled = false;
+    $('#btnApplyUpdateTop').disabled = false;
+  }
+}
+
+$('#btnCheckUpdate').addEventListener('click', ()=>checkUpdate(true));
+$('#btnApplyUpdate').addEventListener('click', applyUpdate);
+$('#btnApplyUpdateTop').addEventListener('click', applyUpdate);
+$('#btnDismissUpd').addEventListener('click', ()=>$('#updateBanner').style.display='none');
+
 // Boot + Persistent SSE Window Lifecycle + Auto-scan dropped args onto CrackSentinel.exe
 let appStream = null;
 function connectDesktopStream(){
@@ -1641,6 +1731,7 @@ async function boot(){
   await loadHealth();
   connectDesktopStream();
   await loadDashboard();
+  setTimeout(()=>checkUpdate(false), 1800);
   const params = new URLSearchParams(location.search);
   const autoPaths = params.getAll('autopath').filter(Boolean);
   if(autoPaths.length && !isPublicMode){

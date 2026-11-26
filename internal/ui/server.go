@@ -25,6 +25,7 @@ import (
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
 	"gamecrack-scanner/internal/yara"
@@ -83,6 +84,9 @@ type Server struct {
 	lastHeartbeat int64
 	activeClients int64
 	seenClient    int64
+	updateMu      sync.Mutex
+	cachedUpdate  *updater.ReleaseInfo
+	updateAt      time.Time
 
 	watchMu     sync.Mutex
 	watchCancel context.CancelFunc
@@ -182,6 +186,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/app/heartbeat", s.handleAppHeartbeat)
 	mux.HandleFunc("/api/app/stream", s.handleAppStream)
 	mux.HandleFunc("/api/app/quit", s.handleAppQuit)
+	mux.HandleFunc("/api/update/check", s.handleUpdateCheck)
+	mux.HandleFunc("/api/update/apply", s.handleUpdateApply)
 	return s.originGuard(mux)
 }
 

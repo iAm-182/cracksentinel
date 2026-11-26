@@ -15,6 +15,7 @@ import (
 
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/ui"
+	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/yara"
 )
 
@@ -25,6 +26,7 @@ func main() {
 	if err != nil {
 		exe = "."
 	}
+	updater.CleanupOldBinary(exe)
 	appDir := filepath.Dir(exe)
 	dataDir := filepath.Join(appDir, "data")
 	tmpDir := filepath.Join(appDir, "tmp")

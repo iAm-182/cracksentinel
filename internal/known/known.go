@@ -31,6 +31,14 @@ var exactRuntimeDLLs = map[string]string{
 	"v8.dll":              "V8 JavaScript engine runtime",
 	"ffmpeg.dll":          "FFmpeg multimedia runtime",
 	"zlib1.dll":           "zlib compression runtime",
+	"lz4.dll":             "LZ4 compression runtime",
+	"zstd.dll":            "Zstandard compression runtime",
+	"libzstd.dll":         "Zstandard compression runtime",
+	"vulkan-1.dll":        "Vulkan graphics loader",
+	"dxcompiler.dll":      "DirectX Shader Compiler",
+	"dxil.dll":            "DirectX Intermediate Language runtime",
+	"ogg.dll":             "Ogg Vorbis audio runtime",
+	"opus.dll":            "Opus audio runtime",
 	"steam_api.dll":       "", // handled by EMU_STEAMAPI, not runtime DLL
 	"steam_api64.dll":     "",
 }
@@ -50,6 +58,9 @@ var prefixRuntimeDLLs = []prefixEntry{
 	{"d3dx9_", "DirectX 9 runtime"},
 	{"d3dx10_", "DirectX 10 runtime"},
 	{"d3dx11_", "DirectX 11 runtime"},
+	{"xinput", "DirectX XInput controller runtime"},
+	{"oo2core_", "RAD Oodle game compression runtime"},
+	{"amd_fidelityfx", "AMD FidelityFX graphics runtime"},
 	{"qt5", "Qt5 framework runtime"},
 	{"qt6", "Qt6 framework runtime"},
 	{"sdl2", "SDL2 game media runtime"},
@@ -60,6 +71,7 @@ var prefixRuntimeDLLs = []prefixEntry{
 	{"msvcr", "Microsoft Visual C runtime"},
 	{"api-ms-win-", "Windows API set shim"},
 	{"fmod", "FMOD game audio runtime"},
+	{"wwise", "Audiokinetic Wwise audio runtime"},
 	{"physx", "NVIDIA PhysX runtime"},
 	{"nvngx_", "NVIDIA DLSS/NGX runtime"},
 	{"amd_ags_", "AMD GPU Services runtime"},
@@ -70,6 +82,9 @@ var prefixRuntimeDLLs = []prefixEntry{
 	{"swresample-", "FFmpeg resampler runtime"},
 	{"libcrypto-", "OpenSSL crypto runtime"},
 	{"libssl-", "OpenSSL TLS runtime"},
+	{"vorbis", "Ogg Vorbis audio runtime"},
+	{"freetype", "FreeType font runtime"},
+	{"harfbuzz", "HarfBuzz text shaping runtime"},
 }
 
 // RuntimeLabel returns a human-readable description if path's basename matches
@@ -93,4 +108,36 @@ func RuntimeLabel(path string) string {
 // IsRuntimeDLL reports whether path matches a known runtime DLL name.
 func IsRuntimeDLL(path string) bool {
 	return RuntimeLabel(path) != ""
+}
+
+// UtilityLabel identifies structurally verified benign game-repack utilities
+// (Inno Setup uninstallers, FitGirl QuickSFV checksum verifiers) by requiring
+// BOTH the expected filename AND genuine internal structural strings.
+// Callers MUST still veto this whenever any intent/payload IOC, signature
+// mismatch, crypter layout, or online malware consensus is present.
+func UtilityLabel(path string, strs []string) string {
+	base := strings.ToLower(filepath.Base(path))
+	if !strings.HasSuffix(base, ".exe") || len(strs) == 0 {
+		return ""
+	}
+	if strings.HasPrefix(base, "unins") && len(base) == len("unins000.exe") {
+		digits := base[5:8]
+		if digits[0] >= '0' && digits[0] <= '9' && digits[1] >= '0' && digits[1] <= '9' && digits[2] >= '0' && digits[2] <= '9' {
+			for _, s := range strs {
+				l := strings.ToLower(s)
+				if strings.Contains(l, "inno setup") || strings.Contains(l, "jr.inno.setup") || strings.Contains(l, "inno_setup") {
+					return "Inno Setup uninstaller"
+				}
+			}
+		}
+	}
+	if base == "quicksfv.exe" {
+		for _, s := range strs {
+			l := strings.ToLower(s)
+			if strings.Contains(l, "quicksfv") || strings.Contains(l, "quick sfv") {
+				return "QuickSFV checksum verifier"
+			}
+		}
+	}
+	return ""
 }

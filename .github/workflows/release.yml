@@ -1,0 +1,86 @@
+name: Release CrackSentinel
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v2.0.0)'
+        required: true
+        default: 'v2.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Verify vet and unit tests
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build cross-platform release binaries
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.version }}"
+          fi
+          VER="${TAG#v}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BDATE="$(date -u +%Y-%m-%d)"
+          BASE_LD="-s -w -X gamecrack-scanner/internal/version.Version=${VER} -X gamecrack-scanner/internal/version.Commit=${COMMIT} -X gamecrack-scanner/internal/version.BuildDate=${BDATE}"
+
+          mkdir -p release-dist
+
+          # Windows Desktop GUI App (embeds cmd/desktop/resource_windows_amd64.syso studio icon + DPI manifest)
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "${BASE_LD} -H=windowsgui" -o release-dist/CrackSentinel.exe ./cmd/desktop
+
+          # Windows CLI tools
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "${BASE_LD}" -o release-dist/scanner.exe ./cmd/scanner
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "${BASE_LD}" -o release-dist/scanner-batch.exe ./cmd/batch
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "${BASE_LD}" -o release-dist/scanner-label.exe ./cmd/label
+
+          # Linux server binaries (24/7 HomeServer)
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "${BASE_LD}" -o release-dist/cracksentinel-linux-amd64 ./cmd/scanner
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "${BASE_LD}" -o release-dist/cracksentinel-linux-arm64 ./cmd/scanner
+
+          # Portable Windows bundle zip
+          mkdir -p release-bundle/CrackSentinel
+          cp release-dist/CrackSentinel.exe release-dist/scanner.exe CrackSentinel-Drop.bat CrackSentinel-UI.bat README.md release-bundle/CrackSentinel/
+          cp -r extension release-bundle/CrackSentinel/extension
+          (cd release-bundle && zip -r ../release-dist/CrackSentinel-Windows-Portable.zip CrackSentinel)
+
+          # Generate SHA-256 checksums for built-in auto-updater verification
+          (cd release-dist && sha256sum CrackSentinel.exe scanner.exe scanner-batch.exe scanner-label.exe cracksentinel-linux-amd64 cracksentinel-linux-arm64 CrackSentinel-Windows-Portable.zip > checksums.txt)
+          cat release-dist/checksums.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
+          name: CrackSentinel ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-dist/CrackSentinel.exe
+            release-dist/scanner.exe
+            release-dist/scanner-batch.exe
+            release-dist/scanner-label.exe
+            release-dist/cracksentinel-linux-amd64
+            release-dist/cracksentinel-linux-arm64
+            release-dist/CrackSentinel-Windows-Portable.zip
+            release-dist/checksums.txt

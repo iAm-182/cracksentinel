@@ -77,6 +77,21 @@ func BinaryAvailable() bool {
 }
 
 func resolveBinary() string {
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for _, rel := range []string{
+			filepath.Join("tools", "yara64.exe"),
+			filepath.Join("tools", "yara.exe"),
+			filepath.Join("tools", "yara"),
+			"yara64.exe",
+			"yara.exe",
+		} {
+			p := filepath.Join(dir, rel)
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
 	for _, name := range []string{"yara", "yara64", "yara32"} {
 		if p, err := exec.LookPath(name); err == nil {
 			return p

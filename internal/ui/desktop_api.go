@@ -23,9 +23,12 @@ import (
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/scan"
 	"gamecrack-scanner/internal/sigfeed"
+	"gamecrack-scanner/internal/sysaudit"
 	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/watch"
+	"gamecrack-scanner/internal/wininteg"
+	"gamecrack-scanner/internal/winsandbox"
 )
 
 // DesktopSettings persists user preferences in <DataDir>/settings.json.
@@ -1332,4 +1335,112 @@ func (s *Server) handleSignaturesSync(w http.ResponseWriter, r *http.Request) {
 		"changed": changed,
 		"status":  st,
 	})
+}
+
+func (s *Server) handleAuditRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "PC health audit is disabled in public web mode"})
+		return
+	}
+	rep := sysaudit.Run(r.Context())
+	writeJSON(w, http.StatusOK, rep)
+}
+
+func (s *Server) handleSandboxStatus(w http.ResponseWriter, r *http.Request) {
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Windows Sandbox is disabled in public web mode"})
+		return
+	}
+	writeJSON(w, http.StatusOK, winsandbox.CheckAvailability())
+}
+
+func (s *Server) handleSandboxLaunch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Windows Sandbox is disabled in public web mode"})
+		return
+	}
+	var req struct {
+		Path       string `json:"path"`
+		AutoLaunch *bool  `json:"auto_launch"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	p := strings.TrimSpace(req.Path)
+	if p == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path diperlukan"})
+		return
+	}
+	launch := true
+	if req.AutoLaunch != nil {
+		launch = *req.AutoLaunch
+	}
+	s.mu.RLock()
+	outDir := s.opts.TempDir
+	s.mu.RUnlock()
+	wsbPath, launched, hint, err := winsandbox.PrepareAndLaunch(p, outDir, launch)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"wsb_path": wsbPath,
+		"launched": launched,
+		"message":  hint,
+	})
+}
+
+func (s *Server) handleWindowsIntegration(w http.ResponseWriter, r *http.Request) {
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Windows integration is disabled in public web mode"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, wininteg.Status())
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ContextMenu    *bool `json:"context_menu"`
+		AutostartGuard *bool `json:"autostart_guard"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	dir := filepath.Dir(exe)
+	targetExe := filepath.Join(dir, "CrackSentinel.exe")
+	if _, err := os.Stat(targetExe); err != nil {
+		targetExe = exe
+	}
+	if req.ContextMenu != nil {
+		if err := wininteg.SetContextMenu(*req.ContextMenu, targetExe); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	if req.AutostartGuard != nil {
+		if err := wininteg.SetBackgroundGuardAutostart(*req.AutostartGuard, targetExe); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, wininteg.Status())
 }

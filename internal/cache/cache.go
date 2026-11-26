@@ -11,7 +11,7 @@ import (
 
 // CurrentVersion is incremented whenever detection rules or scoring semantics
 // change materially so stale cached verdicts automatically re-scan.
-const CurrentVersion = 4
+const CurrentVersion = 5
 
 type Entry struct {
 	SHA256          string          `json:"sha256"`

@@ -284,6 +284,7 @@ var strongStringIOCs = map[string]bool{
 	obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="): true, obf.S("OSgjKi41BTk2MyoqPygFMzU5"): true,
 	obf.S("PjY2BSkzPj82NTs+BSooNSIj"): true, obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="): true, obf.S("Kj84BTY+KAUpMj82Njk1Pj8="): true,
 	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="): true, obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="): true, obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"): true,
+	obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"): true,
 }
 
 // actionCategories are the finding categories that describe
@@ -315,7 +316,7 @@ func IsCapability(rule string) bool {
 	if strings.HasPrefix(rule, obf.S("MzcqBQ==")) {
 		return true
 	}
-	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM="), obf.S("Kj8FOyozBTI7KTIzND0FNjU7Pj8o")} {
+	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM="), obf.S("Kj8FOyozBTI7KTIzND0FNjU7Pj8o"), obf.S("Oy8uNTMuBTk1NyozNj8+BT8iPw=="), obf.S("PjUuND8uBTk1KS4vKDsFKjs5MT8+")} {
 		if rule == r {
 			return true
 		}

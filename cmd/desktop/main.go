@@ -46,10 +46,15 @@ func main() {
 		_, _, _ = sigfeed.Global().Sync(ctx, "")
 	}()
 
-	// Collect any paths dragged onto CrackSentinel.exe.
+	// Collect any paths dragged onto CrackSentinel.exe or "--background" tray-guard mode.
 	var dropArgs []string
+	bgMode := false
 	for _, a := range os.Args[1:] {
 		a = strings.TrimSpace(a)
+		if a == "--background" || a == "-background" {
+			bgMode = true
+			continue
+		}
 		if a == "" || strings.HasPrefix(a, "-") {
 			continue
 		}
@@ -62,8 +67,10 @@ func main() {
 	// open/focus the app window directly without spawning a duplicate server.
 	existingURL := "http://" + defaultAddr
 	if isCrackSentinelAlive(existingURL) {
-		launchURL := buildLaunchURL(existingURL, dropArgs)
-		launchAppWindow(launchURL)
+		if !bgMode {
+			launchURL := buildLaunchURL(existingURL, dropArgs)
+			launchAppWindow(launchURL)
+		}
 		return
 	}
 
@@ -103,6 +110,15 @@ func main() {
 		DesktopMode:   true,
 		OnQuit:        requestQuit,
 	}
+	if bgMode {
+		// In --background autostart mode, ensure Download Guard automatically protects Downloads!
+		if home, err := os.UserHomeDir(); err == nil {
+			dl := filepath.Join(home, "Downloads")
+			if st, err := os.Stat(dl); err == nil && st.IsDir() {
+				opts.WatchDir = dl
+			}
+		}
+	}
 
 	srv := ui.New(opts)
 	ln, baseURL, err := srv.StartListener()
@@ -129,8 +145,10 @@ func main() {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	launchURL := buildLaunchURL(baseURL, dropArgs)
-	launchAppWindow(launchURL)
+	if !bgMode {
+		launchURL := buildLaunchURL(baseURL, dropArgs)
+		launchAppWindow(launchURL)
+	}
 
 	// Lifecycle management (persistent SSE stream):
 	// - Explicit "Tutup Aplikasi" button exits immediately.

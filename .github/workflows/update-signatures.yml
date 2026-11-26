@@ -1,0 +1,43 @@
+name: Update Live Threat Signatures
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-threat-intel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Fetch latest stealer & RAT SHA-256 IOCs
+        env:
+          MB_API_KEY: ${{ secrets.MB_API_KEY }}
+        run: python3 scripts/update_live_signatures.py
+
+      - name: Validate signature database with Go sigfeed tests
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run sigfeed validation test
+        run: go test ./internal/sigfeed
+
+      - name: Commit & push updated live-signatures.json if changed
+        run: |
+          if [[ -n "$(git status --porcelain signatures/live-signatures.json internal/sigfeed/default_signatures.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add signatures/live-signatures.json internal/sigfeed/default_signatures.json
+            git commit -m "chore(signatures): auto-sync abuse.ch stealer & RAT SHA-256 feed [skip ci]"
+            git push origin main
+          else
+            echo "Signature feed already up-to-date."
+          fi

@@ -1075,6 +1075,40 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 				}
 			}
 		}
+		// Pure-Go .NET Metadata (#US / #Strings), Costura.Fody unpacker & Game-Mod Trojan detector.
+		if !sub && peInfo.Dotnet {
+			findings = append(findings, s.inspectDotnetAndMods(path, depth, res, findings)...)
+		}
+		// AutoIt v3 ("AU3!EA06" / ".a3x") & Inno Setup embedded script container detector.
+		if !sub && info.Size() <= 256<<20 {
+			sw := unpack.DetectScriptWrapper(path)
+			if sw.HasAutoIt && !res.Signed {
+				findings = append(findings, model.Finding{
+					Rule:     "autoit_compiled_exe",
+					Category: "packing",
+					Severity: 20,
+					Detail:   fmt.Sprintf("compiled AutoIt v3 script container (%s at offset 0x%x) — common wrapper for FUD stealers/trainers", sw.AutoItVariant, sw.AutoItOffset),
+				})
+			}
+			if sw.HasInnoSetup && peInfo.OverlayFormat == "" {
+				peInfo.OverlayFormat = "innosetup"
+				findings = append(findings, model.Finding{
+					Rule:     "innosetup_detected",
+					Category: "info",
+					Severity: 0,
+					Detail:   "Inno Setup installer header: " + sw.InnoVersionHdr,
+				})
+			}
+		}
+		// Native .asi / plugin game-mod trojan check (e.g. GTA/RDR2/Skyrim .asi or BepInEx/plugins/*.dll).
+		if isNativeModPath(path) && hasModShellOrExfil(findings, strs) {
+			findings = append(findings, model.Finding{
+				Rule:     "gamemod_trojan_plugin",
+				Category: "dropper",
+				Severity: 50,
+				Detail:   "game mod plugin (.asi / mod DLL) contains shell execution or external C2/exfiltration indicators",
+			})
+		}
 	}
 	// A multi-megabyte binary with no readable strings at all is
 	// encrypted or packed. Legitimate binaries always carry strings:
@@ -1465,7 +1499,139 @@ const (
 
 var containerSeq int64
 
-var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "mjs", "cjs", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg", "asar", "nsi", "nsh", "iss"}
+var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "mjs", "cjs", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg", "asar", "nsi", "nsh", "iss", "au3", "a3x", "asi"}
+
+func (s *Scanner) ensureTmpDir() string {
+	if s.tmp != "" {
+		return s.tmp
+	}
+	s.tmpMu.Lock()
+	defer s.tmpMu.Unlock()
+	if s.tmp == "" {
+		if tmp, err := os.MkdirTemp(s.cfg.TempDir, "gc-extract-"); err == nil {
+			s.tmp = tmp
+		} else if tmp2, err2 := os.MkdirTemp("", "gc-extract-"); err2 == nil {
+			s.tmp = tmp2
+		}
+	}
+	return s.tmp
+}
+
+func (s *Scanner) inspectDotnetAndMods(path string, depth int, res model.FileResult, curFindings []model.Finding) []model.Finding {
+	var dest string
+	if !s.cfg.NoUnpack {
+		if td := s.ensureTmpDir(); td != "" {
+			dest = filepath.Join(td, fmt.Sprintf("costura_%d", atomic.AddInt64(&unpackSeq, 1)))
+		}
+	}
+	rep, err := unpack.InspectDotnet(path, dest, 32<<20)
+	if err != nil || rep == nil || !rep.IsDotnet {
+		return nil
+	}
+	var out []model.Finding
+
+	// Match #US (UTF-16 user strings) + #Strings through rules & live signature feed!
+	var combined []string
+	combined = append(combined, rep.UserStrings...)
+	combined = append(combined, rep.MetadataStrings...)
+	if len(combined) > 0 {
+		dnFinds, _ := rules.Match(rules.MatchInput{
+			Kind:   filetype.KindScript,
+			Strs:   combined,
+			Path:   path + ":dotnet_metadata",
+			Signed: res.Signed,
+		})
+		dnFinds = append(dnFinds, sigfeed.Global().Match("", combined)...)
+		alreadyRule := map[string]bool{}
+		for _, cf := range curFindings {
+			alreadyRule[cf.Rule] = true
+		}
+		for _, df := range dnFinds {
+			if df.Severity <= 0 || alreadyRule[df.Rule] {
+				continue
+			}
+			alreadyRule[df.Rule] = true
+			df.Detail = "[dotnet-il] " + df.Detail
+			out = append(out, df)
+		}
+	}
+
+	// Costura.Fody embedded compressed assemblies
+	if len(rep.CosturaDLLs) > 0 {
+		out = append(out, model.Finding{
+			Rule:     "dotnet_costura_packed",
+			Category: "packing",
+			Severity: 14,
+			Detail:   fmt.Sprintf(".NET Costura.Fody embedded compressed assembly (%d DLL(s): %s)", len(rep.CosturaDLLs), truncStr(strings.Join(rep.CosturaDLLs, ", "), 90)),
+		})
+	}
+	for _, extFile := range rep.ExtractedFiles {
+		inner := s.scanFile(extFile, depth+1, true)
+		out = append(out, model.Finding{
+			Rule:     "costura_unpacked",
+			Category: "packing",
+			Severity: 0,
+			Detail:   fmt.Sprintf("Costura embedded DLL %q decompressed & scanned -> %s (score %d)", filepath.Base(extFile), inner.Verdict, inner.Score),
+		})
+		for _, f := range inner.Findings {
+			if f.Severity <= 0 {
+				continue
+			}
+			f.Detail = "[costura:" + filepath.Base(extFile) + "] " + f.Detail
+			out = append(out, f)
+		}
+	}
+
+	// Unity BepInEx / MelonLoader / Harmony game-mod plugin trojan heuristic
+	if rep.IsGameModPlugin || isNativeModPath(path) {
+		allCheck := append([]model.Finding{}, curFindings...)
+		allCheck = append(allCheck, out...)
+		if hasModShellOrExfil(allCheck, combined) {
+			out = append(out, model.Finding{
+				Rule:     "gamemod_trojan_plugin",
+				Category: "dropper",
+				Severity: 50,
+				Detail:   "Unity/Harmony game mod plugin (BepInEx/MelonLoader) invokes external process execution or C2/stealer APIs",
+			})
+		}
+	}
+	return out
+}
+
+func isNativeModPath(path string) bool {
+	norm := strings.ToLower(strings.ReplaceAll(path, "\\", "/"))
+	if strings.HasSuffix(norm, ".asi") {
+		return true
+	}
+	return strings.HasSuffix(norm, ".dll") && (strings.Contains(norm, "/bepinex/plugins/") ||
+		strings.Contains(norm, "/bepinex/patchers/") ||
+		strings.Contains(norm, "/melonloader/mods/") ||
+		strings.Contains(norm, "/mods/") ||
+		strings.Contains(norm, "/scripts/"))
+}
+
+func hasModShellOrExfil(findings []model.Finding, strs []string) bool {
+	for _, f := range findings {
+		if f.Severity >= 30 && !rules.IsCapability(f.Rule) {
+			return true
+		}
+	}
+	hasProcStart := false
+	hasSuspiciousTarget := false
+	for _, s := range strs {
+		l := strings.ToLower(s)
+		if l == "processstartinfo" || strings.Contains(l, "diagnostics.process") || l == "shellexecutea" || l == "shellexecutew" || l == "winexec" || l == "urldownloadtofilea" || l == "urldownloadtofilew" {
+			hasProcStart = true
+		}
+		if strings.Contains(l, "powershell") || strings.Contains(l, "cmd.exe") || strings.Contains(l, "mshta") ||
+			strings.Contains(l, "discord.com/api/webhooks") || strings.Contains(l, "api.telegram.org/bot") ||
+			strings.Contains(l, "pastebin.com/raw") || strings.Contains(l, "paste.ee/r/") || strings.Contains(l, "raw.githubusercontent.com") ||
+			strings.Contains(l, "gofile.io") {
+			hasSuspiciousTarget = true
+		}
+	}
+	return hasProcStart && hasSuspiciousTarget
+}
 
 func isMicrosoftSigned(res model.FileResult) bool {
 	if !res.Signed {

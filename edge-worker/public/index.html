@@ -271,6 +271,11 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       Cek Link URL
     </button>
+    <button class="nav-item local-only" data-view="audit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Audit PC
+      <span class="nav-badge" id="navAuditBadge">CEK</span>
+    </button>
 
     <div class="nav-sec">Manajemen</div>
     <button class="nav-item local-only" data-view="quarantine">
@@ -362,6 +367,7 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
             <button class="btn primary local-only" id="heroBtnFolder" type="button">Pilih Folder Game</button>
             <button class="btn public-only primary" id="heroBtnWebFolder" style="display:none" type="button">Scan Folder (Smart Filter)</button>
             <button class="btn local-only" id="heroBtnFiles" type="button">Pilih File / Arsip</button>
+            <button class="btn local-only" id="heroBtnAudit" type="button">Cek Kesehatan PC</button>
             <button class="btn" id="heroBtnURL" type="button">Cek Link Download</button>
           </div>
         </div>
@@ -617,6 +623,26 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         </div>
       </section>
 
+      <!-- VIEW 4B: POST-INSTALL PC HEALTH & PERSISTENCE AUDIT -->
+      <section class="view" id="view-audit">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Post-Install PC Security &amp; Persistence Audit (Read-Only)</h3>
+              <div class="muted">Memeriksa apakah PC terlanjur terkena trojan/stealer: cek manipulasi <b>ExclusionPath Windows Defender</b>, <b>Registry Run/RunOnce</b>, <b>Folder Startup</b>, <b>Scheduled Tasks</b> tersembunyi, dan pembajakan file <code>hosts</code>.</div>
+            </div>
+            <button class="btn primary" id="btnRunAudit" type="button">Mulai Audit PC Sekarang</button>
+          </div>
+          <div id="auditSummaryBox" style="display:none;margin-top:12px"></div>
+          <div class="table-wrap" id="auditTableWrap" style="display:none;margin-top:12px">
+            <table>
+              <thead><tr><th>Risiko</th><th>Kategori</th><th>Temuan &amp; Lokasi</th><th>Perintah / Nilai</th></tr></thead>
+              <tbody id="auditBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 5: QUARANTINE VAULT -->
       <section class="view" id="view-quarantine">
         <div class="card">
@@ -773,7 +799,17 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Pemeliharaan &amp; Integrasi Windows</h3></div>
+          <div class="card-head"><h3>Pemeliharaan &amp; Integrasi Windows Explorer</h3></div>
+          <div style="display:grid;gap:10px;margin-bottom:14px">
+            <div class="switch-row">
+              <div><b>Menu Klik-Kanan Windows Explorer ("Scan with CrackSentinel")</b><div class="muted">Klik kanan folder game / file apa saja di Explorer untuk langsung memindai tanpa perlu buka aplikasi dulu (tanpa UAC/Admin)</div></div>
+              <input type="checkbox" id="setWinContextMenu">
+            </div>
+            <div class="switch-row">
+              <div><b>Background Download Guard Otomatis Saat Login Windows</b><div class="muted">Menjalankan <code>CrackSentinel.exe --background</code> secara senyap di latar belakang saat PC menyala</div></div>
+              <input type="checkbox" id="setWinAutostartGuard">
+            </div>
+          </div>
           <div class="row">
             <button class="btn primary" id="btnCreateShortcut" type="button">Buat Shortcut di Desktop</button>
             <button class="btn danger" id="btnClearCache" type="button">Bersihkan Hash Cache</button>
@@ -806,9 +842,10 @@ const VIEW_META = {
   scanner:    ['Scanner', 'Drag & drop, scan folder game puluhan GB, & mass check'],
   guard:      ['Download Guard', 'Proteksi real-time folder Downloads + Windows alert'],
   url:        ['Cek Link URL', 'Analisa keamanan link download & redirect chain'],
+  audit:      ['Audit Keamanan PC', 'Cek apakah PC sudah terlanjur disusupi (Defender, Startup, Registry, Tasks)'],
   quarantine: ['Quarantine Vault', 'Kelola, pulihkan, atau hapus permanen file berbahaya'],
   history:    ['Riwayat & Ekstensi', 'Laporan scan tersimpan & integrasi browser'],
-  settings:   ['Pengaturan', 'Konfigurasi engine, penyimpanan, API key, & shortcut']
+  settings:   ['Pengaturan', 'Konfigurasi engine, penyimpanan, API key, & integrasi Windows']
 };
 
 const ASSET_EXTS = new Set([
@@ -864,7 +901,7 @@ function switchView(name){
   if(name === 'guard') loadWatchStatus();
   if(name === 'quarantine') loadQuarantine();
   if(name === 'history') loadHistory();
-  if(name === 'settings') loadSettings();
+  if(name === 'settings') { loadSettings(); loadWinIntegration(); }
 }
 $$('.nav-item').forEach(btn=>btn.addEventListener('click', ()=>switchView(btn.dataset.view)));
 $('#btnMenuToggle').addEventListener('click', ()=>$('#sidebar').classList.toggle('open'));
@@ -1039,6 +1076,7 @@ $('#btnPickFolder').addEventListener('click', ()=>pickAndScan('folder'));
 $('#topScanFiles').addEventListener('click', ()=>pickAndScan('files'));
 $('#heroBtnFiles').addEventListener('click', ()=>pickAndScan('files'));
 $('#btnPickFiles').addEventListener('click', ()=>pickAndScan('files'));
+$('#heroBtnAudit').addEventListener('click', ()=>{ switchView('audit'); runPCAudit(); });
 $('#heroBtnURL').addEventListener('click', ()=>switchView('url'));
 $('#topWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
 $('#heroBtnWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
@@ -1332,7 +1370,9 @@ function explainFinding(f){
   if(r === 'emu_steamapi') return {kind:'info', label:'Emulator Game', text:'Emulator Steam dikenali (TENOKE/Goldberg/RUNE) — hooking memori normal pada crack.'};
   if(r === 'crack_whitelist' || r === 'yara:gc_crack_emu_info') return {kind:'info', label:'Crack Dikenali', text:'Tanda crack/emulator game standar yang umum dipakai.'};
   if(r === 'known_runtime_dll') return {kind:'info', label:'Terverifikasi', text:'Library runtime game / utility installer resmi tanpa indikasi payload berbahaya.'};
-  if(r === 'pyinstaller_unpacked' || r === 'installer_unpacked' || r === 'auto_unpacked' || r === 'container_expanded') return {kind:'info', label:'Dibongkar Otomatis', text:'Isi terkompresi (PyInstaller / NSIS / ASAR / UPX / Arsip) berhasil dibongkar & diperiksa ke dalamnya.'};
+  if(r === 'pyinstaller_unpacked' || r === 'installer_unpacked' || r === 'auto_unpacked' || r === 'container_expanded' || r === 'costura_unpacked' || r === 'innosetup_detected') {
+    return {kind:'info', label:'Dibongkar Otomatis', text:'Isi terkompresi (PyInstaller / Costura .NET / NSIS / Inno / ASAR / UPX) berhasil dibongkar & diperiksa ke dalamnya.'};
+  }
   if(r.startsWith('online_') && sev < 0) return {kind:'info', label:'Reputasi Bersih', text:'Mayoritas puluhan antivirus di VirusTotal menyatakan file ini bersih.'};
   if(r === 'web_size_skipped' || r === 'carved') return {kind:'info', label:'Info Scan', text:'Pemeriksaan selesai tanpa menemukan executable berbahaya tersembunyi.'};
 
@@ -1344,8 +1384,8 @@ function explainFinding(f){
   if(r === 'imp_destructive') return {kind:'tech', label:'Teknis File', text:'Akses baca/pindah/hapus file standar — normal pada installer & tool cek file.'};
   if(r === 'imp_clipboard') return {kind:'tech', label:'Teknis Utility', text:'Akses copy-paste clipboard standar.'};
   if(r === 'imp_exfil') return {kind:'tech', label:'Teknis Jaringan', text:'Memiliki fungsi koneksi internet standar (HTTP/socket).'};
-  if(r === 'packed' || r === 'pe_packed' || r === 'pe_rwx_section' || r === 'pe_abnormal_ep' || r === 'pe_tls_suspicious' || r === 'pe_encrypted_overlay' || r === 'pe_api_hashing_loader') {
-    return {kind:'tech', label:'Struktur Packer/PE', text:'Struktur PE/memori tidak standar (packer/proteksi DRM/overlay) — aman pada crack murni, waspada jika disertai indikator C2/stealer.'};
+  if(r === 'packed' || r === 'pe_packed' || r === 'pe_rwx_section' || r === 'pe_abnormal_ep' || r === 'pe_tls_suspicious' || r === 'pe_encrypted_overlay' || r === 'pe_api_hashing_loader' || r === 'dotnet_costura_packed' || r === 'autoit_compiled_exe') {
+    return {kind:'tech', label:'Struktur Packer/PE', text:'Struktur PE/Costura/AutoIt terkompresi — aman pada trainer/crack murni, waspada jika disertai indikator C2/stealer.'};
   }
   if(r === 'dotnet') return {kind:'tech', label:'Info Runtime', text:'Program dibuat menggunakan Microsoft .NET.'};
   if(r === 'base64_blob') return {kind:'tech', label:'Data Base64', text:'Teks Base64 panjang (umumnya ikon/konfigurasi jika di dalam game, waspada jika di script).'};
@@ -1379,6 +1419,7 @@ function explainFinding(f){
   if(r === 'lsass_cred_dump' || r.includes('lsass_dumper')) {
     return {kind:'danger', label:'BAHAYA: Curi Memori OS', text:'Mencoba menyedot password Windows langsung dari memori sistem (LSASS)!'};
   }
+  if(r === 'gamemod_trojan_plugin') return {kind:'danger', label:'BAHAYA: Mod Game Beracun', text:'Plugin mod game (BepInEx/MelonLoader/.asi) diam-diam mengeksekusi shell atau mengirim data ke C2!'};
   if(r === 'dll_sideload_proxy') return {kind:'danger', label:'BAHAYA: DLL Sideloading', text:'Teknik "White+Black" (AheadLib Proxy): menyamar sebagai DLL sistem Windows untuk membajak program resmi!'};
   if(r === 'direct_syscall_stubs' || r === 'ntdll_unhook_evasion' || r.includes('syscall_evasion')) return {kind:'danger', label:'BAHAYA: Bypass Antivirus', text:'Memakai Direct Syscall / Unhooking ntdll.dll (teknik loader FUD) untuk bersembunyi dari Antivirus/EDR!'};
   if(r === 'peb_ldr_shellcode') return {kind:'danger', label:'BAHAYA: Shellcode Loader', text:'Menelusuri memori PEB->LDR secara langsung seperti shellcode trojan tersembunyi!'};
@@ -1552,6 +1593,7 @@ function drawResultRows(){
     const acts = [];
     if(isLocalScan && r.score >= 30){
       acts.push(`<button class="btn sm danger" type="button" onclick="quarantinePath(${JSON.stringify(r.path)})">Karantina</button>`);
+      acts.push(`<button class="btn sm" type="button" title="Uji aman tanpa internet di Windows Sandbox (.wsb)" onclick="launchSandbox(${JSON.stringify(r.path)})">Sandbox</button>`);
     }
     if(isLocalScan){
       acts.push(`<button class="btn sm ghost" type="button" onclick="openExplorer(${JSON.stringify(r.path)})">Explorer</button>`);
@@ -1591,6 +1633,56 @@ async function openExplorer(path){
   const r = await apiFetch('/api/open-explorer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})});
   if(!r.ok){ const d = await parseJSONSafe(r); toast(d.error || 'Gagal buka Explorer'); }
 }
+async function launchSandbox(path){
+  if(!confirm('Buka file/folder ini di dalam Windows Sandbox terisolasi?\n\n• Internet: DIMATIKAN TOTAL\n• Folder Host: READ-ONLY (virus tidak bisa merusak file PC asli)\n• Clipboard: DIBLOKIR\n\nTarget: ' + path)) return;
+  const r = await apiFetch('/api/sandbox/launch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, auto_launch:true})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal menyiapkan Sandbox: ' + (d.error||''));
+  toast(d.message || ('File .wsb dibuat: ' + d.wsb_path));
+}
+async function runPCAudit(){
+  const btn = $('#btnRunAudit');
+  const box = $('#auditSummaryBox');
+  const wrap = $('#auditTableWrap');
+  btn.disabled = true;
+  box.style.display = 'block';
+  box.innerHTML = '<div class="row muted"><div class="spinner"></div> Memeriksa Windows Defender Exclusions, Registry Run/RunOnce, Startup Folder, Scheduled Tasks, &amp; Hosts...</div>';
+  wrap.style.display = 'none';
+  try{
+    const r = await apiFetch('/api/audit/run', {method:'POST'});
+    const d = await parseJSONSafe(r);
+    if(!r.ok) throw new Error(d.error || 'Audit gagal');
+    const cls = d.status === 'CRITICAL' ? 'danger' : d.status === 'WARNING' ? 'warn' : 'safe';
+    const bCls = d.status === 'CRITICAL' ? 'MALICIOUS' : d.status === 'WARNING' ? 'SUSPICIOUS' : 'CLEAN';
+    const nb = $('#navAuditBadge');
+    nb.textContent = d.status === 'SAFE' ? 'OK' : (d.high_count + d.medium_count);
+    nb.classList.toggle('mal', d.status === 'CRITICAL');
+    nb.classList.toggle('on', d.status === 'SAFE');
+    const rtTxt = d.realtime_protection === true ? 'Aktif' : d.realtime_protection === false ? 'MATI!' : 'Tidak diketahui';
+    box.innerHTML = `<div class="explain-banner ${cls}">
+      <div class="explain-title"><span class="badge ${bCls}">${esc(d.status)}</span> Status Keamanan PC: ${d.status==='SAFE'?'BERSIH & AMAN':d.status==='WARNING'?'PERLU DICEK':'PERINGATAN TINGGI — ADA INDIKATOR BERBAHAYA!'}</div>
+      <p class="explain-desc">Diperiksa <b>${d.checked_locations||0} titik sistem</b> dalam ${fmtMs(d.duration_ms)} · Windows Defender Real-Time: <b>${rtTxt}</b> · Temuan Risiko Tinggi: <b>${d.high_count||0}</b> · Menengah: <b>${d.medium_count||0}</b>.</p>
+    </div>`;
+    const fs = d.findings || [];
+    wrap.style.display = 'block';
+    const tb = $('#auditBody');
+    if(!fs.length){
+      tb.innerHTML = '<tr><td colspan="4" class="cln" style="font-weight:600">Tidak ditemukan pengecualian Defender mencurigakan, autorun script, maupun tugas terjadwal berbahaya!</td></tr>';
+    }else{
+      tb.innerHTML = fs.map(f=>`<tr>
+        <td><span class="badge ${f.risk==='HIGH'?'MALICIOUS':f.risk==='MEDIUM'?'SUSPICIOUS':'INFO'}">${esc(f.risk)}</span></td>
+        <td class="mono">${esc(f.category)}</td>
+        <td><b>${esc(f.title)}</b><div class="mono muted">${esc(f.location)}</div><div class="muted" style="margin-top:3px">${esc(f.reason)}</div></td>
+        <td class="mono" style="word-break:break-all;max-width:340px">${esc(f.command)}</td>
+      </tr>`).join('');
+    }
+  }catch(e){
+    box.innerHTML = '<div class="mal">Gagal menjalankan audit: ' + esc(e.message) + '</div>';
+  }finally{
+    btn.disabled = false;
+  }
+}
+$('#btnRunAudit').addEventListener('click', runPCAudit);
 async function labelCorpus(path, label){
   const r = await apiFetch('/api/corpus/label', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, label})});
   const d = await parseJSONSafe(r);
@@ -1852,6 +1944,30 @@ $('#btnCreateShortcut').addEventListener('click', async ()=>{
   const d = await parseJSONSafe(r);
   if(!r.ok) return toast('Gagal: ' + (d.error||''));
   toast('Shortcut Desktop dibuat: ' + d.shortcut);
+});
+async function loadWinIntegration(){
+  if(isPublicMode) return;
+  try{
+    const r = await apiFetch('/api/windows/integration');
+    if(!r.ok) return;
+    const d = await r.json();
+    $('#setWinContextMenu').checked = !!d.context_menu_enabled;
+    $('#setWinAutostartGuard').checked = !!d.autostart_guard_enabled;
+  }catch(_){}
+}
+$('#setWinContextMenu').addEventListener('change', async e=>{
+  const enable = e.target.checked;
+  const r = await apiFetch('/api/windows/integration', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({context_menu: enable})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok){ e.target.checked = !enable; return toast('Gagal mengatur menu klik-kanan: ' + (d.error||'')); }
+  toast(enable ? 'Menu klik-kanan "Scan with CrackSentinel" diaktifkan!' : 'Menu klik-kanan Explorer dinonaktifkan.');
+});
+$('#setWinAutostartGuard').addEventListener('change', async e=>{
+  const enable = e.target.checked;
+  const r = await apiFetch('/api/windows/integration', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({autostart_guard: enable})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok){ e.target.checked = !enable; return toast('Gagal mengatur autostart: ' + (d.error||'')); }
+  toast(enable ? 'Background Download Guard otomatis saat login diaktifkan!' : 'Autostart Background Guard dimatikan.');
 });
 $('#btnAppQuit').addEventListener('click', async ()=>{
   if(!confirm('Tutup aplikasi CrackSentinel?')) return;

@@ -38,6 +38,7 @@ var scriptExt = map[string]bool{
 	".vbs": true, ".vbe": true, ".js": true, ".mjs": true, ".cjs": true,
 	".jse": true, ".wsf": true, ".hta": true, ".py": true, ".pyw": true,
 	".rpy": true, ".reg": true, ".nsi": true, ".nsh": true, ".iss": true,
+	".au3": true, ".a3x": true,
 }
 
 var assetExt = map[string]bool{

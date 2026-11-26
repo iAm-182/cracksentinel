@@ -49,6 +49,9 @@ type Info struct {
 	HasPyInstaller     bool
 	DirectSyscallStubs int
 	PEBLDRWalk         bool
+	IsGoBinary         bool
+	IsRustBinary       bool
+	RecoveredSymbols   []string
 }
 
 type Section struct {

@@ -154,6 +154,7 @@ func analyzeHeuristics(f *pe.File, r io.ReaderAt, actualSize int64, info *Info) 
 			}
 		}
 	}
+	analyzeGoAndRust(f, r, info)
 }
 
 func detectOverlayMagic(b []byte) string {

@@ -20,6 +20,7 @@ import (
 
 	"gamecrack-scanner/internal/authenticode"
 	"gamecrack-scanner/internal/cache"
+	"gamecrack-scanner/internal/deobf"
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/jev"
 	"gamecrack-scanner/internal/known"
@@ -958,12 +959,128 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	}
 
 	var strs []string
+	var extraPreFindings []model.Finding
 	if kind == filetype.KindPE {
 		strs = dedupCap(text.ExtractASCII(path, 8*1024*1024, 6), 20000)
 		strs = append(strs, dedupCap(text.ExtractUTF16(path, 4*1024*1024, 6), 10000)...)
+		if peInfo != nil && len(peInfo.RecoveredSymbols) > 0 {
+			strs = append(strs, peInfo.RecoveredSymbols...)
+		}
+		if len(readBytes) > 0 && !res.Signed {
+			stackStrs, xorStrs := deobf.ExtractStackAndXORStrings(readBytes)
+			if len(stackStrs) > 0 {
+				strs = append(strs, stackStrs...)
+				extraPreFindings = append(extraPreFindings, model.Finding{
+					Rule:     "pe_stack_strings",
+					Category: "evasion",
+					Severity: 12,
+					Detail:   fmt.Sprintf("reconstructed %d stack-built string(s) from machine code: %s", len(stackStrs), truncStr(strings.Join(stackStrs, ", "), 80)),
+				})
+			}
+			if len(xorStrs) > 0 {
+				strs = append(strs, xorStrs...)
+				extraPreFindings = append(extraPreFindings, model.Finding{
+					Rule:     "xor_obfuscated_c2",
+					Category: "evasion",
+					Severity: 50,
+					Detail:   "decoded single-byte XOR-obfuscated C2/stealer string in binary: " + truncStr(xorStrs[0], 90),
+				})
+			}
+		}
 	} else if len(readBytes) > 0 {
 		strs = dedupCap(text.ExtractASCIIBytes(readBytes, 6), 20000)
 		strs = append(strs, dedupCap(decodeUTF16Bytes(readBytes), 20000)...)
+	}
+
+	// Static Script Deobfuscation (BatCloak UTF-16 BOM smuggling, %var:~x,y% slicing, PowerShell Deflate+Base64)
+	if kind == filetype.KindScript {
+		lowExt := strings.ToLower(filepath.Ext(path))
+		if lowExt == ".rpyc" {
+			if rpycStrs := unpack.InspectRpyc(path); len(rpycStrs) > 0 {
+				strs = append(strs, dedupCap(rpycStrs, 8000)...)
+			}
+		} else if len(readBytes) > 0 && deobf.CanDeobfuscateExt(path) {
+			dr := deobf.DeobfuscateScript(lowExt, readBytes)
+			if len(dr.Lines) > 0 {
+				strs = append(strs, dr.Lines...)
+			}
+			for _, tc := range dr.Techniques {
+				if tc == "utf16_bom_smuggling" {
+					extraPreFindings = append(extraPreFindings, model.Finding{
+						Rule:     "batcloak_bom_smuggling",
+						Category: "evasion",
+						Severity: 45,
+						Detail:   "script uses fake UTF-16 BOM header over ASCII commands (BatCloak/Asian-codepage AV bypass)",
+					})
+				} else if tc == "batch_var_obfuscation" || tc == "base64_compressed_layer" {
+					extraPreFindings = append(extraPreFindings, model.Finding{
+						Rule:     "script_deobfuscated",
+						Category: "evasion",
+						Severity: 15,
+						Detail:   fmt.Sprintf("static script deobfuscator unwrapped %s (%d layer(s))", tc, dr.LayersFound),
+					})
+				}
+			}
+		}
+	}
+
+	// Deep binary MS-SHLLINK (.lnk) parser + file-size inflation check
+	if kind == filetype.KindShortcut && strings.EqualFold(filepath.Ext(path), ".lnk") {
+		li := unpack.ParseLNK(path)
+		if li.Valid {
+			strs = append(strs, li.ExtractedStrings...)
+			if li.Arguments != "" && deobf.CanDeobfuscateExt(".ps1") {
+				dr := deobf.DeobfuscateScript(".ps1", []byte(li.Arguments))
+				strs = append(strs, dr.Lines...)
+			}
+			if li.ZeroPadded {
+				extraPreFindings = append(extraPreFindings, model.Finding{
+					Rule:     "lnk_size_inflated",
+					Category: "evasion",
+					Severity: 45,
+					Detail:   fmt.Sprintf("Windows .lnk shortcut artificially inflated to %s with padding bytes to masquerade as a full game installer", humanMB(li.FileSize)),
+				})
+			}
+		}
+	}
+
+	// Java .jar (Minecraft Forge/Fabric/Bukkit mods) & Sims 4 .ts4script Constant Pool / bytecode inspection
+	if kind == filetype.KindArchive {
+		lowExt := strings.ToLower(filepath.Ext(path))
+		if (lowExt == ".jar" || lowExt == ".ts4script") && info.Size() <= 128<<20 {
+			if jrep, jerr := unpack.InspectJarOrModZip(path, 600); jerr == nil && jrep != nil {
+				if jrep.ClassCount > 0 || jrep.PycCount > 0 {
+					extraPreFindings = append(extraPreFindings, model.Finding{
+						Rule:     "javamod_inspected",
+						Category: "info",
+						Severity: 0,
+						Detail:   fmt.Sprintf("inspected mod archive bytecode (%d .class, %d .pyc, %d constant-pool strings)", jrep.ClassCount, jrep.PycCount, len(jrep.ExtractedStrings)),
+					})
+				}
+				if jrep.FractureiserLike {
+					extraPreFindings = append(extraPreFindings, model.Finding{
+						Rule:     "java_mod_fractureiser",
+						Category: "dropper",
+						Severity: 55,
+						Detail:   "Java .jar mod combines Runtime.exec/URLClassLoader with external C2/webhook/stealer strings (Fractureiser-style mod malware)",
+					})
+				}
+				if len(jrep.ExtractedStrings) > 0 {
+					jmFinds, _ := rules.Match(rules.MatchInput{
+						Kind: filetype.KindScript,
+						Strs: jrep.ExtractedStrings,
+						Path: path + ":mod_bytecode",
+					})
+					jmFinds = append(jmFinds, sigfeed.Global().Match("", jrep.ExtractedStrings)...)
+					for _, jf := range jmFinds {
+						if jf.Severity > 0 {
+							jf.Detail = "[mod-bytecode] " + jf.Detail
+							extraPreFindings = append(extraPreFindings, jf)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	findings, whitelist := rules.Match(rules.MatchInput{
@@ -975,6 +1092,7 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		Signed: res.Signed,
 	})
 	findings = append(findings, authFindings...)
+	findings = append(findings, extraPreFindings...)
 	if len(readBytes) == 0 && head != nil {
 		f2, _ := rules.Match(rules.MatchInput{Kind: kind, PE: peInfo, Strs: nil, Bytes: head, Path: path, Signed: res.Signed})
 		findings = append(findings, f2...)
@@ -1074,6 +1192,20 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 					findings = append(findings, pf)
 				}
 			}
+		}
+		if peInfo.IsGoBinary || peInfo.IsRustBinary {
+			lang := "Go"
+			if peInfo.IsRustBinary && !peInfo.IsGoBinary {
+				lang = "Rust"
+			} else if peInfo.IsGoBinary && peInfo.IsRustBinary {
+				lang = "Go+Rust"
+			}
+			findings = append(findings, model.Finding{
+				Rule:     "modern_lang_binary",
+				Category: "info",
+				Severity: 0,
+				Detail:   fmt.Sprintf("%s compiled binary (%d symbol/crate name(s) recovered from metadata)", lang, len(peInfo.RecoveredSymbols)),
+			})
 		}
 		// Pure-Go .NET Metadata (#US / #Strings), Costura.Fody unpacker & Game-Mod Trojan detector.
 		if !sub && peInfo.Dotnet {
@@ -1499,7 +1631,7 @@ const (
 
 var containerSeq int64
 
-var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "mjs", "cjs", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "msi", "jar", "cpl", "reg", "asar", "nsi", "nsh", "iss", "au3", "a3x", "asi"}
+var extractableExts = []string{"exe", "dll", "sys", "scr", "bat", "cmd", "ps1", "vbs", "js", "mjs", "cjs", "jse", "wsf", "hta", "lnk", "url", "pif", "ini", "nfo", "txt", "md5", "cfg", "com", "py", "pyw", "rpy", "rpyc", "lua", "msi", "jar", "ts4script", "cpl", "reg", "asar", "nsi", "nsh", "iss", "au3", "a3x", "asi", "vhd", "vhdx", "img"}
 
 func (s *Scanner) ensureTmpDir() string {
 	if s.tmp != "" {

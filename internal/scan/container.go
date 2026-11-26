@@ -31,6 +31,7 @@ import (
 
 	"gamecrack-scanner/internal/filetype"
 	"gamecrack-scanner/internal/model"
+	"gamecrack-scanner/internal/motw"
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/unpack"
 )
@@ -56,6 +57,7 @@ type archivePlan struct {
 	allEntries []archiveEntry // all file entries (for decoy/structural checks)
 	total      int64
 	encrypted  bool
+	password   string // auto-cracked dropper password when unlocked via candidate list
 	ok         bool
 }
 
@@ -91,14 +93,24 @@ func (s *Scanner) planArchiveFull(path string) archivePlan {
 		}
 	}
 	if ext == ".zip" || fmtMagic == "zip" {
-		if p := s.planZip(path); p.ok {
+		p := s.planZip(path)
+		if p.ok && !p.encrypted {
+			return p
+		}
+		if p.encrypted && find7z() != "" {
+			if p7 := s.plan7zWithAutoUnlock(path); p7.ok {
+				p7.encrypted = true
+				return p7
+			}
+		}
+		if p.ok {
 			return p
 		}
 	}
 	if fmtMagic == "freearc" || filetype.IsFreeArc(path) {
 		return s.planFreeArc(path)
 	}
-	return s.plan7z(path)
+	return s.plan7zWithAutoUnlock(path)
 }
 
 func (s *Scanner) planZip(path string) archivePlan {
@@ -153,13 +165,85 @@ func (s *Scanner) planAsar(path string) archivePlan {
 
 // plan7z uses "7z l -slt" to enumerate the archive without extracting it.
 func (s *Scanner) plan7z(path string) archivePlan {
+	return s.plan7zPass(path, "")
+}
+
+// commonDropperPasswords are the standard passwords used by 95%+ of fake-crack
+// / stealer web mirrors to blind antivirus scanners before downloaders extract them.
+var commonDropperPasswords = []string{
+	"1234", "12345", "123456", "123", "1111", "0000",
+	"2024", "2025", "2026", "2027",
+	"password", "pass", "infected", "malware", "virus",
+	"crack", "setup", "install", "installer", "game", "repack", "patch", "cheat", "trainer", "mod",
+}
+
+func (s *Scanner) candidateArchivePasswords(path string) []string {
+	seen := map[string]bool{}
+	var out []string
+	push := func(pw string) {
+		pw = strings.TrimSpace(pw)
+		if pw != "" && len(pw) <= 64 && !seen[pw] {
+			seen[pw] = true
+			out = append(out, pw)
+		}
+	}
+	for _, p := range commonDropperPasswords {
+		push(p)
+	}
+	// Derive stem & Mark-of-the-Web origin domain (many mirrors use their domain or filename as archive password!)
+	base := filepath.Base(path)
+	stem := strings.TrimSuffix(base, filepath.Ext(base))
+	push(stem)
+	push(strings.ToLower(stem))
+	if src := motw.Read(path); src != nil && src.HostDomain != "" {
+		push(src.HostDomain)
+		push("www." + src.HostDomain)
+	}
+	return out
+}
+
+func (s *Scanner) plan7zWithAutoUnlock(path string) archivePlan {
+	p := s.plan7zPass(path, "")
+	if !p.encrypted {
+		return p
+	}
+	// If header is encrypted (!p.ok) or files inside are encrypted, try common dropper passwords!
+	bin := find7z()
+	if bin == "" {
+		return p
+	}
+	for _, pw := range s.candidateArchivePasswords(path) {
+		if !p.ok {
+			cand := s.plan7zPass(path, pw)
+			if cand.ok && len(cand.allEntries) > 0 {
+				cand.encrypted = true
+				cand.password = pw
+				return cand
+			}
+		} else {
+			// Header is readable (e.g. encrypted ZIP or 7z without -mhe), verify password via fast `7z t`!
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			cmd := exec.CommandContext(ctx, bin, "t", "-y", "-p"+pw, path)
+			procutil.HideWindow(cmd)
+			err := cmd.Run()
+			cancel()
+			if err == nil {
+				p.password = pw
+				return p
+			}
+		}
+	}
+	return p
+}
+
+func (s *Scanner) plan7zPass(path, password string) archivePlan {
 	bin := find7z()
 	if bin == "" {
 		return archivePlan{}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), archiveListTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "l", "-slt", "-y", "-p", path)
+	cmd := exec.CommandContext(ctx, bin, "l", "-slt", "-y", "-p"+password, path)
 	procutil.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	lowOut := strings.ToLower(string(out))
@@ -421,12 +505,21 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 
 	plan := s.planArchiveFull(path)
 	if plan.encrypted {
-		out.Extra = append(out.Extra, model.Finding{
-			Rule:     "archive_encrypted",
-			Category: "evasion",
-			Severity: 25,
-			Detail:   "password-protected archive — web malware droppers commonly encrypt archives (e.g. pass '1234') to bypass antivirus inspection",
-		})
+		if plan.password != "" {
+			out.Extra = append(out.Extra, model.Finding{
+				Rule:     "archive_password_unlocked",
+				Category: "evasion",
+				Severity: 30,
+				Detail:   fmt.Sprintf("password-protected archive automatically unlocked (password %q) — inspecting hidden payload inside!", plan.password),
+			})
+		} else {
+			out.Extra = append(out.Extra, model.Finding{
+				Rule:     "archive_encrypted",
+				Category: "evasion",
+				Severity: 25,
+				Detail:   "password-protected archive — web malware droppers commonly encrypt archives (e.g. pass '1234') to bypass antivirus inspection",
+			})
+		}
 	}
 	if len(plan.allEntries) > 0 {
 		out.Extra = append(out.Extra, detectDecoyArchiveEntries(plan.allEntries)...)
@@ -460,7 +553,7 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 		out.Reason = "temp dir error: " + err.Error()
 		return out
 	}
-	method, err := s.extractTo(path, dest)
+	method, err := s.extractToWithPass(path, dest, plan.password)
 	if err != nil {
 		out.Reason = method + " extraction failed: " + err.Error()
 		return out
@@ -481,7 +574,11 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 		if ierr != nil {
 			return nil
 		}
-		if info.Size() > s.cfg.MaxSizeMB*1024*1024 {
+		maxSz := s.cfg.MaxSizeMB
+		if maxSz <= 0 {
+			maxSz = 512
+		}
+		if info.Size() > maxSz*1024*1024 {
 			return nil
 		}
 		rel, rerr := filepath.Rel(dest, p)
@@ -521,6 +618,10 @@ func (s *Scanner) expandContainerInner(path string, depth int) containerOutcome 
 
 // extractTo extracts the container into dest and returns the method used.
 func (s *Scanner) extractTo(path, dest string) (string, error) {
+	return s.extractToWithPass(path, dest, "")
+}
+
+func (s *Scanner) extractToWithPass(path, dest, password string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 	fmtMagic := filetype.ArchiveFormat(path)
 	if ext == ".asar" || fmtMagic == "asar" {
@@ -531,7 +632,7 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 			return "asar", err
 		}
 	}
-	if ext == ".zip" || fmtMagic == "zip" {
+	if password == "" && (ext == ".zip" || fmtMagic == "zip") {
 		if err := extractZip(path, dest); err == nil {
 			return "zip", nil
 		}
@@ -552,7 +653,7 @@ func (s *Scanner) extractTo(path, dest string) (string, error) {
 		return "freearc", nil
 	}
 	if bin := find7z(); bin != "" {
-		args := []string{"x", "-y", "-aoa", "-p", "-o" + dest}
+		args := []string{"x", "-y", "-aoa", "-p" + password, "-o" + dest}
 		args = append(args, includeFilters()...)
 		args = append(args, path)
 		ctx, cancel := context.WithTimeout(context.Background(), archiveExtractTimeout)

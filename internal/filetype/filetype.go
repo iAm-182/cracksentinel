@@ -37,8 +37,8 @@ var scriptExt = map[string]bool{
 	".bat": true, ".cmd": true, ".ps1": true, ".psm1": true, ".psd1": true,
 	".vbs": true, ".vbe": true, ".js": true, ".mjs": true, ".cjs": true,
 	".jse": true, ".wsf": true, ".hta": true, ".py": true, ".pyw": true,
-	".rpy": true, ".reg": true, ".nsi": true, ".nsh": true, ".iss": true,
-	".au3": true, ".a3x": true,
+	".rpy": true, ".rpyc": true, ".lua": true, ".reg": true,
+	".nsi": true, ".nsh": true, ".iss": true, ".au3": true, ".a3x": true,
 }
 
 var assetExt = map[string]bool{
@@ -57,7 +57,8 @@ var docExt = map[string]bool{
 var containerExt = map[string]bool{
 	".zip": true, ".7z": true, ".rar": true, ".iso": true, ".cab": true,
 	".arj": true, ".tgz": true, ".tar": true, ".gz": true, ".xz": true,
-	".bz2": true, ".msi": true, ".img": true, ".asar": true,
+	".bz2": true, ".msi": true, ".img": true, ".vhd": true, ".vhdx": true,
+	".udf": true, ".asar": true, ".jar": true, ".ts4script": true,
 }
 
 var peNormalExt = map[string]bool{

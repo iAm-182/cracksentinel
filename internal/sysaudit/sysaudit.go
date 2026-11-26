@@ -196,7 +196,16 @@ $out | ConvertTo-Json -Depth 5 -Compress
 		rtOn := !(*raw.RealtimeDisabled)
 		rep.RealtimeProtection = &rtOn
 	}
+	memFindings, procsScanned := scanInjectedProcesses()
+	rep.CheckedLocations += procsScanned
 	evaluateRawAudit(raw, &rep)
+	for _, mf := range memFindings {
+		rep.Findings = append([]Finding{mf}, rep.Findings...)
+		if mf.Risk == "HIGH" {
+			rep.HighCount++
+			rep.Status = "CRITICAL"
+		}
+	}
 	rep.DurationMs = time.Since(t0).Milliseconds()
 	return rep
 }

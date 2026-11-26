@@ -13,7 +13,7 @@ import (
 
 var (
 	// Version is the semantic version of the build.
-	Version = "1.0.0-dev"
+	Version = "2.3.0"
 	// Commit is the git commit the build came from (set at link time).
 	Commit = "unknown"
 	// BuildDate is the build timestamp (set at link time).

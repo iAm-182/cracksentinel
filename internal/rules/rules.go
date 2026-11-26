@@ -98,6 +98,7 @@ var reClickFixDropper = regexp.MustCompile(obf.S("cmUzc3I3KTIuO3IGdD8iP3NlBilxMi
 var reClipperPattern = regexp.MustCompile(obf.S("cgYEZXI4OWsGJgYBa2kGByYGAWtpBgcGATt3MTd3IBt3EhB3FAp3AGt3YwYHBiFob3ZpbgYnJmoiBgE7dzwbdxxqd2MGBwYhbmoGJyYOBgEbdwA7dyBrd2MGBwYhaWkGJyYGARYXaQYHBgE7dzE3dyAbdxIQdxQKdwBrd2MGBwYhaGx2aWkGJyZuBgFqd2MbGAYHBgFrd2MbdxIQdxQKdwA7dzE3dyAGBwYhY2kGJ3Nz"))
 var reNtdllUnhook = regexp.MustCompile(obf.S("cmUzc3IGBjE0NS00PjY2KQYGNC4+NjYGdD42NiYGOCkjKS0yMykqPygpAWhpbgdlBjgmBjgyPzY2KT07Lj8GOCYGODI7NjUpPTsuPwY4JgY4LjsoLjsoLyk9Oy4/BjgmBjg8KD8pMiM5OzY2KQY4cw=="))
 var reInstallerCradle = regexp.MustCompile(obf.S("cmUzc3I/Ij85LTszLiY/Ij85KTI/NjYmNCk/Ij85YGA/Ij85cmVgLjU2NT0mLjUpLjs5MXNlJikyPzY2PyI/OSYGASgvNAYHcwEEBigGNAchanZrbGoncio1LT8oKTI/NjYmKi0pMiY3KTIuOyY5PyguLy4zNiY4My4pOz43MzQmKD89KSwoaWgmKC80PjY2aWgmLSk5KDMqLiY5KTkoMyouJnc/NDkmdy0GKXEyMz4+PzQmOz4+dzcqKig/PD8oPzQ5PyY/Ijk2LykzNTQqOy4ycw=="))
+var reLuaModExec = regexp.MustCompile(obf.S("cmUzcwY4cjUpBnQ/Ij85Ly4/JjM1BnQqNSo/NCY8PDMGdDY1Oz4mKjs5MTs9PwZ0NjU7PjYzOHMGKXAGcg=="))
 
 // scriptRules are kind-specific indicators for script payloads (.bat/.cmd/
 // .ps1/.vbs/.js/.hta). A script has no import table, so its behaviour is
@@ -285,6 +286,8 @@ var strongStringIOCs = map[string]bool{
 	obf.S("PjY2BSkzPj82NTs+BSooNSIj"): true, obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="): true, obf.S("Kj84BTY+KAUpMj82Njk1Pj8="): true,
 	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="): true, obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="): true, obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"): true,
 	obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"): true,
+	obf.S("NjQxBSkzID8FMzQ8NjsuPz4="):     true, obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="): true,
+	obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"): true, obf.S("Ni87BTc1PgUpMj82NgU/Ij85"): true, obf.S("IjUoBTU4PC8pOTsuPz4FOWg="): true,
 }
 
 // actionCategories are the finding categories that describe
@@ -316,7 +319,7 @@ func IsCapability(rule string) bool {
 	if strings.HasPrefix(rule, obf.S("MzcqBQ==")) {
 		return true
 	}
-	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM="), obf.S("Kj8FOyozBTI7KTIzND0FNjU7Pj8o"), obf.S("Oy8uNTMuBTk1NyozNj8+BT8iPw=="), obf.S("PjUuND8uBTk1KS4vKDsFKjs5MT8+")} {
+	for _, r := range []string{obf.S("MT8jNjU9BS01KD5o"), obf.S("ODspP2xuBTg2NTg="), obf.S("KTs0Pjg1IgU5Mj85MQ=="), obf.S("Kjs5MT8o"), obf.S("PjUuND8u"), obf.S("Kj8FKjsoKT8="), obf.S("OSgjKi4/KAU0NQUoOy0FKT85LjM1NCk="), obf.S("PzQ5KCMqLj8+BSo7IzY1Oz4="), obf.S("NDU0KS47ND47KD4FKT85LjM1NCk="), obf.S("NDUFKD87Pjs4Nj8FKS4oMzQ9KQ=="), obf.S("Oy8uNQUvNCo7OTE/Pg=="), obf.S("LzQqOzkxBTw7MzY/Pg=="), obf.S("Kj8FKC0iBSk/OS4zNTQ="), obf.S("Kj8FOzg0NSg3OzYFPyo="), obf.S("Kj8FLjYpBSkvKSozOTM1Lyk="), obf.S("Kj8FPzQ5KCMqLj8+BTUsPyg2OyM="), obf.S("Kj8FOyozBTI7KTIzND0FNjU7Pj8o"), obf.S("Oy8uNTMuBTk1NyozNj8+BT8iPw=="), obf.S("PjUuND8uBTk1KS4vKDsFKjs5MT8+"), obf.S("KTkoMyouBT4/NTg8Lyk5Oy4/Pg=="), obf.S("Kj8FKS47OTEFKS4oMzQ9KQ==")} {
 		if rule == r {
 			return true
 		}
@@ -426,6 +429,19 @@ func matchKind(kind filetype.Kind, strs []string, path string) []model.Finding {
 					Detail:   obf.S("FAkTCXp1ehM0NDV6CT8uLyp6MzQpLjs2Nj8oeik5KDMqLno/Ij85Ly4/KXoyMz4+PzR6KTI/NjZ1FhUWGDM0eio7IzY1Oz5geg==") + trunc(s, 90),
 				})
 				break
+			}
+		}
+		if strings.HasSuffix(strings.ToLower(path), obf.S("dDYvOw==")) {
+			for _, s := range strs {
+				if reLuaModExec.MatchString(s) {
+					out = append(out, model.Finding{
+						Rule:     obf.S("Ni87BTc1PgUpMj82NgU/Ij85"),
+						Category: obf.S("Pig1Kio/KA=="),
+						Severity: 45,
+						Detail:   obf.S("Fi87ej07Nz96NzU+ejM0LDUxPyl6FQl6KTI/NjZ6dXo0Oy4zLD96NjM4KDsoI3o/Ij85Ly4zNTRgeg==") + trunc(s, 90),
+					})
+					break
+				}
 			}
 		}
 	case filetype.KindShortcut:

@@ -33,4 +33,18 @@ func TestDirectSyscallAndPEBWalkDetection(t *testing.T) {
 	if hasPEBLDRWalk64(tebOnly) {
 		t.Fatalf("TEB gs:[0x30] must not trigger hasPEBLDRWalk64")
 	}
+
+	// Synthetic Go 1.20+ .gopclntab pcHeader recovering stripped main.stealChromeCookies symbol
+	pcln := make([]byte, 256)
+	copy(pcln[0:8], []byte{0xF1, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x08})
+	pcln[8] = 2   // nfunc = 2
+	pcln[32] = 64 // funcnameOffset = 64 (at 8 + 3*8)
+	copy(pcln[64:], []byte("runtime.main\x00main.stealChromeCookies\x00github.com/evil/stealer.SendWebhook\x00"))
+	if off := findGoPclntab(pcln); off != 0 {
+		t.Fatalf("findGoPclntab = %d, want 0", off)
+	}
+	syms := extractGoPclntabFuncNames(pcln)
+	if len(syms) != 2 || syms[0] != "main.stealChromeCookies" {
+		t.Fatalf("extractGoPclntabFuncNames = %v, want [main.stealChromeCookies ...]", syms)
+	}
 }

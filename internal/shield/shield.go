@@ -306,25 +306,33 @@ func riskyExecutionDirs() []string {
 	return dirs
 }
 
+func normSlashPath(p string) string {
+	p = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(p)), "\\", "/")
+	return strings.TrimRight(p, "/")
+}
+
 func isInRiskyDir(exePath string, risky []string) bool {
 	if exePath == "" {
 		return false
 	}
-	low := strings.ToLower(filepath.Clean(exePath))
+	low := normSlashPath(exePath)
 	// Never intercept CrackSentinel itself, YARA/7z/UPX helper tools, or trusted browser binaries
-	base := filepath.Base(low)
+	base := low
+	if idx := strings.LastIndexByte(low, '/'); idx >= 0 {
+		base = low[idx+1:]
+	}
 	switch base {
 	case "cracksentinel.exe", "scanner.exe", "scanner-batch.exe", "scanner-label.exe",
 		"7z.exe", "unrar.exe", "yara64.exe", "yara.exe", "upx.exe",
 		"chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "code.exe", "git.exe":
 		return false
 	}
-	if strings.HasPrefix(low, `c:\windows\`) || strings.HasPrefix(low, `c:\program files\`) || strings.HasPrefix(low, `c:\program files (x86)\`) {
+	if strings.HasPrefix(low, "c:/windows/") || strings.HasPrefix(low, "c:/program files/") || strings.HasPrefix(low, "c:/program files (x86)/") {
 		return false
 	}
 	for _, rd := range risky {
-		rdLow := strings.ToLower(rd)
-		if low == rdLow || strings.HasPrefix(low, rdLow+string(os.PathSeparator)) {
+		rdLow := normSlashPath(rd)
+		if rdLow != "" && (low == rdLow || strings.HasPrefix(low, rdLow+"/")) {
 			return true
 		}
 	}

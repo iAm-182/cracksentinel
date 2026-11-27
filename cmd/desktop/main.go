@@ -186,7 +186,7 @@ func main() {
 		case <-quitCh:
 			return
 		case <-ticker.C:
-			if srv.WatchActive() || srv.ShieldActive() || srv.ActiveJobs() > 0 {
+			if bgMode || srv.WatchActive() || srv.ShieldActive() || srv.ActiveJobs() > 0 {
 				zeroSince = time.Time{}
 				continue
 			}

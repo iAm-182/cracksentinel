@@ -460,8 +460,8 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
           <div class="dz-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </div>
-          <h2>Drag &amp; Drop File / Archive / Folder Game ke Sini</h2>
-          <p id="dropHint">Untuk game ukuran besar (10–100 GB), klik <b>Pilih Folder Game (Scan Langsung)</b> agar scan langsung di disk tanpa menyalin file. Kamu juga bisa drop <code>.exe .dll .zip .rar .7z .iso .ps1 .bat</code> langsung ke kotak ini.</p>
+          <h2>Drag &amp; Drop File / Archive / .Torrent / Folder Game ke Sini</h2>
+          <p id="dropHint">Untuk game ukuran besar (10–100 GB), klik <b>Pilih Folder Game (Scan Langsung)</b> agar scan langsung di disk tanpa menyalin file. Kamu juga bisa drop <code>.exe .dll .zip .rar .7z .iso .torrent .jar .lnk .ps1 .bat</code> langsung ke kotak ini.</p>
           <div class="row" style="justify-content:center">
             <button class="btn primary local-only" id="btnPickFolder" type="button">Pilih Folder Game (Scan Langsung)</button>
             <button class="btn local-only" id="btnPickFiles" type="button">Pilih File Lokal (1 / Banyak)</button>
@@ -634,15 +634,18 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         <div class="card">
           <div class="card-head">
             <div>
-              <h3>Post-Install PC Security &amp; Memory Hollowing Audit (Read-Only)</h3>
-              <div class="muted">Memeriksa apakah PC terlanjur disusupi trojan/stealer: scan <b>Live Process Memory Hollowing / Reflective PE Injection (<code>MEM_PRIVATE</code>)</b>, manipulasi <b>ExclusionPath Windows Defender</b>, <b>Registry Run/RunOnce</b>, <b>Folder Startup</b>, <b>Scheduled Tasks</b> tersembunyi, dan pembajakan file <code>hosts</code>.</div>
+              <h3>Post-Install PC Security, Memory Hollowing, Discord/Steam Integrity &amp; 1-Click Auto-Fix</h3>
+              <div class="muted">Memeriksa apakah PC terlanjur disusupi trojan/stealer: scan <b>Injeksi Aplikasi Discord (<code>discord_desktop_core\index.js</code>) &amp; Steam</b>, <b>Live Process Memory Hollowing (<code>MEM_PRIVATE</code> PE)</b>, manipulasi <b>ExclusionPath Windows Defender</b>, <b>Registry Run/RunOnce</b>, <b>Folder Startup</b>, <b>Scheduled Tasks</b>, dan file <code>hosts</code> — lengkap dengan tombol <b>1-Klik Bersihkan &amp; Pulihkan (Auto-Fix)</b>.</div>
             </div>
-            <button class="btn primary" id="btnRunAudit" type="button">Mulai Audit PC Sekarang</button>
+            <div class="row">
+              <button class="btn danger" id="btnFixAllAudit" style="display:none" type="button">Bersihkan &amp; Pulihkan Semua (Auto-Fix)</button>
+              <button class="btn primary" id="btnRunAudit" type="button">Mulai Audit PC Sekarang</button>
+            </div>
           </div>
           <div id="auditSummaryBox" style="display:none;margin-top:12px"></div>
           <div class="table-wrap" id="auditTableWrap" style="display:none;margin-top:12px">
             <table>
-              <thead><tr><th>Risiko</th><th>Kategori</th><th>Temuan &amp; Lokasi</th><th>Perintah / Nilai</th></tr></thead>
+              <thead><tr><th>Risiko</th><th>Kategori</th><th>Temuan &amp; Lokasi</th><th>Perintah / Nilai</th><th>Aksi Pemulihan</th></tr></thead>
               <tbody id="auditBody"></tbody>
             </table>
           </div>
@@ -1470,8 +1473,8 @@ function explainFinding(f){
   if(r === 'emu_steamapi') return {kind:'info', label:'Emulator Game', text:'Emulator Steam dikenali (TENOKE/Goldberg/RUNE) — hooking memori normal pada crack.'};
   if(r === 'crack_whitelist' || r === 'yara:gc_crack_emu_info') return {kind:'info', label:'Crack Dikenali', text:'Tanda crack/emulator game standar yang umum dipakai.'};
   if(r === 'known_runtime_dll') return {kind:'info', label:'Terverifikasi', text:'Library runtime game / utility installer resmi tanpa indikasi payload berbahaya.'};
-  if(r === 'pyinstaller_unpacked' || r === 'installer_unpacked' || r === 'auto_unpacked' || r === 'container_expanded' || r === 'costura_unpacked' || r === 'innosetup_detected' || r === 'modern_lang_binary' || r === 'javamod_inspected') {
-    return {kind:'info', label:'Dibongkar Otomatis', text:'Isi terkompresi / simbol (PyInstaller / Costura .NET / Go / Rust / Java Mod / NSIS / ASAR / UPX) berhasil dibongkar & diperiksa ke dalamnya.'};
+  if(r === 'pyinstaller_unpacked' || r === 'installer_unpacked' || r === 'auto_unpacked' || r === 'container_expanded' || r === 'costura_unpacked' || r === 'innosetup_detected' || r === 'modern_lang_binary' || r === 'javamod_inspected' || r === 'torrent_inspected') {
+    return {kind:'info', label:'Dibongkar Otomatis', text:'Isi terkompresi / simbol / metadata (.torrent / PyInstaller / Costura .NET / Go / Rust / Java Mod / NSIS / ASAR / UPX) berhasil dibongkar & diperiksa ke dalamnya.'};
   }
   if(r === 'script_deobfuscated' || r === 'pe_stack_strings') {
     return {kind:'tech', label:'Deobfuscasi Statis', text:'Lapisan penyamaran script / stack-string pada program berhasil dibuka secara statis tanpa menjalankan file.'};
@@ -1529,6 +1532,9 @@ function explainFinding(f){
   if(r === 'xor_obfuscated_c2') return {kind:'danger', label:'BAHAYA: C2 Dienkripsi XOR', text:'Ditemukan alamat server pencuri data (C2/Webhook) yang disembunyikan dengan enkripsi XOR!'};
   if(r === 'lnk_size_inflated') return {kind:'danger', label:'BAHAYA: Shortcut .LNK Palsu', text:'File shortcut .lnk dipompa ukurannya hingga jutaan byte agar terlihat seperti installer game asli!'};
   if(r === 'archive_password_unlocked') return {kind:'danger', label:'Waspada: Arsip Terkunci Dibobol', text:'Arsip ber-password jebakan berhasil dibuka otomatis oleh CrackSentinel untuk memeriksa isi aslinya!'};
+  if(r === 'torrent_shortcut_or_script_dropper' || r === 'torrent_tiny_fake_repack' || r === 'torrent_decoy_renpy_dropper') {
+    return {kind:'danger', label:'BAHAYA: File .Torrent Jebakan', text:'Isi daftar file di dalam .torrent ini adalah dropper virus / repack palsu (terdeteksi sebelum kamu mengunduhnya di qBittorrent)!'};
+  }
   if(r === 'dll_sideload_proxy') return {kind:'danger', label:'BAHAYA: DLL Sideloading', text:'Teknik "White+Black" (AheadLib Proxy): menyamar sebagai DLL sistem Windows untuk membajak program resmi!'};
   if(r === 'direct_syscall_stubs' || r === 'ntdll_unhook_evasion' || r.includes('syscall_evasion')) return {kind:'danger', label:'BAHAYA: Bypass Antivirus', text:'Memakai Direct Syscall / Unhooking ntdll.dll (teknik loader FUD) untuk bersembunyi dari Antivirus/EDR!'};
   if(r === 'peb_ldr_shellcode') return {kind:'danger', label:'BAHAYA: Shellcode Loader', text:'Menelusuri memori PEB->LDR secara langsung seperti shellcode trojan tersembunyi!'};
@@ -1749,13 +1755,17 @@ async function launchSandbox(path){
   if(!r.ok) return toast('Gagal menyiapkan Sandbox: ' + (d.error||''));
   toast(d.message || ('File .wsb dibuat: ' + d.wsb_path));
 }
+let lastAuditFindings = [];
+
 async function runPCAudit(){
   const btn = $('#btnRunAudit');
+  const fixAllBtn = $('#btnFixAllAudit');
   const box = $('#auditSummaryBox');
   const wrap = $('#auditTableWrap');
   btn.disabled = true;
+  fixAllBtn.style.display = 'none';
   box.style.display = 'block';
-  box.innerHTML = '<div class="row muted"><div class="spinner"></div> Memeriksa Windows Defender Exclusions, Registry Run/RunOnce, Startup Folder, Scheduled Tasks, &amp; Hosts...</div>';
+  box.innerHTML = '<div class="row muted"><div class="spinner"></div> Memeriksa Injeksi Discord/Steam, Live Memory Hollowing, Windows Defender Exclusions, Registry Run, Startup Folder, Scheduled Tasks, &amp; Hosts...</div>';
   wrap.style.display = 'none';
   try{
     const r = await apiFetch('/api/audit/run', {method:'POST'});
@@ -1770,19 +1780,26 @@ async function runPCAudit(){
     const rtTxt = d.realtime_protection === true ? 'Aktif' : d.realtime_protection === false ? 'MATI!' : 'Tidak diketahui';
     box.innerHTML = `<div class="explain-banner ${cls}">
       <div class="explain-title"><span class="badge ${bCls}">${esc(d.status)}</span> Status Keamanan PC: ${d.status==='SAFE'?'BERSIH & AMAN':d.status==='WARNING'?'PERLU DICEK':'PERINGATAN TINGGI — ADA INDIKATOR BERBAHAYA!'}</div>
-      <p class="explain-desc">Diperiksa <b>${d.checked_locations||0} titik sistem</b> dalam ${fmtMs(d.duration_ms)} · Windows Defender Real-Time: <b>${rtTxt}</b> · Temuan Risiko Tinggi: <b>${d.high_count||0}</b> · Menengah: <b>${d.medium_count||0}</b>.</p>
+      <p class="explain-desc">Diperiksa <b>${d.checked_locations||0} titik sistem &amp; proses</b> dalam ${fmtMs(d.duration_ms)} · Windows Defender Real-Time: <b>${rtTxt}</b> · Temuan Risiko Tinggi: <b>${d.high_count||0}</b> · Menengah: <b>${d.medium_count||0}</b>.</p>
     </div>`;
     const fs = d.findings || [];
+    lastAuditFindings = fs;
+    const fixables = fs.filter(f => f.fix_action && f.fix_target);
+    if(fixables.length > 0){
+      fixAllBtn.style.display = 'inline-flex';
+      fixAllBtn.textContent = `Bersihkan & Pulihkan Semua (${fixables.length} Auto-Fix)`;
+    }
     wrap.style.display = 'block';
     const tb = $('#auditBody');
     if(!fs.length){
-      tb.innerHTML = '<tr><td colspan="4" class="cln" style="font-weight:600">Tidak ditemukan pengecualian Defender mencurigakan, autorun script, maupun tugas terjadwal berbahaya!</td></tr>';
+      tb.innerHTML = '<tr><td colspan="5" class="cln" style="font-weight:600">Tidak ditemukan injeksi Discord/Steam, Memory Hollowing, pengecualian Defender berbahaya, autorun script, maupun tugas terjadwal mencurigakan!</td></tr>';
     }else{
-      tb.innerHTML = fs.map(f=>`<tr>
+      tb.innerHTML = fs.map((f, idx)=>`<tr>
         <td><span class="badge ${f.risk==='HIGH'?'MALICIOUS':f.risk==='MEDIUM'?'SUSPICIOUS':'INFO'}">${esc(f.risk)}</span></td>
         <td class="mono">${esc(f.category)}</td>
         <td><b>${esc(f.title)}</b><div class="mono muted">${esc(f.location)}</div><div class="muted" style="margin-top:3px">${esc(f.reason)}</div></td>
-        <td class="mono" style="word-break:break-all;max-width:340px">${esc(f.command)}</td>
+        <td class="mono" style="word-break:break-all;max-width:310px">${esc(f.command)}</td>
+        <td>${f.fix_action ? `<button class="btn sm ${f.risk==='HIGH'?'danger':'primary'}" type="button" onclick="applyAuditFix(${idx})">${esc(f.fix_label||'Auto-Fix')}</button>` : '-'}</td>
       </tr>`).join('');
     }
   }catch(e){
@@ -1791,6 +1808,30 @@ async function runPCAudit(){
     btn.disabled = false;
   }
 }
+
+async function applyAuditFix(idx){
+  const f = lastAuditFindings[idx];
+  if(!f || !f.fix_action) return;
+  if(!confirm(`Jalankan pemulihan otomatis (${f.fix_label || 'Auto-Fix'})?\n\nTarget: ${f.location}\nNilai: ${f.command}`)) return;
+  const r = await apiFetch('/api/audit/fix', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fix_action: f.fix_action, fix_target: f.fix_target})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal Auto-Fix: ' + (d.error||''));
+  toast(d.message || 'Berhasil dibersihkan!');
+  runPCAudit();
+}
+
+$('#btnFixAllAudit').addEventListener('click', async ()=>{
+  const fixables = lastAuditFindings.filter(f => f.fix_action && f.fix_target);
+  if(!fixables.length) return;
+  if(!confirm(`Jalankan Auto-Fix untuk seluruh ${fixables.length} temuan audit sekarang?`)) return;
+  let okCount = 0;
+  for(const f of fixables){
+    const r = await apiFetch('/api/audit/fix', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fix_action: f.fix_action, fix_target: f.fix_target})});
+    if(r.ok) okCount++;
+  }
+  toast(`Selesai memulihkan ${okCount}/${fixables.length} temuan!`);
+  runPCAudit();
+});
 $('#btnRunAudit').addEventListener('click', runPCAudit);
 async function labelCorpus(path, label){
   const r = await apiFetch('/api/corpus/label', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, label})});
@@ -2286,10 +2327,12 @@ function drawNetWatch(){
   tb.innerHTML = rows.slice(0, 120).map(c=>{
     const bCls = c.risk === 'HIGH' ? 'MALICIOUS' : c.risk === 'MEDIUM' ? 'SUSPICIOUS' : 'CLEAN';
     const canAct = c.pid > 4;
+    const svcBadge = c.service ? `<span class="badge ${c.service.includes('Telegram')?'MALICIOUS':'INFO'}" style="margin-top:3px">${esc(c.service)}</span>` : '';
+    const hostNote = c.remote_host ? `<div class="muted">${esc(c.remote_host)}</div>` : '';
     return `<tr>
       <td><span class="badge ${bCls}">${esc(c.risk)}</span></td>
       <td class="mono"><b>${esc(c.process)}</b> <span class="muted">(PID ${c.pid})</span><div class="muted" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.exe_path)}">${esc(c.exe_path||'-')}</div></td>
-      <td class="mono">${esc(c.remote_addr)}:<b>${c.remote_port}</b><div class="muted">lokal :${c.local_port}</div></td>
+      <td class="mono">${esc(c.remote_addr)}:<b>${c.remote_port}</b>${hostNote}<div>${svcBadge}</div></td>
       <td class="mono muted">${esc(c.state)}</td>
       <td class="muted">${esc(c.reason)}</td>
       <td>${canAct ? `<div class="row" style="gap:5px">
@@ -2338,6 +2381,12 @@ async function boot(){
   if(!isPublicMode) loadShieldStatus();
   setTimeout(()=>checkUpdate(false), 1800);
   const params = new URLSearchParams(location.search);
+  const autoView = params.get('view');
+  if(autoView && VIEW_META[autoView]){
+    history.replaceState(null, '', '/');
+    switchView(autoView);
+    if(autoView === 'audit' && !isPublicMode) runPCAudit();
+  }
   const autoPaths = params.getAll('autopath').filter(Boolean);
   if(autoPaths.length && !isPublicMode){
     history.replaceState(null, '', '/');

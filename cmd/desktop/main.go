@@ -16,8 +16,10 @@ import (
 
 	"gamecrack-scanner/internal/online"
 	"gamecrack-scanner/internal/sigfeed"
+	"gamecrack-scanner/internal/tray"
 	"gamecrack-scanner/internal/ui"
 	"gamecrack-scanner/internal/updater"
+	"gamecrack-scanner/internal/version"
 	"gamecrack-scanner/internal/yara"
 )
 
@@ -149,6 +151,22 @@ func main() {
 		launchURL := buildLaunchURL(baseURL, dropArgs)
 		launchAppWindow(launchURL)
 	}
+
+	trayInst := tray.Start(tray.Callbacks{
+		Tooltip: "CrackSentinel v" + version.Short() + " — Game Malware Guard",
+		OnOpenDashboard: func(view string) {
+			u := baseURL
+			if view != "" {
+				u = baseURL + "/?view=" + url.QueryEscape(view)
+			}
+			launchAppWindow(u)
+		},
+		GetShieldState:  srv.ShieldStates,
+		OnToggleProcess: srv.ToggleProcessShield,
+		OnToggleRansom:  srv.ToggleRansomGuard,
+		OnQuit:          requestQuit,
+	})
+	defer trayInst.Stop()
 
 	// Lifecycle management (persistent SSE stream):
 	// - Explicit "Tutup Aplikasi" button exits immediately.

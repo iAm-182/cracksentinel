@@ -218,7 +218,7 @@ func Classify(path string) Kind {
 		return KindScript
 	case textExt[ext]:
 		return KindText
-	case containerExt[ext]:
+	case containerExt[ext] || ext == ".torrent":
 		return KindArchive
 	}
 	head := make([]byte, 8)

@@ -29,7 +29,7 @@ func ClassifyEvidence(rule string) EvidenceClass {
 			return EvidenceCrackExpected
 		}
 	}
-	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky"), obf.S("NzspKy8/KDs+MzQ9BSo/"), obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="), obf.S("Oyg5MjMsPwU/NDkoIyouPz4="), obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"), obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="), obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"), obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="), obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"), obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="), obf.S("OSgjKi41BTczND8oBTM1OQ=="), obf.S("Nik7KSkFOSg/PgU+Lzcq"), obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="), obf.S("OSgjKi41BTk2MyoqPygFMzU5"), obf.S("PjY2BSkzPj82NTs+BSooNSIj"), obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="), obf.S("Kj84BTY+KAUpMj82Njk1Pj8="), obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="), obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="), obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"), obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"), obf.S("NjQxBSkzID8FMzQ8NjsuPz4="), obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="), obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"), obf.S("Ni87BTc1PgUpMj82NgU/Ij85"), obf.S("IjUoBTU4PC8pOTsuPz4FOWg="), obf.S("Oyg5MjMsPwUqOykpLTUoPgUvNDY1OTE/Pg==")} {
+	for _, r := range []string{obf.S("PjMpOTUoPgUtPzgyNTUx"), obf.S("Lj82Pz0oOzcFLjUxPzQ="), obf.S("LTs2Nj8uBTgoNS0pPygFLjsoPT8u"), obf.S("MzcqBTkoPz4/NC4zOzY="), obf.S("KikFPzQ5NT4/Pg=="), obf.S("PjUtNDY1Oz4FOSg7PjY/"), obf.S("KTkoMyouBTkoPz4FKjsuMik="), obf.S("KTkoMyouBT4/PD80Pj8oBTgjKjspKQ=="), obf.S("KTkoMyouBTkoIyouNQU3MzQ/KA=="), obf.S("KTkoMyouBSg/LD8oKT8FKTI/NjY="), obf.S("Kj8oKTMpLj80OT8FKS4oMzQ9"), obf.S("OD8yOywFND8uLTUoMQU5NTQ0Pzku"), obf.S("OD8yOywFPDM2PwU+KDUq"), obf.S("OD8yOywFOTIzNj4FKig1OT8pKQ=="), obf.S("OD8yOywFMTM2Nj8+"), obf.S("OD8yOywFOSg7KTI="), obf.S("OD8yOywFPDszNj8+"), obf.S("PjUvODY/BT8iLj80KTM1NA=="), obf.S("Oyg5MjMsPwU+NS84Nj8FPyIu"), obf.S("Oyg5MjMsPwU1PDwzOT8FNzs5KDU="), obf.S("KTI1KC45Ly4FKD83NS4/"), obf.S("PjU5BTc7OSg1"), obf.S("PjU5BT4+Pw=="), obf.S("PzM5Oyg="), obf.S("KTM9NDsuLyg/BTczKTc7Ljky"), obf.S("NzspKy8/KDs+MzQ9BSo/"), obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="), obf.S("Oyg5MjMsPwU/NDkoIyouPz4="), obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"), obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="), obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"), obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="), obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"), obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="), obf.S("OSgjKi41BTczND8oBTM1OQ=="), obf.S("Nik7KSkFOSg/PgU+Lzcq"), obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="), obf.S("OSgjKi41BTk2MyoqPygFMzU5"), obf.S("PjY2BSkzPj82NTs+BSooNSIj"), obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="), obf.S("Kj84BTY+KAUpMj82Njk1Pj8="), obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="), obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="), obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"), obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"), obf.S("NjQxBSkzID8FMzQ8NjsuPz4="), obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="), obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"), obf.S("Ni87BTc1PgUpMj82NgU/Ij85"), obf.S("IjUoBTU4PC8pOTsuPz4FOWg="), obf.S("Oyg5MjMsPwUqOykpLTUoPgUvNDY1OTE/Pg=="), obf.S("LjUoKD80LgUpMjUoLjkvLgU1KAUpOSgzKi4FPig1Kio/KA=="), obf.S("LjUoKD80LgUuMzQjBTw7MT8FKD8qOzkx"), obf.S("LjUoKD80LgU+Pzk1IwUoPzQqIwU+KDUqKj8o")} {
 		if rule == r {
 			return EvidencePayload
 		}
@@ -132,38 +132,41 @@ var payloadRules = map[string]bool{
 	// Test file.
 	obf.S("PzM5Oyg="): true,
 	// YARA payload rules.
-	obf.S("IzsoO2A9OQU+Myk5NSg+BS0/ODI1NTE="):     true,
-	obf.S("IzsoO2A9OQUuPzY/PSg7NwU4NS4FLjUxPzQ="): true,
-	obf.S("IzsoO2A9OQUpLj87Nj8oBSkuKDM0PSk="):     true,
-	obf.S("IzsoO2A9OQUyOyg+OTU+Pz4FOWg="):         true,
-	obf.S("IzsoO2A9OQUqNS0/KCkyPzY2BT80OTU+Pz4="): true,
-	obf.S("KTM9NDsuLyg/BTczKTc7Ljky"):             true, // the content no longer matches the signature it carries
-	obf.S("NzspKy8/KDs+MzQ9BSo/"):                 true,
-	obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="):         true,
-	obf.S("Oyg5MjMsPwU/NDkoIyouPz4="):             true,
-	obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"):     true,
-	obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="):         true,
-	obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"):         true,
-	obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="):     true,
-	obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"):             true,
-	obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="):         true,
-	obf.S("OSgjKi41BTczND8oBTM1OQ=="):             true,
-	obf.S("Nik7KSkFOSg/PgU+Lzcq"):                 true,
-	obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="):     true,
-	obf.S("OSgjKi41BTk2MyoqPygFMzU5"):             true,
-	obf.S("PjY2BSkzPj82NTs+BSooNSIj"):             true,
-	obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="):         true,
-	obf.S("Kj84BTY+KAUpMj82Njk1Pj8="):             true,
-	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="):         true,
-	obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="): true,
-	obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"):         true,
-	obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"):         true,
-	obf.S("NjQxBSkzID8FMzQ8NjsuPz4="):             true,
-	obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="):     true,
-	obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"):         true,
-	obf.S("Ni87BTc1PgUpMj82NgU/Ij85"):             true,
-	obf.S("IjUoBTU4PC8pOTsuPz4FOWg="):             true,
-	obf.S("Oyg5MjMsPwUqOykpLTUoPgUvNDY1OTE/Pg=="): true,
+	obf.S("IzsoO2A9OQU+Myk5NSg+BS0/ODI1NTE="):                 true,
+	obf.S("IzsoO2A9OQUuPzY/PSg7NwU4NS4FLjUxPzQ="):             true,
+	obf.S("IzsoO2A9OQUpLj87Nj8oBSkuKDM0PSk="):                 true,
+	obf.S("IzsoO2A9OQUyOyg+OTU+Pz4FOWg="):                     true,
+	obf.S("IzsoO2A9OQUqNS0/KCkyPzY2BT80OTU+Pz4="):             true,
+	obf.S("KTM9NDsuLyg/BTczKTc7Ljky"):                         true, // the content no longer matches the signature it carries
+	obf.S("NzspKy8/KDs+MzQ9BSo/"):                             true,
+	obf.S("Pj85NSMFKD80KiMFPig1Kio/KA=="):                     true,
+	obf.S("Oyg5MjMsPwU/NDkoIyouPz4="):                         true,
+	obf.S("Lyg2BTQvNz8oMzkFPj85NSMFPjU3OzM0"):                 true,
+	obf.S("Lyg2BT41Lzg2PwU/Ii4/NCkzNTQ="):                     true,
+	obf.S("KS4/OzY/KAU7KioFODUvND4FPzQ5"):                     true,
+	obf.S("KS4/OzY/KAUtOzY2Py4FKT8pKTM1NA=="):                 true,
+	obf.S("Nzs2LTsoPwU8OzczNiMFMzU5"):                         true,
+	obf.S("Pj88PzQpPwUvOzkFPyw7KTM1NA=="):                     true,
+	obf.S("OSgjKi41BTczND8oBTM1OQ=="):                         true,
+	obf.S("Nik7KSkFOSg/PgU+Lzcq"):                             true,
+	obf.S("NjU2ODM0BTk2MzkxPDMiBT4oNSoqPyg="):                 true,
+	obf.S("OSgjKi41BTk2MyoqPygFMzU5"):                         true,
+	obf.S("PjY2BSkzPj82NTs+BSooNSIj"):                         true,
+	obf.S("PjMoPzkuBSkjKTk7NjYFKS4vOCk="):                     true,
+	obf.S("Kj84BTY+KAUpMj82Njk1Pj8="):                         true,
+	obf.S("NC4+NjYFLzQyNTUxBT8sOykzNTQ="):                     true,
+	obf.S("MzQpLjs2Nj8oBTc7NjM5MzUvKQUpOSgzKi4="):             true,
+	obf.S("NjMsPwUpMjtob2wFODY7OTE2Myku"):                     true,
+	obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"):                     true,
+	obf.S("NjQxBSkzID8FMzQ8NjsuPz4="):                         true,
+	obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="):                 true,
+	obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"):                     true,
+	obf.S("Ni87BTc1PgUpMj82NgU/Ij85"):                         true,
+	obf.S("IjUoBTU4PC8pOTsuPz4FOWg="):                         true,
+	obf.S("Oyg5MjMsPwUqOykpLTUoPgUvNDY1OTE/Pg=="):             true,
+	obf.S("LjUoKD80LgUpMjUoLjkvLgU1KAUpOSgzKi4FPig1Kio/KA=="): true,
+	obf.S("LjUoKD80LgUuMzQjBTw7MT8FKD8qOzkx"):                 true,
+	obf.S("LjUoKD80LgU+Pzk1IwUoPzQqIwU+KDUqKj8o"):             true,
 }
 
 // ClassifyRule reports how strongly a rule argues for a malicious payload.

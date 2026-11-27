@@ -152,4 +152,45 @@ func TestV23EndToEndFeatures(t *testing.T) {
 			t.Fatalf("password-locked '1234' .7z verdict = %s (score=%d), want MALICIOUS + archive_password_unlocked; findings=%+v", encRes.Verdict, encRes.Score, encRes.Findings)
 		}
 	}
+
+	// 6. Malicious .torrent file (FitGirl fake repack carrying 2.5 MB Setup.lnk + stealer.ps1) -> MALICIOUS before download!
+	bStr := func(s string) string {
+		return string(append([]byte{}, []byte(strings.TrimSpace(strings.Join([]string{itoaTest(len(s)), ":", s}, "")))...))
+	}
+	torBencode := "d" +
+		bStr("announce") + bStr("http://tracker.evil-mirror.top:80/announce") +
+		bStr("info") + "d" +
+		bStr("name") + bStr("GTA6_FitGirl_Repack") +
+		bStr("piece length") + "i262144e" +
+		bStr("pieces") + bStr("12345678901234567890") +
+		bStr("files") + "l" +
+		"d" + bStr("length") + "i2621440e" + bStr("path") + "l" + bStr("Setup_Game.lnk") + "ee" +
+		"d" + bStr("length") + "i4096e" + bStr("path") + "l" + bStr("stealer.ps1") + "ee" +
+		"e" +
+		"ee"
+	torPath := filepath.Join(tmp, "GTA6_FitGirl_Repack.torrent")
+	if err := os.WriteFile(torPath, []byte(torBencode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	torRes, _, err := ScanOne(Config{ExtractDepth: 1, ExtractMaxMB: 50, TempDir: tmp}, torPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if torRes.Verdict != model.VerdictMalicious || !hasRule(torRes.Findings, "torrent_shortcut_or_script_dropper") {
+		t.Fatalf("fake .torrent verdict = %s (score=%d), want MALICIOUS + torrent_shortcut_or_script_dropper; findings=%+v", torRes.Verdict, torRes.Score, torRes.Findings)
+	}
+}
+
+func itoaTest(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
 }

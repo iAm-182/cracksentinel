@@ -15,12 +15,15 @@ import (
 
 // Finding represents one suspicious post-install persistence or AV-tamper item on the host PC.
 type Finding struct {
-	Category string `json:"category"` // "defender", "autorun", "startup", "schtask", "hosts"
-	Risk     string `json:"risk"`     // "HIGH", "MEDIUM", "INFO"
-	Title    string `json:"title"`
-	Location string `json:"location"`
-	Command  string `json:"command"`
-	Reason   string `json:"reason"`
+	Category  string `json:"category"` // "defender", "autorun", "startup", "schtask", "hosts", "memory", "discord_steam"
+	Risk      string `json:"risk"`     // "HIGH", "MEDIUM", "INFO"
+	Title     string `json:"title"`
+	Location  string `json:"location"`
+	Command   string `json:"command"`
+	Reason    string `json:"reason"`
+	FixAction string `json:"fix_action,omitempty"`
+	FixTarget string `json:"fix_target,omitempty"`
+	FixLabel  string `json:"fix_label,omitempty"`
 }
 
 // Report summarizes a read-only Post-Install PC Security & Persistence Audit.
@@ -197,8 +200,16 @@ $out | ConvertTo-Json -Depth 5 -Compress
 		rep.RealtimeProtection = &rtOn
 	}
 	memFindings, procsScanned := scanInjectedProcesses()
-	rep.CheckedLocations += procsScanned
+	clientFindings, clientsChecked := scanClientIntegrity()
+	rep.CheckedLocations += procsScanned + clientsChecked
 	evaluateRawAudit(raw, &rep)
+	for _, cf := range clientFindings {
+		rep.Findings = append([]Finding{cf}, rep.Findings...)
+		if cf.Risk == "HIGH" {
+			rep.HighCount++
+			rep.Status = "CRITICAL"
+		}
+	}
 	for _, mf := range memFindings {
 		rep.Findings = append([]Finding{mf}, rep.Findings...)
 		if mf.Risk == "HIGH" {
@@ -223,12 +234,15 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 	// 1. Windows Defender Real-Time Protection & Exclusions
 	if raw.RealtimeDisabled != nil && *raw.RealtimeDisabled {
 		add(Finding{
-			Category: "defender",
-			Risk:     "HIGH",
-			Title:    "Windows Defender Real-Time Protection Mati!",
-			Location: "Windows Security (DisableRealtimeMonitoring = True)",
-			Command:  "RealtimeMonitoring: Disabled",
-			Reason:   "Proteksi real-time Windows Defender sedang nonaktif (sering dimatikan diam-diam oleh crack bervirus atau jika Anda memakai antivirus pihak ketiga).",
+			Category:  "defender",
+			Risk:      "HIGH",
+			Title:     "Windows Defender Real-Time Protection Mati!",
+			Location:  "Windows Security (DisableRealtimeMonitoring = True)",
+			Command:   "RealtimeMonitoring: Disabled",
+			Reason:    "Proteksi real-time Windows Defender sedang nonaktif (sering dimatikan diam-diam oleh crack bervirus atau jika Anda memakai antivirus pihak ketiga).",
+			FixAction: "enable_defender_realtime",
+			FixTarget: "true",
+			FixLabel:  "Aktifkan Defender",
 		})
 	}
 	for _, ex := range raw.ExclusionPaths {
@@ -238,21 +252,27 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 		}
 		if reBroadDefenderEx.MatchString(exTrim) {
 			add(Finding{
-				Category: "defender",
-				Risk:     "HIGH",
-				Title:    "Pengecualian Windows Defender Berbahaya (Folder Rawan Malware)",
-				Location: "Defender ExclusionPath",
-				Command:  exTrim,
-				Reason:   "Malware crack sangat sering menambahkan C:\\, %APPDATA%, %TEMP%, atau ProgramData ke ExclusionPath agar virusnya tidak terdeteksi Defender!",
+				Category:  "defender",
+				Risk:      "HIGH",
+				Title:     "Pengecualian Windows Defender Berbahaya (Folder Rawan Malware)",
+				Location:  "Defender ExclusionPath",
+				Command:   exTrim,
+				Reason:    "Malware crack sangat sering menambahkan C:\\, %APPDATA%, %TEMP%, atau ProgramData ke ExclusionPath agar virusnya tidak terdeteksi Defender!",
+				FixAction: "remove_defender_exclusion_path",
+				FixTarget: exTrim,
+				FixLabel:  "Hapus Exclusion",
 			})
 		} else {
 			add(Finding{
-				Category: "defender",
-				Risk:     "MEDIUM",
-				Title:    "Folder Masuk Daftar Pengecualian Defender",
-				Location: "Defender ExclusionPath",
-				Command:  exTrim,
-				Reason:   "Pastikan Anda sendiri yang mengecualikan folder ini, bukan ditambahkan otomatis oleh installer mencurigakan.",
+				Category:  "defender",
+				Risk:      "MEDIUM",
+				Title:     "Folder Masuk Daftar Pengecualian Defender",
+				Location:  "Defender ExclusionPath",
+				Command:   exTrim,
+				Reason:    "Pastikan Anda sendiri yang mengecualikan folder ini, bukan ditambahkan otomatis oleh installer mencurigakan.",
+				FixAction: "remove_defender_exclusion_path",
+				FixTarget: exTrim,
+				FixLabel:  "Hapus Exclusion",
 			})
 		}
 	}
@@ -260,12 +280,15 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 		low := strings.ToLower(strings.TrimSpace(ext))
 		if low == ".exe" || low == "exe" || low == ".dll" || low == "dll" || low == ".ps1" || low == "ps1" || low == ".bat" || low == "bat" {
 			add(Finding{
-				Category: "defender",
-				Risk:     "HIGH",
-				Title:    "Ekstensi Executable Dikecualikan dari Antivirus!",
-				Location: "Defender ExclusionExtension",
-				Command:  ext,
-				Reason:   "Mengecualikan seluruh file .exe/.dll/.ps1 membuat semua virus kebal terhadap Windows Defender!",
+				Category:  "defender",
+				Risk:      "HIGH",
+				Title:     "Ekstensi Executable Dikecualikan dari Antivirus!",
+				Location:  "Defender ExclusionExtension",
+				Command:   ext,
+				Reason:    "Mengecualikan seluruh file .exe/.dll/.ps1 membuat semua virus kebal terhadap Windows Defender!",
+				FixAction: "remove_defender_exclusion_ext",
+				FixTarget: ext,
+				FixLabel:  "Hapus Exclusion",
 			})
 		}
 	}
@@ -273,12 +296,15 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 		low := strings.ToLower(strings.TrimSpace(pr))
 		if strings.Contains(low, "powershell") || strings.Contains(low, "cmd.exe") || strings.Contains(low, "mshta") || strings.Contains(low, "rundll32") || strings.Contains(low, "regsvr32") {
 			add(Finding{
-				Category: "defender",
-				Risk:     "HIGH",
-				Title:    "Proses Sistem Dikecualikan dari Antivirus!",
-				Location: "Defender ExclusionProcess",
-				Command:  pr,
-				Reason:   "Mengecualikan powershell/cmd/rundll32 dari Defender adalah teknik klasik trojan/RAT!",
+				Category:  "defender",
+				Risk:      "HIGH",
+				Title:     "Proses Sistem Dikecualikan dari Antivirus!",
+				Location:  "Defender ExclusionProcess",
+				Command:   pr,
+				Reason:    "Mengecualikan powershell/cmd/rundll32 dari Defender adalah teknik klasik trojan/RAT!",
+				FixAction: "remove_defender_exclusion_proc",
+				FixTarget: pr,
+				FixLabel:  "Hapus Exclusion",
 			})
 		}
 	}
@@ -292,21 +318,27 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 		hasDrop := reSuspUserDropDir.MatchString(ar.Val)
 		if hasLOL && hasDrop {
 			add(Finding{
-				Category: "autorun",
-				Risk:     "HIGH",
-				Title:    "Autorun Registry Mencurigakan (Script + Folder Temp/AppData)",
-				Location: ar.Hive + `\` + ar.Name,
-				Command:  ar.Val,
-				Reason:   "Menjalankan script/LOLBin otomatis saat login Windows dari folder AppData/Temp/Public — pola utama RAT & Stealer!",
+				Category:  "autorun",
+				Risk:      "HIGH",
+				Title:     "Autorun Registry Mencurigakan (Script + Folder Temp/AppData)",
+				Location:  ar.Hive + `\` + ar.Name,
+				Command:   ar.Val,
+				Reason:    "Menjalankan script/LOLBin otomatis saat login Windows dari folder AppData/Temp/Public — pola utama RAT & Stealer!",
+				FixAction: "delete_registry_value",
+				FixTarget: ar.Hive + "|" + ar.Name,
+				FixLabel:  "Hapus Autorun",
 			})
 		} else if hasLOL || hasDrop {
 			add(Finding{
-				Category: "autorun",
-				Risk:     "MEDIUM",
-				Title:    "Program Startup Registry Non-Standar",
-				Location: ar.Hive + `\` + ar.Name,
-				Command:  ar.Val,
-				Reason:   "Berjalan otomatis dari lokasi user/script saat Windows menyala — periksa apakah ini aplikasi resmi Anda.",
+				Category:  "autorun",
+				Risk:      "MEDIUM",
+				Title:     "Program Startup Registry Non-Standar",
+				Location:  ar.Hive + `\` + ar.Name,
+				Command:   ar.Val,
+				Reason:    "Berjalan otomatis dari lokasi user/script saat Windows menyala — periksa apakah ini aplikasi resmi Anda.",
+				FixAction: "delete_registry_value",
+				FixTarget: ar.Hive + "|" + ar.Name,
+				FixLabel:  "Hapus Autorun",
 			})
 		}
 	}
@@ -324,12 +356,15 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 				risk = "HIGH"
 			}
 			add(Finding{
-				Category: "startup",
-				Risk:     risk,
-				Title:    "File Mencurigakan di Folder Startup Windows: " + sf.Name,
-				Location: sf.Path,
-				Command:  sf.Target,
-				Reason:   "File script/shortcut di folder Startup otomatis dieksekusi setiap PC menyala.",
+				Category:  "startup",
+				Risk:      risk,
+				Title:     "File Mencurigakan di Folder Startup Windows: " + sf.Name,
+				Location:  sf.Path,
+				Command:   sf.Target,
+				Reason:    "File script/shortcut di folder Startup otomatis dieksekusi setiap PC menyala.",
+				FixAction: "quarantine_file",
+				FixTarget: sf.Path,
+				FixLabel:  "Karantina Startup",
 			})
 		}
 	}
@@ -343,21 +378,27 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 		hasDrop := reSuspUserDropDir.MatchString(tk.Action)
 		if hasLOL && hasDrop {
 			add(Finding{
-				Category: "schtask",
-				Risk:     "HIGH",
-				Title:    "Scheduled Task Berbahaya: " + tk.Name,
-				Location: tk.Path + tk.Name,
-				Command:  tk.Action,
-				Reason:   "Tugas terjadwal menjalankan PowerShell/LOLBin ke arah AppData/Temp/Public — teknik persistensi favorit Lumma/AsyncRAT/XWorm!",
+				Category:  "schtask",
+				Risk:      "HIGH",
+				Title:     "Scheduled Task Berbahaya: " + tk.Name,
+				Location:  tk.Path + tk.Name,
+				Command:   tk.Action,
+				Reason:    "Tugas terjadwal menjalankan PowerShell/LOLBin ke arah AppData/Temp/Public — teknik persistensi favorit Lumma/AsyncRAT/XWorm!",
+				FixAction: "delete_scheduled_task",
+				FixTarget: tk.Path + tk.Name,
+				FixLabel:  "Hapus Task",
 			})
 		} else if hasLOL {
 			add(Finding{
-				Category: "schtask",
-				Risk:     "MEDIUM",
-				Title:    "Scheduled Task Menjalankan Script/Shell: " + tk.Name,
-				Location: tk.Path + tk.Name,
-				Command:  tk.Action,
-				Reason:   "Tugas terjadwal memanggil PowerShell/cmd/wscript — pastikan tugas ini milik aplikasi yang Anda kenal.",
+				Category:  "schtask",
+				Risk:      "MEDIUM",
+				Title:     "Scheduled Task Menjalankan Script/Shell: " + tk.Name,
+				Location:  tk.Path + tk.Name,
+				Command:   tk.Action,
+				Reason:    "Tugas terjadwal memanggil PowerShell/cmd/wscript — pastikan tugas ini milik aplikasi yang Anda kenal.",
+				FixAction: "delete_scheduled_task",
+				FixTarget: tk.Path + tk.Name,
+				FixLabel:  "Hapus Task",
 			})
 		}
 	}
@@ -365,12 +406,15 @@ func evaluateRawAudit(raw rawAuditPayload, rep *Report) {
 	// 5. Hosts File Antivirus Blocking
 	for _, hl := range raw.HostsTampered {
 		add(Finding{
-			Category: "hosts",
-			Risk:     "HIGH",
-			Title:    "File Hosts Memblokir Domain Antivirus / Windows Update!",
-			Location: `C:\Windows\System32\drivers\etc\hosts`,
-			Command:  hl,
-			Reason:   "Malware membelokkan domain antivirus/VirusTotal/Windows Update di file hosts agar tidak bisa diakses!",
+			Category:  "hosts",
+			Risk:      "HIGH",
+			Title:     "File Hosts Memblokir Domain Antivirus / Windows Update!",
+			Location:  `C:\Windows\System32\drivers\etc\hosts`,
+			Command:   hl,
+			Reason:    "Malware membelokkan domain antivirus/VirusTotal/Windows Update di file hosts agar tidak bisa diakses!",
+			FixAction: "clean_hosts_file",
+			FixTarget: hl,
+			FixLabel:  "Pulihkan Hosts",
 		})
 	}
 

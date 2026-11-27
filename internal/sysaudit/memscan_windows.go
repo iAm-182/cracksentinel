@@ -164,12 +164,15 @@ func inspectProcessMemory(pid uint32, exeName string) ([]Finding, bool) {
 					protStr = "RWX"
 				}
 				out = append(out, Finding{
-					Category: "memory",
-					Risk:     "HIGH",
-					Title:    fmt.Sprintf("Injeksi Memori / Process Hollowing Terdeteksi di %s (PID %d)!", exeName, pid),
-					Location: fmt.Sprintf("PID %d (%s) @ 0x%X (%s, MEM_PRIVATE %d KB)", pid, exeName, mbi.BaseAddress, protStr, mbi.RegionSize/1024),
-					Command:  fmt.Sprintf("Unbacked PE image (MZ->PE) inside private %s memory", protStr),
-					Reason:   "Ditemukan program .exe/.dll utuh berjalan langsung di memori privat tanpa file di harddisk (Reflective DLL Injection / RunPE / Process Hollowing)!",
+					Category:  "memory",
+					Risk:      "HIGH",
+					Title:     fmt.Sprintf("Injeksi Memori / Process Hollowing Terdeteksi di %s (PID %d)!", exeName, pid),
+					Location:  fmt.Sprintf("PID %d (%s) @ 0x%X (%s, MEM_PRIVATE %d KB)", pid, exeName, mbi.BaseAddress, protStr, mbi.RegionSize/1024),
+					Command:   fmt.Sprintf("Unbacked PE image (MZ->PE) inside private %s memory", protStr),
+					Reason:    "Ditemukan program .exe/.dll utuh berjalan langsung di memori privat tanpa file di harddisk (Reflective DLL Injection / RunPE / Process Hollowing)!",
+					FixAction: "kill_process",
+					FixTarget: fmt.Sprintf("%d", pid),
+					FixLabel:  "Matikan Proses",
 				})
 				if len(out) >= 2 {
 					break

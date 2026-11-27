@@ -38,6 +38,16 @@ func TestScoreOutboundConnectionAndRiskyDirs(t *testing.T) {
 	if r3 != "CLEAN" {
 		t.Fatalf("loopback connection risk = %s, want CLEAN", r3)
 	}
+
+	// Non-Telegram process connecting to Telegram Bot API DC (149.154.167.99) -> HIGH C2 alert!
+	r4, _ := scoreOutboundConnection("setup_crack.exe", `C:\Program Files\Game\setup_crack.exe`, "149.154.167.99", 443, risky)
+	if r4 != "HIGH" {
+		t.Fatalf("non-Telegram process connecting to Telegram DC risk = %s, want HIGH", r4)
+	}
+	svc, isTG, _ := identifyRemoteService("149.154.167.99", 443)
+	if !isTG || svc == "" {
+		t.Fatalf("expected Telegram Bot API service classification, got svc=%q isTG=%v", svc, isTG)
+	}
 }
 
 func TestCanaryDeploymentAndTamperCheck(t *testing.T) {

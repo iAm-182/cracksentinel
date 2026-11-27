@@ -288,6 +288,7 @@ var strongStringIOCs = map[string]bool{
 	obf.S("PTs3Pzc1PgUuKDUwOzQFKjYvPTM0"): true,
 	obf.S("NjQxBSkzID8FMzQ8NjsuPz4="):     true, obf.S("ODsuOTY1OzEFODU3BSk3Lz09NjM0PQ=="): true,
 	obf.S("MDssOwU3NT4FPCg7OS4vKD8zKT8o"): true, obf.S("Ni87BTc1PgUpMj82NgU/Ij85"): true, obf.S("IjUoBTU4PC8pOTsuPz4FOWg="): true,
+	obf.S("LjUoKD80LgUpMjUoLjkvLgU1KAUpOSgzKi4FPig1Kio/KA=="): true, obf.S("LjUoKD80LgUuMzQjBTw7MT8FKD8qOzkx"): true, obf.S("LjUoKD80LgU+Pzk1IwUoPzQqIwU+KDUqKj8o"): true,
 }
 
 // actionCategories are the finding categories that describe

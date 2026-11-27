@@ -16,6 +16,42 @@ func (s *Server) ShieldActive() bool {
 	return s.shieldMgr.Active()
 }
 
+// ShieldStates returns (processShieldOn, ransomGuardOn, downloadGuardOn) for the Windows System Tray menu.
+func (s *Server) ShieldStates() (bool, bool, bool) {
+	wOn := s.WatchActive()
+	if s.shieldMgr == nil {
+		return false, false, wOn
+	}
+	st := s.shieldMgr.Status()
+	return st.ProcessShieldOn, st.RansomGuardOn, wOn
+}
+
+// ToggleProcessShield flips the Active Process Shield on/off from the Windows System Tray menu.
+func (s *Server) ToggleProcessShield() {
+	if s.shieldMgr == nil {
+		return
+	}
+	st := s.shieldMgr.Status()
+	_ = s.shieldMgr.ApplyConfig(shield.Config{
+		ProcessShieldOn: !st.ProcessShieldOn,
+		ProcessAutoKill: st.ProcessAutoKill,
+		RansomGuardOn:   st.RansomGuardOn,
+	})
+}
+
+// ToggleRansomGuard flips the Anti-Ransomware Canary Guard on/off from the Windows System Tray menu.
+func (s *Server) ToggleRansomGuard() {
+	if s.shieldMgr == nil {
+		return
+	}
+	st := s.shieldMgr.Status()
+	_ = s.shieldMgr.ApplyConfig(shield.Config{
+		ProcessShieldOn: st.ProcessShieldOn,
+		ProcessAutoKill: st.ProcessAutoKill,
+		RansomGuardOn:   !st.RansomGuardOn,
+	})
+}
+
 func (s *Server) requireLocalShield(w http.ResponseWriter) bool {
 	if s.opts.PublicMode || s.shieldMgr == nil {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Active Protection & Kernel WFP hanya tersedia di aplikasi desktop lokal"})

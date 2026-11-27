@@ -1350,6 +1350,37 @@ func (s *Server) handleAuditRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rep)
 }
 
+func (s *Server) handleAuditFix(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.PublicMode {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Auto-Fix is disabled in public web mode"})
+		return
+	}
+	var req struct {
+		FixAction string `json:"fix_action"`
+		FixTarget string `json:"fix_target"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	s.mu.RLock()
+	quarDir := s.opts.QuarantineDir
+	s.mu.RUnlock()
+	msg, err := sysaudit.ApplyFix(r.Context(), req.FixAction, req.FixTarget, quarDir)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"fixed":   true,
+		"message": msg,
+	})
+}
+
 func (s *Server) handleSandboxStatus(w http.ResponseWriter, r *http.Request) {
 	if s.opts.PublicMode {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Windows Sandbox is disabled in public web mode"})

@@ -1044,10 +1044,30 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 		}
 	}
 
-	// Java .jar (Minecraft Forge/Fabric/Bukkit mods) & Sims 4 .ts4script Constant Pool / bytecode inspection
+	// Java .jar, Sims 4 .ts4script, & BitTorrent .torrent pre-download inspection
 	if kind == filetype.KindArchive {
 		lowExt := strings.ToLower(filepath.Ext(path))
-		if (lowExt == ".jar" || lowExt == ".ts4script") && info.Size() <= 128<<20 {
+		if lowExt == ".torrent" && info.Size() <= 32<<20 {
+			if trep, terr := unpack.InspectTorrent(path); terr == nil && trep != nil && trep.Valid {
+				extraPreFindings = append(extraPreFindings, model.Finding{
+					Rule:     "torrent_inspected",
+					Category: "info",
+					Severity: 0,
+					Detail:   fmt.Sprintf("inspected .torrent metadata (%q: %d file(s), total %.1f MB, %d tracker(s))", trep.Name, trep.FileCount, float64(trep.TotalSize)/(1<<20), len(trep.Trackers)),
+				})
+				for _, tf := range trep.Findings {
+					extraPreFindings = append(extraPreFindings, model.Finding{
+						Rule:     tf.Rule,
+						Category: tf.Category,
+						Severity: tf.Severity,
+						Detail:   tf.Detail,
+					})
+				}
+				if len(trep.ExtractedStrings) > 0 {
+					strs = append(strs, trep.ExtractedStrings...)
+				}
+			}
+		} else if (lowExt == ".jar" || lowExt == ".ts4script") && info.Size() <= 128<<20 {
 			if jrep, jerr := unpack.InspectJarOrModZip(path, 600); jerr == nil && jrep != nil {
 				if jrep.ClassCount > 0 || jrep.PycCount > 0 {
 					extraPreFindings = append(extraPreFindings, model.Finding{
@@ -1471,7 +1491,7 @@ func (s *Scanner) scanFileEvidence(path string, depth int, sub bool) (model.File
 	if forceMalicious {
 		res.Verdict = model.VerdictMalicious
 	}
-	if depth < s.cfg.ExtractDepth && (kind == filetype.KindArchive || filetype.IsExpandableContainer(path)) {
+	if depth < s.cfg.ExtractDepth && !strings.EqualFold(filepath.Ext(path), ".torrent") && (kind == filetype.KindArchive || filetype.IsExpandableContainer(path)) {
 		s.expandContainer(path, depth, &res)
 	} else if !sub && depth < s.cfg.ExtractDepth && kind == filetype.KindPE && isExpandableInstallerPE(peInfo, strs, info.Size()) {
 		s.expandInstallerPE(path, depth, &res)

@@ -43,6 +43,8 @@ type NetConnection struct {
 	LocalPort  uint16 `json:"local_port"`
 	RemoteAddr string `json:"remote_addr"`
 	RemotePort uint16 `json:"remote_port"`
+	RemoteHost string `json:"remote_host,omitempty"`
+	Service    string `json:"service,omitempty"`
 	State      string `json:"state"`
 	PID        uint32 `json:"pid"`
 	Process    string `json:"process"`
@@ -382,12 +384,13 @@ func verifyFileSHA256(path, wantHex string) bool {
 	return hex.EncodeToString(s[:]) == wantHex
 }
 
-// scoreOutboundConnection evaluates whether a live TCP connection looks normal or suspicious (C2/RAT/Tor/Miner).
+// scoreOutboundConnection evaluates whether a live TCP connection looks normal or suspicious (C2/RAT/Tor/Miner/Telegram Bot).
 func scoreOutboundConnection(procName, exePath, remoteIP string, remotePort uint16, riskyDirs []string) (risk, reason string) {
 	if remoteIP == "" || remoteIP == "0.0.0.0" || remoteIP == "127.0.0.1" || remoteIP == "::" || remoteIP == "::1" ||
 		strings.HasPrefix(remoteIP, "127.") || strings.HasPrefix(remoteIP, "10.") || strings.HasPrefix(remoteIP, "192.168.") {
 		return "CLEAN", "Koneksi lokal / LAN internal"
 	}
+	svc, isTelegramDC, _ := identifyRemoteService(remoteIP, remotePort)
 	lowProc := strings.ToLower(procName)
 	suspiciousPort := false
 	switch remotePort {
@@ -398,15 +401,23 @@ func scoreOutboundConnection(procName, exePath, remoteIP string, remotePort uint
 	// LOLBins making direct external connections are classic fileless/ClickFix C2 indicators!
 	switch lowProc {
 	case "powershell.exe", "pwsh.exe", "mshta.exe", "wscript.exe", "cscript.exe", "regsvr32.exe", "rundll32.exe", "certutil.exe", "cmd.exe":
-		return "HIGH", fmt.Sprintf("LOLBin sistem (%s) terhubung langsung ke IP eksternal %s:%d!", procName, remoteIP, remotePort)
+		return "HIGH", fmt.Sprintf("LOLBin sistem (%s) terhubung langsung ke IP eksternal %s:%d (%s)!", procName, remoteIP, remotePort, svc)
+	}
+
+	// Non-Telegram process connecting to Telegram Bot API DC range = HIGH-confidence Telegram Stealer/RAT C2!
+	if isTelegramDC && !strings.Contains(lowProc, "telegram") {
+		return "HIGH", fmt.Sprintf("BAHAYA C2: Proses %s (bukan aplikasi Telegram!) mengirim koneksi ke server Telegram Bot API (%s:%d)!", procName, remoteIP, remotePort)
 	}
 
 	fromRisky := isInRiskyDir(exePath, riskyDirs)
 	if suspiciousPort {
-		return "HIGH", fmt.Sprintf("Terhubung ke port C2/RAT/Miner berisiko tinggi (:%d)", remotePort)
+		return "HIGH", fmt.Sprintf("Terhubung ke port C2/RAT/Miner berisiko tinggi (:%d · %s)", remotePort, svc)
 	}
 	if fromRisky {
-		return "MEDIUM", "Program dari folder Downloads/Games/Temp sedang mengakses internet keluar"
+		if strings.Contains(svc, "Discord") || strings.Contains(svc, "Cloudflare") {
+			return "MEDIUM", "Program dari folder rawan terhubung ke Discord/Cloudflare Edge (waspada pengiriman webhook stealer)"
+		}
+		return "MEDIUM", fmt.Sprintf("Program dari folder Downloads/Games/Temp mengakses internet keluar (%s)", svc)
 	}
-	return "CLEAN", "Koneksi aplikasi standar"
+	return "CLEAN", "Koneksi aplikasi standar (" + svc + ")"
 }

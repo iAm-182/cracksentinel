@@ -451,6 +451,7 @@ func (m *Manager) ListConnections() ([]NetConnection, error) {
 				pname = fmt.Sprintf("PID-%d", row.OwningPid)
 			}
 		}
+		svc, _, rhost := identifyRemoteService(remIP, remPort)
 		risk, reason := scoreOutboundConnection(pname, pi.exePath, remIP, remPort, risky)
 		out = append(out, NetConnection{
 			Protocol:   "TCP",
@@ -458,6 +459,8 @@ func (m *Manager) ListConnections() ([]NetConnection, error) {
 			LocalPort:  locPort,
 			RemoteAddr: remIP,
 			RemotePort: remPort,
+			RemoteHost: rhost,
+			Service:    svc,
 			State:      tcpStateName(row.State),
 			PID:        row.OwningPid,
 			Process:    pname,

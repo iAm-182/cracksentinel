@@ -202,6 +202,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/signatures/status", s.handleSignaturesStatus)
 	mux.HandleFunc("/api/signatures/sync", s.handleSignaturesSync)
 	mux.HandleFunc("/api/audit/run", s.handleAuditRun)
+	mux.HandleFunc("/api/audit/fix", s.handleAuditFix)
 	mux.HandleFunc("/api/sandbox/status", s.handleSandboxStatus)
 	mux.HandleFunc("/api/sandbox/launch", s.handleSandboxLaunch)
 	mux.HandleFunc("/api/windows/integration", s.handleWindowsIntegration)

@@ -25,6 +25,7 @@ import (
 	"gamecrack-scanner/internal/procutil"
 	"gamecrack-scanner/internal/report"
 	"gamecrack-scanner/internal/scan"
+	"gamecrack-scanner/internal/shield"
 	"gamecrack-scanner/internal/sigfeed"
 	"gamecrack-scanner/internal/updater"
 	"gamecrack-scanner/internal/version"
@@ -96,6 +97,8 @@ type Server struct {
 	watchQuar   bool
 	watchToast  bool
 	watchEvents []watch.Event
+
+	shieldMgr *shield.Manager
 }
 
 func New(opts Options) *Server {
@@ -152,6 +155,13 @@ func New(opts Options) *Server {
 		lastHeartbeat: time.Now().Unix(),
 	}
 	s.initDesktopState()
+	if !s.opts.PublicMode {
+		s.shieldMgr = shield.NewManager(s.opts.DataDir, func(exePath string) (model.FileResult, error) {
+			cfg := s.baseScanConfig(filepath.Dir(exePath), 1, false, false)
+			res, _, err := scan.ScanOne(cfg, exePath)
+			return res, err
+		}, watch.NotifyToast)
+	}
 	return s
 }
 
@@ -195,6 +205,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/sandbox/status", s.handleSandboxStatus)
 	mux.HandleFunc("/api/sandbox/launch", s.handleSandboxLaunch)
 	mux.HandleFunc("/api/windows/integration", s.handleWindowsIntegration)
+	mux.HandleFunc("/api/shield/status", s.handleShieldStatus)
+	mux.HandleFunc("/api/shield/config", s.handleShieldConfig)
+	mux.HandleFunc("/api/shield/netwatch", s.handleShieldNetWatch)
+	mux.HandleFunc("/api/shield/block", s.handleShieldBlock)
+	mux.HandleFunc("/api/shield/unblock", s.handleShieldUnblock)
+	mux.HandleFunc("/api/shield/kill", s.handleShieldKill)
+	mux.HandleFunc("/api/shield/cfa", s.handleShieldCFA)
 	return s.originGuard(mux)
 }
 
@@ -227,6 +244,9 @@ func (s *Server) ServeListener(ln net.Listener) error {
 		if autoStart && wdir != "" {
 			_ = s.startWatch(wdir, wint, wquar, wtoast)
 		}
+	}
+	if !s.opts.PublicMode && s.shieldMgr != nil {
+		s.shieldMgr.StartConfigured()
 	}
 	srv := &http.Server{
 		Handler:           s.Handler(),
@@ -370,6 +390,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"yara":          s.opts.Yara != nil,
 		"online":        onlineEnabled,
 		"watching":      watching,
+		"shield_active": s.ShieldActive(),
 		"watch_dir": func() string {
 			if s.opts.PublicMode {
 				return ""

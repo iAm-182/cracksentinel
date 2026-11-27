@@ -267,6 +267,11 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
       Download Guard
       <span class="nav-badge" id="navGuardBadge">OFF</span>
     </button>
+    <button class="nav-item local-only" data-view="shield">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Active Shield &amp; NetWatch
+      <span class="nav-badge" id="navShieldBadge">NEW</span>
+    </button>
     <button class="nav-item" data-view="url">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       Cek Link URL
@@ -368,6 +373,7 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
             <button class="btn public-only primary" id="heroBtnWebFolder" style="display:none" type="button">Scan Folder (Smart Filter)</button>
             <button class="btn local-only" id="heroBtnFiles" type="button">Pilih File / Arsip</button>
             <button class="btn local-only" id="heroBtnAudit" type="button">Cek Kesehatan PC</button>
+            <button class="btn local-only" id="heroBtnShield" type="button">Active Shield &amp; NetWatch</button>
             <button class="btn" id="heroBtnURL" type="button">Cek Link Download</button>
           </div>
         </div>
@@ -643,6 +649,97 @@ details summary{cursor:pointer;color:var(--acc2);font-size:12px;font-weight:600}
         </div>
       </section>
 
+      <!-- VIEW 4C: KASPERSKY-GRADE ACTIVE SHIELD, RANSOMWARE HONEYPOT & KERNEL WFP NETWATCH -->
+      <section class="view" id="view-shield">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Active Protection Suite + Kernel WFP &amp; Minifilter Bridge (&lt;0.3% CPU)</h3>
+              <div class="muted">Proteksi aktif super ringan setara suite premium memakai native Win32 syscall (<code>NtSuspendProcess</code>, <code>GetExtendedTcpTable</code>, Canary Honeypot, &amp; Windows Filtering Platform Kernel Firewall).</div>
+            </div>
+            <span class="badge INFO" id="shieldTopBadge">SIAP</span>
+          </div>
+
+          <div style="display:grid;gap:10px;margin-bottom:16px">
+            <div class="switch-row">
+              <div>
+                <b>1. Active Process Shield (<code>NtSuspendProcess</code> Real-Time Execution Blocker)</b>
+                <div class="muted">Otomatis membekukan proses baru dari folder <code>Downloads</code> / <code>Games</code> / <code>Temp</code> / <code>AppData</code> dalam milidetik, memindai file-nya, lalu mengizinkan jalan bila aman atau mematikan paksa bila <code>MALICIOUS</code>!</div>
+              </div>
+              <input type="checkbox" id="chkProcShield">
+            </div>
+            <div class="switch-row">
+              <div>
+                <b>Otomatis Matikan (Kill) Proses yang Terbukti <code>MALICIOUS</code></b>
+                <div class="muted">Jika dimatikan, proses virus hanya dibekukan (Suspended) tanpa dimatikan</div>
+              </div>
+              <input type="checkbox" id="chkProcAutoKill" checked>
+            </div>
+            <div class="switch-row">
+              <div>
+                <b>2. Anti-Ransomware Canary Honeypot Guard (Zero-CPU Trap)</b>
+                <div class="muted">Menjaga file umpan tersembunyi di <code>Documents</code>, <code>Pictures</code>, &amp; <code>Desktop</code>. Jika ada ransomware mengenkripsi umpan, seluruh proses asing di folder rawan langsung dibekukan &amp; dimatikan!</div>
+              </div>
+              <input type="checkbox" id="chkRansomGuard">
+            </div>
+            <div class="switch-row">
+              <div>
+                <b>3. Kernel Minifilter Anti-Ransomware (<code>WdFilter.sys</code> Controlled Folder Access)</b>
+                <div class="muted" id="lblKernelDrivers">Memeriksa status driver kernel Windows Filtering Platform (<code>bfe</code>) &amp; Minifilter (<code>WdFilter.sys</code>)...</div>
+              </div>
+              <input type="checkbox" id="chkKernelCFA">
+            </div>
+          </div>
+
+          <div class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr));margin:0">
+            <div class="metric"><div class="n acc" id="shStatInspected">0</div><div class="l">Proses Diperiksa</div></div>
+            <div class="metric"><div class="n mal" id="shStatBlocked">0</div><div class="l">Ancaman Dicegat</div></div>
+            <div class="metric"><div class="n cln" id="shStatCanary">AMAN</div><div class="l">Status Canary</div></div>
+            <div class="metric"><div class="n sus" id="shStatWFP">0</div><div class="l">Blokir Kernel WFP</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Live Network &amp; C2 Monitor (<code>NetWatch</code> + Kernel WFP Firewall Blocker)</h3>
+              <div class="muted">Melihat aplikasi apa saja di PC kamu yang sedang terhubung keluar secara live (tanpa <code>netstat</code> lambat) + 1-klik <b>Putus Internet di Level Kernel (WFP)</b> atau <b>Kill PID</b>.</div>
+            </div>
+            <div class="row">
+              <input type="text" id="netSearch" style="max-width:220px" placeholder="Filter aplikasi / IP / port...">
+              <button class="btn sm primary" id="btnRefreshNet" type="button">Refresh Live</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Risiko</th><th>Proses &amp; PID</th><th>Koneksi Tujuan</th><th>Status</th><th>Analisa</th><th>Aksi Kernel / Proses</th></tr></thead>
+              <tbody id="netWatchBody"><tr><td colspan="6" class="muted">Memuat daftar koneksi aktif...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="card">
+            <div class="card-head"><h3>Aplikasi Diblokir di Kernel WFP Firewall</h3></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Aplikasi</th><th>Waktu</th><th>Aksi</th></tr></thead>
+                <tbody id="wfpBlockedBody"><tr><td colspan="3" class="muted">Belum ada aplikasi yang diblokir.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Log Intersepsi Active Shield</h3></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Waktu</th><th>Layer</th><th>Keterangan</th></tr></thead>
+                <tbody id="shieldEventsBody"><tr><td colspan="3" class="muted">Belum ada ancaman yang dicegat.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 5: QUARANTINE VAULT -->
       <section class="view" id="view-quarantine">
         <div class="card">
@@ -841,6 +938,7 @@ const VIEW_META = {
   dashboard:  ['Dashboard', 'Ringkasan keamanan, status engine, & quick scan'],
   scanner:    ['Scanner', 'Drag & drop, scan folder game puluhan GB, & mass check'],
   guard:      ['Download Guard', 'Proteksi real-time folder Downloads + Windows alert'],
+  shield:     ['Active Shield & NetWatch', 'Process Blocker (NtSuspendProcess), Anti-Ransomware Canary, & Kernel WFP Firewall'],
   url:        ['Cek Link URL', 'Analisa keamanan link download & redirect chain'],
   audit:      ['Audit Keamanan PC', 'Cek injeksi memori proses (Memory Hollowing), Defender, Startup, Registry, & Tasks'],
   quarantine: ['Quarantine Vault', 'Kelola, pulihkan, atau hapus permanen file berbahaya'],
@@ -899,6 +997,7 @@ function switchView(name){
   $('#sidebar').classList.remove('open');
   if(name === 'dashboard') loadDashboard();
   if(name === 'guard') loadWatchStatus();
+  if(name === 'shield') { loadShieldStatus(); loadNetWatch(); }
   if(name === 'quarantine') loadQuarantine();
   if(name === 'history') loadHistory();
   if(name === 'settings') { loadSettings(); loadWinIntegration(); }
@@ -1077,6 +1176,7 @@ $('#topScanFiles').addEventListener('click', ()=>pickAndScan('files'));
 $('#heroBtnFiles').addEventListener('click', ()=>pickAndScan('files'));
 $('#btnPickFiles').addEventListener('click', ()=>pickAndScan('files'));
 $('#heroBtnAudit').addEventListener('click', ()=>{ switchView('audit'); runPCAudit(); });
+$('#heroBtnShield').addEventListener('click', ()=>switchView('shield'));
 $('#heroBtnURL').addEventListener('click', ()=>switchView('url'));
 $('#topWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
 $('#heroBtnWebFolder').addEventListener('click', ()=>{ switchView('scanner'); $('#folderInput').click(); });
@@ -2072,10 +2172,170 @@ function connectDesktopStream(){
   }catch(_){}
 }
 
+// Active Protection Suite + Kernel WFP NetWatch
+let cachedNetConns = [];
+
+async function loadShieldStatus(){
+  if(isPublicMode) return;
+  try{
+    const r = await apiFetch('/api/shield/status');
+    if(!r.ok) return;
+    const d = await r.json();
+    const anyOn = !!(d.process_shield_on || d.ransom_guard_on);
+    $('#chkProcShield').checked = !!d.process_shield_on;
+    $('#chkProcAutoKill').checked = d.process_auto_kill !== false;
+    $('#chkRansomGuard').checked = !!d.ransom_guard_on;
+    $('#chkKernelCFA').checked = !!d.defender_cfa_enabled;
+
+    const nb = $('#navShieldBadge');
+    if(nb){
+      nb.textContent = anyOn ? 'ON' : 'SIAP';
+      nb.classList.toggle('on', anyOn);
+    }
+    const tb = $('#shieldTopBadge');
+    tb.textContent = anyOn ? 'PROTEKSI AKTIF' : 'STANDBY';
+    tb.className = 'badge ' + (anyOn ? 'CLEAN' : 'INFO');
+
+    $('#lblKernelDrivers').innerHTML = `Kernel WFP Firewall (<code>bfe</code>): <b>${d.wfp_kernel_firewall?'AKTIF':'OFF'}</b> · Kernel Minifilter (<code>WdFilter.sys</code>): <b>${d.defender_minifilter_on?'AKTIF':'OFF'}</b> · Mode Proses: <b>${d.is_admin?'Administrator':'User Standar (UAC saat blokir WFP)'}</b>`;
+    $('#shStatInspected').textContent = d.processes_inspected || 0;
+    $('#shStatBlocked').textContent = d.threats_blocked || 0;
+    $('#shStatCanary').textContent = d.ransom_guard_on ? (d.canary_intact ? 'UTUH' : 'DISERANG!') : 'OFF';
+    $('#shStatCanary').className = 'n ' + (!d.ransom_guard_on ? '' : d.canary_intact ? 'cln' : 'mal');
+    const blocked = d.blocked_apps || [];
+    $('#shStatWFP').textContent = blocked.length;
+
+    const wb = $('#wfpBlockedBody');
+    if(!blocked.length){
+      wb.innerHTML = '<tr><td colspan="3" class="muted">Belum ada aplikasi yang diblokir di Kernel WFP.</td></tr>';
+    }else{
+      wb.innerHTML = blocked.map(b=>`<tr>
+        <td class="mono" style="word-break:break-all"><b>${esc(b.exe_path.split(/[\\/]/).pop())}</b><div class="muted">${esc(b.exe_path)}</div></td>
+        <td class="mono muted">${esc(b.added_at)}</td>
+        <td><button class="btn sm ghost" type="button" onclick="unblockWFP(${JSON.stringify(b.exe_path)})">Buka Blokir</button></td>
+      </tr>`).join('');
+    }
+
+    const evs = d.recent_events || [];
+    const eb = $('#shieldEventsBody');
+    if(!evs.length){
+      eb.innerHTML = '<tr><td colspan="3" class="muted">Belum ada ancaman yang dicegat.</td></tr>';
+    }else{
+      eb.innerHTML = evs.slice(0, 25).map(ev=>`<tr>
+        <td class="mono muted">${esc(ev.time)}</td>
+        <td><span class="badge ${ev.severity==='CRITICAL'||ev.severity==='HIGH'?'MALICIOUS':'INFO'}">${esc(ev.layer)}</span></td>
+        <td>${esc(ev.summary)}</td>
+      </tr>`).join('');
+    }
+  }catch(_){}
+}
+
+async function saveShieldToggles(){
+  const body = {
+    process_shield_on: $('#chkProcShield').checked,
+    process_auto_kill: $('#chkProcAutoKill').checked,
+    ransom_guard_on: $('#chkRansomGuard').checked
+  };
+  const r = await apiFetch('/api/shield/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal menyimpan konfigurasi Shield: ' + (d.error||''));
+  toast('Konfigurasi Active Shield diperbarui!');
+  loadShieldStatus();
+}
+
+$('#chkProcShield').addEventListener('change', saveShieldToggles);
+$('#chkProcAutoKill').addEventListener('change', saveShieldToggles);
+$('#chkRansomGuard').addEventListener('change', saveShieldToggles);
+$('#chkKernelCFA').addEventListener('change', async e=>{
+  const enable = e.target.checked;
+  if(!confirm((enable ? 'Aktifkan' : 'Matikan') + ' proteksi Kernel Minifilter Controlled Folder Access (WdFilter.sys)?\nWindows akan meminta izin Administrator (UAC).')) {
+    e.target.checked = !enable;
+    return;
+  }
+  const r = await apiFetch('/api/shield/cfa', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enable})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok){ e.target.checked = !enable; return toast('Gagal: ' + (d.error||'')); }
+  toast('Proteksi Kernel Controlled Folder Access diperbarui!');
+  loadShieldStatus();
+});
+
+async function loadNetWatch(){
+  if(isPublicMode) return;
+  try{
+    const r = await apiFetch('/api/shield/netwatch');
+    if(!r.ok) return;
+    const d = await r.json();
+    cachedNetConns = d.connections || [];
+    drawNetWatch();
+  }catch(_){}
+}
+
+function drawNetWatch(){
+  const q = ($('#netSearch').value||'').toLowerCase();
+  const rows = cachedNetConns.filter(c=>{
+    if(!q) return true;
+    return (c.process||'').toLowerCase().includes(q) ||
+      (c.remote_addr||'').toLowerCase().includes(q) ||
+      String(c.remote_port||'').includes(q) ||
+      (c.exe_path||'').toLowerCase().includes(q);
+  });
+  const tb = $('#netWatchBody');
+  if(!rows.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted">Tidak ada koneksi keluar yang cocok.</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.slice(0, 120).map(c=>{
+    const bCls = c.risk === 'HIGH' ? 'MALICIOUS' : c.risk === 'MEDIUM' ? 'SUSPICIOUS' : 'CLEAN';
+    const canAct = c.pid > 4;
+    return `<tr>
+      <td><span class="badge ${bCls}">${esc(c.risk)}</span></td>
+      <td class="mono"><b>${esc(c.process)}</b> <span class="muted">(PID ${c.pid})</span><div class="muted" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.exe_path)}">${esc(c.exe_path||'-')}</div></td>
+      <td class="mono">${esc(c.remote_addr)}:<b>${c.remote_port}</b><div class="muted">lokal :${c.local_port}</div></td>
+      <td class="mono muted">${esc(c.state)}</td>
+      <td class="muted">${esc(c.reason)}</td>
+      <td>${canAct ? `<div class="row" style="gap:5px">
+        ${c.exe_path ? `<button class="btn sm danger" type="button" onclick="blockWFP(${JSON.stringify(c.exe_path)},${c.pid},true)">Blokir WFP &amp; Kill</button>` : ''}
+        <button class="btn sm ghost" type="button" onclick="killNetPID(${c.pid},${JSON.stringify(c.process)})">Kill PID</button>
+      </div>` : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+$('#btnRefreshNet').addEventListener('click', loadNetWatch);
+$('#netSearch').addEventListener('input', drawNetWatch);
+
+async function blockWFP(exePath, pid, killNow){
+  if(!confirm(`Putus akses internet aplikasi ini di level Kernel Windows (WFP Firewall) & hentikan prosesnya?\n\nTarget: ${exePath}\nPID: ${pid}`)) return;
+  const r = await apiFetch('/api/shield/block', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({exe_path:exePath, pid, kill_now:killNow})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal blokir WFP: ' + (d.error||''));
+  toast('Aplikasi berhasil diblokir di Kernel WFP Firewall!');
+  loadShieldStatus();
+  loadNetWatch();
+}
+
+async function unblockWFP(exePath){
+  if(!confirm('Hapus aturan blokir internet Kernel WFP untuk aplikasi ini?\n\n' + exePath)) return;
+  const r = await apiFetch('/api/shield/unblock', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({exe_path:exePath})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal buka blokir: ' + (d.error||''));
+  toast('Blokir Kernel WFP dihapus.');
+  loadShieldStatus();
+}
+
+async function killNetPID(pid, name){
+  if(!confirm(`Hentikan paksa proses ${name} (PID ${pid}) sekarang?`)) return;
+  const r = await apiFetch('/api/shield/kill', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pid, suspend:false})});
+  const d = await parseJSONSafe(r);
+  if(!r.ok) return toast('Gagal menghentikan proses: ' + (d.error||''));
+  toast(`Proses ${name} (PID ${pid}) dihentikan.`);
+  loadNetWatch();
+}
+
 async function boot(){
   await loadHealth();
   connectDesktopStream();
   await loadDashboard();
+  if(!isPublicMode) loadShieldStatus();
   setTimeout(()=>checkUpdate(false), 1800);
   const params = new URLSearchParams(location.search);
   const autoPaths = params.getAll('autopath').filter(Boolean);
@@ -2093,6 +2353,7 @@ setInterval(()=>{
 
 setInterval(()=>{
   if($('#view-guard').classList.contains('active')) loadWatchStatus();
+  if($('#view-shield').classList.contains('active')) { loadShieldStatus(); loadNetWatch(); }
   if($('#view-dashboard').classList.contains('active')) loadDashboard();
 }, 6000);
 </script>

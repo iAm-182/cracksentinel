@@ -374,20 +374,10 @@ func notify(url string, r model.FileResult) {
 	}
 }
 
-// sendToast shows a non-blocking native Windows desktop notification without
-// requiring any third-party packages. Values are passed via environment
-// variables so untrusted filenames can never inject PowerShell syntax.
-func sendToast(ev Event) {
+// NotifyToast displays a non-blocking native Windows notification (no-op on Linux/macOS).
+func NotifyToast(title, msg string) {
 	if runtime.GOOS != "windows" {
 		return
-	}
-	title := fmt.Sprintf("CrackSentinel [%s %d]", ev.Verdict, ev.Score)
-	msg := filepath.Base(ev.Path)
-	if ev.Action == "quarantined" {
-		msg += " (QUARANTINED)"
-	}
-	if ev.TopFinding != "" {
-		msg += " — " + ev.TopFinding
 	}
 	ps := `Add-Type -AssemblyName System.Windows.Forms; $n=New-Object System.Windows.Forms.NotifyIcon; $n.Icon=[System.Drawing.SystemIcons]::Warning; $n.Visible=$true; $n.ShowBalloonTip(7000, $env:CS_TOAST_TITLE, $env:CS_TOAST_MSG, [System.Windows.Forms.ToolTipIcon]::Warning); Start-Sleep -Seconds 7; $n.Dispose()`
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -396,6 +386,21 @@ func sendToast(ev Event) {
 	procutil.HideWindow(cmd)
 	cmd.Env = append(os.Environ(), "CS_TOAST_TITLE="+title, "CS_TOAST_MSG="+msg)
 	_ = cmd.Run()
+}
+
+// sendToast shows a non-blocking native Windows desktop notification without
+// requiring any third-party packages. Values are passed via environment
+// variables so untrusted filenames can never inject PowerShell syntax.
+func sendToast(ev Event) {
+	title := fmt.Sprintf("CrackSentinel [%s %d]", ev.Verdict, ev.Score)
+	msg := filepath.Base(ev.Path)
+	if ev.Action == "quarantined" {
+		msg += " (QUARANTINED)"
+	}
+	if ev.TopFinding != "" {
+		msg += " — " + ev.TopFinding
+	}
+	NotifyToast(title, msg)
 }
 
 func modUnix(path string) int64 {

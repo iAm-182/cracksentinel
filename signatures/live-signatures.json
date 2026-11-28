@@ -1,6 +1,6 @@
 {
-  "version": "2026.11.28.0129",
-  "updated_at": "2026-11-28T01:29:01Z",
+  "version": "2026.11.28.1537",
+  "updated_at": "2026-11-28T15:37:25Z",
   "description": "CrackSentinel Hot-Reloadable Threat Intelligence Database (SHA-256 IOCs & Live Signatures)",
   "hashes": [
     {
@@ -279,17 +279,17 @@
       "severity": 92
     },
     {
+      "sha256": "fe18c93aa6a0345f71ecdec7a585eabf8ff4a1adab63bc709f0cb7a4868df1d3",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "fe0c806aa688e618d9c9c2ec60a339cbc3522c2d5c61c186938c630171f531c1",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
     {
       "sha256": "fe0c0bf5ed8f6036eb1138b499073807fea4d5b98525af72c2d1d24285d9076e",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "fe0535e9649103a57593469def797f53ba44b739be342fc22497d5861e47d639",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -455,11 +455,6 @@
     },
     {
       "sha256": "fcccbce48b9c530257d49fe82897d975a52d0abece80c2f9dc0eb04ee43da05f",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "fccca6dc860d547977e1ba70afa95b78db59d08dc94e2f66a33c5e6df419c20b",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -639,11 +634,6 @@
       "severity": 92
     },
     {
-      "sha256": "fafa655f8a78471218022509dab916a5569a7899923df480b9ba73c0b2bd6be2",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "faf0bc67308eb8eb4261e918c57e187eef458d87d6ba64a591b2e6672b771d9d",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -660,11 +650,6 @@
     },
     {
       "sha256": "fadf32ce2ed240a99554d3fe75694b55ed345da6e67a3b16a6ddd641f50c0562",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "fabb72ff2bda87a164a32d3f554ea4398fa529e66d954c00a7249c76cc67e0a8",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -819,6 +804,11 @@
       "severity": 92
     },
     {
+      "sha256": "f944ed48a043895f60035d7bac1fc3216e3c6238029d4613441c065af0f7efd4",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "f9415e5965082037a1730a778c4096f1af6e5f8d3c388cd867e6b999059ab392",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -935,6 +925,11 @@
     },
     {
       "sha256": "f83ae1033045e2b125a97215c1cd7fbb81f38af4dec9c604455219efeb5f3d29",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "f83287e06ea4dcf9acc99a8c64d03cc3668ab643351f98395b68a7b3b08782f2",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -1219,6 +1214,11 @@
       "severity": 92
     },
     {
+      "sha256": "f5d0ff8dfd112319f4dc22bdc9d9c7451ec8749e2b799c675d1fc49d70cd5f58",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "f5cf1b8ee8ddced3fb5e081dc1543669c3b62767c45da63002032da87632839d",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -1260,11 +1260,6 @@
     },
     {
       "sha256": "f5951581d76cf5064d2a3f589ef15da197f58fc4b93fa167192cda9412497bfe",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "f58b30a366b9054f48355af6e57c6738286fe863d2da084a17bdef97ed9c6448",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -1449,11 +1444,6 @@
       "severity": 92
     },
     {
-      "sha256": "f472438c89e0f13e937ff48527d7e661897bfe6e723038b7b643336551b49755",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "f47181ae7baae907d129b0a6b256ba23bcb3abc3d29cb1b43c223da9e629962a",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -1629,6 +1619,11 @@
       "severity": 92
     },
     {
+      "sha256": "f2f707345e0e7f72c336670ce0e185c4eea3a1cd6d547a4d0084c2a01c943f1a",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "f2df79291d08c29e4dd851ac2d73d4440da32802585fed60418973cd1a7b0044",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -1660,11 +1655,6 @@
     },
     {
       "sha256": "f2bc3b7948b71a4d92061a0fcba7819895449ffa67edf3259fd22730854a34dc",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "f2b64c500ee7ee109515907fbcde7a6f83753878d32d1bd50c065ded5197c65d",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -1914,11 +1904,6 @@
       "severity": 92
     },
     {
-      "sha256": "f0ebb8b624494af81c674411452ceeef4f92351f86517fc84b21d6fb24b8bb47",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "f0e58a27cc40910afc030ec6ed4fa921c31b0afaa89f138d57c173bfaf3998c3",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -1990,6 +1975,11 @@
     },
     {
       "sha256": "f0884102362412aa950b9a1efc4199633a7fd72c8efb8f00d554960ecdeef622",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "f0879c839997294472de1b4f0d74ff458b4ac5ee57cb27d090d71c29951470a0",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -2419,11 +2409,6 @@
       "severity": 92
     },
     {
-      "sha256": "ed412e7079b26b25c491d9e7ef8157fbfb0fd0dbbb1d5ea470c3666fcec2c431",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "ed3f92fb2a6afc6aa0b766d9554264a916c40887da51b6eec9e6e15e155c36b3",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -2704,11 +2689,6 @@
       "severity": 92
     },
     {
-      "sha256": "eb1c3d52bd01ed52a6d87cdf908fcae036723f7b413360ad09df130368520210",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "eb104349ede33de0d093d2adfca3a778fc5ef34cc3a0c7b1d6839431968e738c",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -2964,11 +2944,6 @@
       "severity": 92
     },
     {
-      "sha256": "e8e6e97adb7587208dd68bf6ce7492dc9d6cfae7b516c6a3667fbe1bf082c919",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "e8d687550eb09938482859f2821237f70d9eaf0b5d6eb095ff23f584fbb778b7",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -3164,6 +3139,11 @@
       "severity": 92
     },
     {
+      "sha256": "e792225eba3f271c8f8582c0bfeba966412cd4b3010563d3ff50bbcfd9cc6d8c",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "e790d6600234b92a530ff6ab3d8e7e65f2eeb1e09b3284ccc9d5b6412091b0d9",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -3255,6 +3235,11 @@
     },
     {
       "sha256": "e6e3cf8acd7b417e381a3b2bf90e569d839e35582f882380f1fbeddfa6ed2a6c",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "e6de86722393a7991b6d15bf57cf78171cd4203265e20fbc98052d1b212f8f88",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -3435,6 +3420,11 @@
     },
     {
       "sha256": "e592537f0619f2052ce24527edf81d05776c2333a43a78d4aeeacf2b8723fbe6",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "e5724a92828c01c3d5349d0276540a67d9ac893ad0effb3b622228b0f8907187",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -3695,6 +3685,11 @@
     },
     {
       "sha256": "e38a00e0062998fbdb647b1ce8c87bae6e05a3b1dabeb237ee574332f43e19ec",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "e387c88b73bbec0ffd3d8273713aa4ef7308fca6845ef1e0c29eb4a62bb5285b",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -4214,6 +4209,11 @@
       "severity": 92
     },
     {
+      "sha256": "dfb39f55c165f80e80fca15b1de2a35e0ec23a65395e977e3df97e56a9b75651",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "dfa5758cd0b07e380df4a5067a7c18779c1b99f352ae747a25b6fc3f24469d6a",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -4230,11 +4230,6 @@
     },
     {
       "sha256": "df95fa5be6048cf2485c3c8cbca5d0722213c5a23f127aa016be8a725485be62",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "df712eff0fb0bc9e37926002e1aad70edb1e03a7eb64403a82415cd461674f30",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -4804,6 +4799,11 @@
       "severity": 92
     },
     {
+      "sha256": "db79728e3fc45e2dab2f2b5d757222c8d0a4893ad1b01e7b236d8beb1f3733e4",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "db7064aedd34c959fbb19ac70da43ff9f08be90e7a85f3d1fa996a3f3186dd53",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -5039,17 +5039,27 @@
       "severity": 92
     },
     {
+      "sha256": "d98d99716736252bdd0e0c3b87d283c518923d735dc91e92eb4967872a792d9a",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
       "sha256": "d97e160038d8e90f0e2f3b0d2eaea21cc1fcb9cdf377a90f080ca2199dac0c70",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
     {
-      "sha256": "d97a15cbd70197f40b597ec25914d7abde71de21c9d217701a3fe75377a94488",
+      "sha256": "d972b6f1fc1d36ca81c459a5dcea33b36b70862cb07a1b1bce8f1f5bf559a8cb",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
     {
       "sha256": "d962b904fc789b59367cf25adbb3b25f0ec9573d6949a32a703bbd07cfa38785",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "d96016830be303ecdeaa645e6a1b1242e4d28f1c4bf232594f0d741522fa33f8",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -5384,11 +5394,6 @@
       "severity": 92
     },
     {
-      "sha256": "d708a427b9a19fce6b4293fc910904321c4f4110e81a9f3c4497408bd82ee82e",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
       "sha256": "d707e48f44fb0580201b7878b0c3e707b6f0629b7d927cc9f03dd574c49556ef",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
@@ -5580,6 +5585,11 @@
     },
     {
       "sha256": "d59a4194ec66b508697d67d71b69f74f590e8a8bb346507075b3ded56854a374",
+      "family": "MultiSource-Malware-IOC",
+      "severity": 92
+    },
+    {
+      "sha256": "d59a21093019cde307ab1173e8803adfea5072737d08ec5a247345aa2f681a44",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     },
@@ -5990,16 +6000,6 @@
     },
     {
       "sha256": "d2fb1489eb4aa374a78fd3a2d96ca211976e0d84742e3c90864e2b5eb1c65f83",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "d2e2da563c5848678043b1dab304052a8ea91114c3029fac847ed3cd75ea9e7a",
-      "family": "MultiSource-Malware-IOC",
-      "severity": 92
-    },
-    {
-      "sha256": "d2daf8a90587a500006b912584feb398977e0087cd8ada2a31a0ab2c5e52114c",
       "family": "MultiSource-Malware-IOC",
       "severity": 92
     }
